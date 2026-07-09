@@ -139,6 +139,11 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
   }
+  if (config.provider === 'evolution') {
+    throw new Error(
+      'This automation step requires the Meta WhatsApp provider; the account is connected via Evolution API.',
+    )
+  }
 
   const accessToken = decrypt(config.access_token)
 

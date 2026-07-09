@@ -90,6 +90,11 @@ export async function engineSendText(
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
   }
+  if (config.provider === 'evolution') {
+    throw new Error(
+      'This flow step requires the Meta WhatsApp provider; the account is connected via Evolution API.',
+    )
+  }
 
   const accessToken = decrypt(config.access_token)
 
@@ -199,6 +204,11 @@ export async function engineSendMedia(
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
+  }
+  if (config.provider === 'evolution') {
+    throw new Error(
+      'This flow step requires the Meta WhatsApp provider; the account is connected via Evolution API.',
+    )
   }
 
   const accessToken = decrypt(config.access_token)
@@ -351,6 +361,11 @@ async function sendInteractiveViaMeta(
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
+  }
+  if (config.provider === 'evolution') {
+    throw new Error(
+      'This flow step requires the Meta WhatsApp provider; the account is connected via Evolution API.',
+    )
   }
 
   const accessToken = decrypt(config.access_token)

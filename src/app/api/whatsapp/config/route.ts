@@ -7,6 +7,7 @@ import {
   verifyPhoneNumber,
 } from '@/lib/whatsapp/meta-api'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
+import { createInstance, getConnectionState } from '@/lib/whatsapp/providers/evolution-api'
 
 /**
  * Resolve the caller's account_id from their profile. Inlined here
@@ -87,7 +88,9 @@ export async function GET() {
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
-      .select('phone_number_id, access_token, status')
+      .select(
+        'id, phone_number_id, access_token, status, provider, evolution_base_url, evolution_instance_name, evolution_api_key',
+      )
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -108,6 +111,46 @@ export async function GET() {
         },
         { status: 200 }
       )
+    }
+
+    if (config.provider === 'evolution') {
+      // The client-side QR poll (/api/whatsapp/evolution/status) only
+      // runs while the settings page is mounted, so `status` in the DB
+      // goes stale the moment the user navigates away — even though
+      // the underlying Evolution session may still be `open`. Reconcile
+      // live here too, since this endpoint is hit on every settings
+      // page load (and can be hit from anywhere else that needs the
+      // real answer), so the DB self-heals without requiring an active
+      // QR-scan session.
+      if (!config.evolution_base_url || !config.evolution_instance_name || !config.evolution_api_key) {
+        return NextResponse.json({ connected: false, provider: 'evolution', reason: 'incomplete_config' })
+      }
+      try {
+        const apiKey = decrypt(config.evolution_api_key)
+        const state = await getConnectionState({
+          baseUrl: config.evolution_base_url,
+          apiKey,
+          instanceName: config.evolution_instance_name,
+        })
+        const connected = state === 'open'
+        if (connected !== (config.status === 'connected')) {
+          const update: Record<string, unknown> = {
+            status: connected ? 'connected' : 'disconnected',
+          }
+          if (connected) update.connected_at = new Date().toISOString()
+          await supabaseAdmin().from('whatsapp_config').update(update).eq('id', config.id)
+        }
+        return NextResponse.json({ connected, provider: 'evolution', state })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown Evolution API error'
+        console.error('[whatsapp/config GET] Evolution status check failed:', message)
+        return NextResponse.json({
+          connected: config.status === 'connected',
+          provider: 'evolution',
+          reason: 'evolution_api_error',
+          message,
+        })
+      }
     }
 
     // Try to decrypt the stored token with the current ENCRYPTION_KEY.
@@ -185,7 +228,25 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { phone_number_id, waba_id, access_token, verify_token, pin } = body
+    const {
+      phone_number_id,
+      waba_id,
+      access_token,
+      verify_token,
+      pin,
+      provider,
+      evolution_base_url,
+      evolution_instance_name,
+      evolution_api_key,
+    } = body
+
+    if (provider === 'evolution') {
+      return saveEvolutionConfig(supabase, accountId, user.id, {
+        evolution_base_url,
+        evolution_instance_name,
+        evolution_api_key,
+      })
+    }
 
     if (!access_token || !phone_number_id) {
       return NextResponse.json(
@@ -429,6 +490,113 @@ export async function POST(request: Request) {
     console.error('Error in WhatsApp config POST:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
+
+/**
+ * Save (create or update) an Evolution API config for the account.
+ * Split out from the Meta branch of POST since the two providers share
+ * no verification/registration steps — Evolution's "is it working"
+ * check is a QR-code connect flow, not a synchronous phone-number
+ * lookup, so it happens in /api/whatsapp/evolution/connect afterward.
+ */
+async function saveEvolutionConfig(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  accountId: string,
+  userId: string,
+  fields: {
+    evolution_base_url?: string
+    evolution_instance_name?: string
+    evolution_api_key?: string
+  }
+) {
+  const { evolution_base_url, evolution_instance_name, evolution_api_key } = fields
+
+  if (!evolution_base_url || !evolution_instance_name || !evolution_api_key) {
+    return NextResponse.json(
+      {
+        error:
+          'evolution_base_url, evolution_instance_name and evolution_api_key are required',
+      },
+      { status: 400 }
+    )
+  }
+
+  let encryptedApiKey: string
+  try {
+    encryptedApiKey = encrypt(evolution_api_key)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown encryption error'
+    console.error('Encryption failed:', message)
+    return NextResponse.json(
+      {
+        error:
+          'Failed to encrypt token. Check that ENCRYPTION_KEY is a valid 64-character hex string in your environment variables.',
+      },
+      { status: 500 }
+    )
+  }
+
+  const { data: existing } = await supabase
+    .from('whatsapp_config')
+    .select('id')
+    .eq('account_id', accountId)
+    .maybeSingle()
+
+  const baseRow = {
+    provider: 'evolution',
+    evolution_base_url,
+    evolution_instance_name,
+    evolution_api_key: encryptedApiKey,
+    phone_number_id: null,
+    waba_id: null,
+    status: 'disconnected',
+    updated_at: new Date().toISOString(),
+  }
+
+  if (existing) {
+    const { error: updateError } = await supabase
+      .from('whatsapp_config')
+      .update(baseRow)
+      .eq('account_id', accountId)
+    if (updateError) {
+      console.error('Error updating whatsapp_config (evolution):', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update configuration' },
+        { status: 500 }
+      )
+    }
+  } else {
+    const { error: insertError } = await supabase.from('whatsapp_config').insert({
+      account_id: accountId,
+      user_id: userId,
+      ...baseRow,
+    })
+    if (insertError) {
+      console.error('Error inserting whatsapp_config (evolution):', insertError)
+      return NextResponse.json(
+        { error: 'Failed to save configuration' },
+        { status: 500 }
+      )
+    }
+  }
+
+  // Best-effort instance creation — QR code retrieval happens in
+  // /api/whatsapp/evolution/connect, which the UI calls right after
+  // this save succeeds. Failures here aren't fatal: `connect` retries.
+  try {
+    await createInstance({
+      baseUrl: evolution_base_url,
+      apiKey: evolution_api_key,
+      instanceName: evolution_instance_name,
+    })
+  } catch (err) {
+    console.warn(
+      '[whatsapp/config POST] Evolution instance create (non-fatal):',
+      err instanceof Error ? err.message : err
+    )
+  }
+
+  return NextResponse.json({ success: true, saved: true, provider: 'evolution' })
 }
 
 /**

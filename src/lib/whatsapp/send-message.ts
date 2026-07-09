@@ -36,6 +36,7 @@ import {
 } from '@/lib/whatsapp/interactive';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { sendText as evolutionSendText, sendMedia as evolutionSendMedia } from '@/lib/whatsapp/providers/evolution-api';
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -262,10 +263,23 @@ export async function sendMessageToConversation(
     );
   }
 
-  const accessToken = decrypt(config.access_token);
+  const isEvolution = config.provider === 'evolution';
+
+  // Meta-only capabilities — fail clearly instead of attempting a send
+  // Evolution has no equivalent for.
+  if (isEvolution && (messageType === 'template' || messageType === 'interactive')) {
+    throw new SendMessageError(
+      'unsupported_by_provider',
+      'Recurso não suportado pelo provedor Evolution API',
+      400
+    );
+  }
+
+  const accessToken = isEvolution ? '' : decrypt(config.access_token);
+  const evolutionApiKey = isEvolution ? decrypt(config.evolution_api_key) : '';
 
   // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
-  if (isLegacyFormat(config.access_token)) {
+  if (!isEvolution && isLegacyFormat(config.access_token)) {
     void db
       .from('whatsapp_config')
       .update({ access_token: encrypt(accessToken) })
@@ -330,6 +344,29 @@ export async function sendMessageToConversation(
   }
 
   const attempt = async (phone: string): Promise<string> => {
+    if (isEvolution) {
+      if (isMediaKind) {
+        const result = await evolutionSendMedia({
+          baseUrl: config.evolution_base_url,
+          apiKey: evolutionApiKey,
+          instanceName: config.evolution_instance_name,
+          number: phone,
+          mediatype: messageType as 'image' | 'video' | 'document' | 'audio',
+          media: mediaUrl!,
+          caption: contentText || undefined,
+          fileName: filename || undefined,
+        });
+        return result.messageId;
+      }
+      const result = await evolutionSendText({
+        baseUrl: config.evolution_base_url,
+        apiKey: evolutionApiKey,
+        instanceName: config.evolution_instance_name,
+        number: phone,
+        text: contentText!,
+      });
+      return result.messageId;
+    }
     if (messageType === 'template') {
       const result = await sendTemplateMessage({
         phoneNumberId: config.phone_number_id,

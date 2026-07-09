@@ -111,13 +111,20 @@ export async function POST(request: Request) {
     // WhatsApp config + access token. Account-scoped post-multi-user.
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
-      .select('phone_number_id, access_token')
+      .select('provider, phone_number_id, access_token')
       .eq('account_id', accountId)
       .single();
 
     if (configError || !config) {
       return NextResponse.json(
         { error: 'WhatsApp not configured.' },
+        { status: 400 },
+      );
+    }
+
+    if (config.provider === 'evolution') {
+      return NextResponse.json(
+        { error: 'Reações não são suportadas pelo provedor Evolution API.' },
         { status: 400 },
       );
     }

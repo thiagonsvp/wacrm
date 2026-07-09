@@ -70,6 +70,19 @@ export function WhatsAppConfig() {
   const [pin, setPin] = useState('');
   const [tokenEdited, setTokenEdited] = useState(false);
 
+  // Provider selector — 'meta' preserves every path above unchanged;
+  // 'evolution' branches into the QR-code connect flow below.
+  const [provider, setProvider] = useState<'meta' | 'evolution'>('meta');
+  const [evolutionBaseUrl, setEvolutionBaseUrl] = useState('');
+  const [evolutionApiKey, setEvolutionApiKey] = useState('');
+  const [evolutionInstanceName, setEvolutionInstanceName] = useState('');
+  const [evolutionApiKeyEdited, setEvolutionApiKeyEdited] = useState(false);
+  const [evolutionSaving, setEvolutionSaving] = useState(false);
+  const [evolutionConnecting, setEvolutionConnecting] = useState(false);
+  const [evolutionQr, setEvolutionQr] = useState<string | null>(null);
+  const [evolutionConnected, setEvolutionConnected] = useState(false);
+  const evolutionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // True once /register has succeeded on Meta's side (timestamp set
   // in the row). When false, the saved config is metadata-only and
   // Meta will silently drop every inbound event — that's the
@@ -115,12 +128,18 @@ export function WhatsAppConfig() {
 
       if (data) {
         setConfig(data);
+        setProvider(data.provider === 'evolution' ? 'evolution' : 'meta');
         setPhoneNumberId(data.phone_number_id || '');
         setWabaId(data.waba_id || '');
         setAccessToken(MASKED_TOKEN);
         setVerifyToken('');
         setPin('');
         setTokenEdited(false);
+        setEvolutionBaseUrl(data.evolution_base_url || '');
+        setEvolutionInstanceName(data.evolution_instance_name || `wacrm-${acctId.slice(0, 8)}`);
+        setEvolutionApiKey(data.evolution_api_key ? MASKED_TOKEN : '');
+        setEvolutionApiKeyEdited(false);
+        setEvolutionConnected(data.provider === 'evolution' && data.status === 'connected');
       } else {
         setConfig(null);
         setPhoneNumberId('');
@@ -129,17 +148,29 @@ export function WhatsAppConfig() {
         setVerifyToken('');
         setPin('');
         setTokenEdited(false);
+        setEvolutionBaseUrl('');
+        setEvolutionInstanceName(`wacrm-${acctId.slice(0, 8)}`);
+        setEvolutionApiKey('');
+        setEvolutionApiKeyEdited(false);
+        setEvolutionConnected(false);
       }
       // Clear any stale probe result when reloading the row.
       setRegistrationProbe(null);
 
-      // Then verify health via the API (decrypts token + pings Meta)
+      // Then verify health via the API. For Meta this decrypts the
+      // token + pings Meta; for Evolution it queries the live
+      // connectionState and self-heals `whatsapp_config.status`, since
+      // the QR-scan poll (/api/whatsapp/evolution/status) only runs
+      // while this page is mounted and can't be relied on to have kept
+      // the DB row in sync.
       if (data) {
         try {
           const res = await fetch('/api/whatsapp/config', { method: 'GET' });
           const payload = await res.json();
 
-          if (payload.connected) {
+          if (data.provider === 'evolution') {
+            setEvolutionConnected(!!payload.connected);
+          } else if (payload.connected) {
             setConnectionStatus('connected');
             setResetReason(null);
             setStatusMessage('');
@@ -150,7 +181,8 @@ export function WhatsAppConfig() {
           }
         } catch (err) {
           console.error('Health check failed:', err);
-          setConnectionStatus('disconnected');
+          if (data.provider === 'evolution') setEvolutionConnected(false);
+          else setConnectionStatus('disconnected');
         }
       } else {
         setConnectionStatus('disconnected');
@@ -371,6 +403,108 @@ export function WhatsAppConfig() {
     toast.success('Webhook URL copied to clipboard');
   }
 
+  function stopEvolutionPolling() {
+    if (evolutionPollRef.current) {
+      clearInterval(evolutionPollRef.current);
+      evolutionPollRef.current = null;
+    }
+  }
+
+  useEffect(() => stopEvolutionPolling, []);
+
+  function startEvolutionPolling() {
+    stopEvolutionPolling();
+    evolutionPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/whatsapp/evolution/status');
+        const data = await res.json();
+        if (data.connected) {
+          setEvolutionConnected(true);
+          setEvolutionQr(null);
+          stopEvolutionPolling();
+          toast.success('WhatsApp conectado via Evolution API.');
+          if (accountId) await fetchConfig(accountId);
+        }
+      } catch (err) {
+        console.error('evolution status poll failed:', err);
+      }
+    }, 3000);
+  }
+
+  async function handleSaveEvolution() {
+    if (!evolutionBaseUrl.trim() || !evolutionInstanceName.trim()) {
+      toast.error('URL do servidor e nome da instância são obrigatórios');
+      return;
+    }
+    if (!config && (!evolutionApiKey.trim() || !evolutionApiKeyEdited)) {
+      toast.error('API Key é obrigatória para a configuração inicial');
+      return;
+    }
+
+    try {
+      setEvolutionSaving(true);
+      const payload: Record<string, unknown> = {
+        provider: 'evolution',
+        evolution_base_url: evolutionBaseUrl.trim(),
+        evolution_instance_name: evolutionInstanceName.trim(),
+      };
+      if (evolutionApiKeyEdited && evolutionApiKey !== MASKED_TOKEN && evolutionApiKey.trim()) {
+        payload.evolution_api_key = evolutionApiKey.trim();
+      } else if (config?.provider === 'evolution') {
+        toast.error('Reinsira a API Key para salvar alterações');
+        setEvolutionSaving(false);
+        return;
+      }
+
+      const res = await fetch('/api/whatsapp/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Falha ao salvar configuração');
+        return;
+      }
+      toast.success('Configuração salva. Clique em "Conectar" para gerar o QR Code.');
+      if (accountId) await fetchConfig(accountId);
+    } catch (err) {
+      console.error('Evolution save error:', err);
+      toast.error('Falha ao salvar configuração');
+    } finally {
+      setEvolutionSaving(false);
+    }
+  }
+
+  async function handleEvolutionConnect() {
+    try {
+      setEvolutionConnecting(true);
+      setEvolutionQr(null);
+      const res = await fetch('/api/whatsapp/evolution/connect', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Falha ao conectar com a Evolution API');
+        return;
+      }
+      if (data.connected) {
+        setEvolutionConnected(true);
+        toast.success('WhatsApp já está conectado.');
+        return;
+      }
+      if (data.base64) {
+        setEvolutionQr(data.base64);
+        startEvolutionPolling();
+      } else {
+        toast.error('A Evolution API não retornou um QR Code.');
+      }
+    } catch (err) {
+      console.error('Evolution connect error:', err);
+      toast.error('Falha ao conectar com a Evolution API');
+    } finally {
+      setEvolutionConnecting(false);
+    }
+  }
+
   if (loading) {
     return (
       <section className="animate-in fade-in-50 duration-200">
@@ -396,6 +530,172 @@ export function WhatsAppConfig() {
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
       {/* Main config form */}
       <div className="space-y-6">
+        {/* Provider selector */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-foreground">Provedor de WhatsApp</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Escolha como este CRM se conecta ao WhatsApp.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex gap-3">
+            <Button
+              type="button"
+              variant={provider === 'meta' ? 'default' : 'outline'}
+              onClick={() => setProvider('meta')}
+              className={provider === 'meta' ? 'bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}
+            >
+              Meta Cloud API
+            </Button>
+            <Button
+              type="button"
+              variant={provider === 'evolution' ? 'default' : 'outline'}
+              onClick={() => setProvider('evolution')}
+              className={provider === 'evolution' ? 'bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}
+            >
+              Evolution API (QR Code)
+            </Button>
+          </CardContent>
+        </Card>
+
+        {provider === 'evolution' ? (
+          <>
+            <Alert className="bg-card border-border">
+              <div className="flex items-center gap-2">
+                {evolutionConnected ? (
+                  <CheckCircle2 className="size-4 text-primary" />
+                ) : (
+                  <XCircle className="size-4 text-red-500" />
+                )}
+                <AlertTitle className="text-foreground mb-0">
+                  {evolutionConnected ? 'Conectado' : 'Não conectado'}
+                </AlertTitle>
+              </div>
+              <AlertDescription className="text-muted-foreground">
+                {evolutionConnected
+                  ? 'WhatsApp conectado via Evolution API.'
+                  : 'Preencha os dados abaixo, salve e clique em Conectar para escanear o QR Code.'}
+              </AlertDescription>
+            </Alert>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-foreground">Configuração Evolution API</CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  Servidor Evolution API não-oficial, conexão via QR Code (Baileys).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">URL do servidor</Label>
+                  <Input
+                    placeholder="https://evolution.meuservidor.com"
+                    value={evolutionBaseUrl}
+                    onChange={(e) => setEvolutionBaseUrl(e.target.value)}
+                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Nome da instância</Label>
+                  <Input
+                    placeholder="wacrm-minha-instancia"
+                    value={evolutionInstanceName}
+                    onChange={(e) => setEvolutionInstanceName(e.target.value)}
+                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">API Key</Label>
+                  <div className="relative">
+                    <Input
+                      type={showToken ? 'text' : 'password'}
+                      placeholder="Chave global da Evolution API"
+                      value={evolutionApiKey}
+                      onChange={(e) => {
+                        setEvolutionApiKey(e.target.value);
+                        setEvolutionApiKeyEdited(true);
+                      }}
+                      onFocus={() => {
+                        if (evolutionApiKey === MASKED_TOKEN) {
+                          setEvolutionApiKey('');
+                          setEvolutionApiKeyEdited(true);
+                        }
+                      }}
+                      className="bg-muted border-border text-foreground placeholder:text-muted-foreground pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowToken(!showToken)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                  {config?.provider === 'evolution' && !evolutionApiKeyEdited && (
+                    <p className="text-xs text-muted-foreground">Chave salva — oculta por segurança.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={handleSaveEvolution}
+                disabled={evolutionSaving}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {evolutionSaving ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar Configuração'
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleEvolutionConnect}
+                disabled={evolutionConnecting || !config || config.provider !== 'evolution'}
+                className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                {evolutionConnecting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Conectando...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="size-4" />
+                    Conectar
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {evolutionQr && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-foreground text-base">Escaneie o QR Code</CardTitle>
+                  <CardDescription className="text-muted-foreground">
+                    Abra o WhatsApp no celular → Aparelhos conectados → Conectar um aparelho.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`data:image/png;base64,${evolutionQr}`}
+                    alt="QR Code de conexão do WhatsApp"
+                    className="mx-auto size-64 rounded border border-border bg-white p-2"
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </>
+        ) : (
+        <>
         {/* Corrupted-token reset banner */}
         {showResetBanner && (
           <Alert className="bg-amber-950/40 border-amber-600/40">
@@ -738,6 +1038,8 @@ export function WhatsAppConfig() {
             </Button>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {/* Setup Instructions Sidebar */}

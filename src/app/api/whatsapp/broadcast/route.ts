@@ -150,6 +150,13 @@ export async function POST(request: Request) {
       )
     }
 
+    if (config.provider === 'evolution') {
+      return NextResponse.json(
+        { error: 'Broadcasts por template não são suportados pelo provedor Evolution API.' },
+        { status: 400 },
+      )
+    }
+
     const accessToken = decrypt(config.access_token)
 
     // Load the template row once so sendTemplateMessage can build
