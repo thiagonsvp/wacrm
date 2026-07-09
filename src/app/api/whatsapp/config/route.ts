@@ -144,8 +144,20 @@ export async function GET() {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown Evolution API error'
         console.error('[whatsapp/config GET] Evolution status check failed:', message)
+        // Do NOT fall back to the stale `status` column here — it may
+        // still read 'connected' from a previous, different set of
+        // credentials (e.g. the user just saved a typo'd instance name
+        // or API key). An unreachable/rejecting live check must read as
+        // disconnected, not "whatever we last knew", and self-heal the
+        // DB the same way the success path does.
+        if (config.status === 'connected') {
+          await supabaseAdmin()
+            .from('whatsapp_config')
+            .update({ status: 'disconnected' })
+            .eq('id', config.id)
+        }
         return NextResponse.json({
-          connected: config.status === 'connected',
+          connected: false,
           provider: 'evolution',
           reason: 'evolution_api_error',
           message,

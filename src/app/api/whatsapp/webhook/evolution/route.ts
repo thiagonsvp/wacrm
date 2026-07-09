@@ -25,6 +25,12 @@ interface EvolutionMessageKey {
   remoteJid: string
   fromMe: boolean
   id: string
+  /**
+   * Present when `remoteJid` uses WhatsApp's newer `@lid` (linked ID)
+   * addressing — an opaque identifier, not a phone number. In that
+   * case the real `<number>@s.whatsapp.net` JID is here instead.
+   */
+  remoteJidAlt?: string
 }
 
 interface EvolutionMessageContent {
@@ -137,7 +143,15 @@ async function processEvolutionWebhook(body: EvolutionWebhookPayload, config: an
   const data = (body as EvolutionUpsertPayload).data
   if (!data?.key || data.key.fromMe) return
 
-  const phone = normalizePhone(data.key.remoteJid.replace(/@.*/, ''))
+  // `remoteJid` is `@lid` (an opaque linked-device id, not a phone
+  // number) for an increasing share of WhatsApp traffic. The real
+  // `<number>@s.whatsapp.net` JID is carried in `remoteJidAlt` when
+  // that happens — prefer it whenever `remoteJid` isn't itself a
+  // phone-based JID.
+  const rawJid = data.key.remoteJid.endsWith('@lid') && data.key.remoteJidAlt
+    ? data.key.remoteJidAlt
+    : data.key.remoteJid
+  const phone = normalizePhone(rawJid.replace(/@.*/, ''))
   const contactName = data.pushName || phone
   const msg = data.message ?? {}
 
