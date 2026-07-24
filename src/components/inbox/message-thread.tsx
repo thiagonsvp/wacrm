@@ -16,6 +16,8 @@ import type {
   MessageTemplate,
   Profile,
   InteractiveMessagePayload,
+  PipelineStage,
+  Deal,
 } from "@/types";
 import {
   MessageSquare,
@@ -27,6 +29,8 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Target,
+  DollarSign,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -38,6 +42,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./message-bubble";
 import { MessageActions } from "./message-actions";
@@ -135,6 +147,13 @@ function groupMessagesByDate(messages: Message[]) {
   return groups;
 }
 
+// Must match the seed names in `src/app/(dashboard)/pipelines/page.tsx`
+// (SPEC_DEFAULT_STAGES). Kept as separate constants here (not imported)
+// because that file isn't a shared module — duplicating two string
+// literals is simpler than carving out a shared constants file for it.
+const QUALIFIED_STAGE_NAME = "Qualified";
+const WON_STAGE_NAME = "Won";
+
 const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string }[] = [
   { label: "Open", value: "open", color: "text-primary" },
   { label: "Pending", value: "pending", color: "text-amber-400" },
@@ -172,7 +191,7 @@ export function MessageThread({
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
 
-  const { user, isAdmin, isOwner } = useAuth();
+  const { user, isAdmin, isOwner, accountId, defaultCurrency } = useAuth();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -838,6 +857,183 @@ export function MessageThread({
     [conversation, onAssignChange],
   );
 
+  const [qualifying, setQualifying] = useState(false);
+  const [saleOpen, setSaleOpen] = useState(false);
+  const [saleSaving, setSaleSaving] = useState(false);
+  const [saleProduct, setSaleProduct] = useState("");
+  const [saleValue, setSaleValue] = useState("");
+
+  // Shared by both quick actions: resolves the account's default pipeline
+  // (oldest by created_at, matching `loadPipelines` in pipelines/page.tsx)
+  // and the deal already linked to this contact within it, if any.
+  const resolvePipelineAndDeal = useCallback(
+    async (contactId: string) => {
+      const supabase = createClient();
+      const { data: pipeline, error: pipelineError } = await supabase
+        .from("pipelines")
+        .select("*")
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+
+      if (pipelineError || !pipeline) {
+        return { error: "no-pipeline" as const };
+      }
+
+      const { data: stages, error: stagesError } = await supabase
+        .from("pipeline_stages")
+        .select("*")
+        .eq("pipeline_id", pipeline.id)
+        .order("position");
+
+      if (stagesError || !stages || stages.length === 0) {
+        return { error: "no-stages" as const };
+      }
+
+      const { data: existingDeal } = await supabase
+        .from("deals")
+        .select("*")
+        .eq("pipeline_id", pipeline.id)
+        .eq("contact_id", contactId)
+        .maybeSingle();
+
+      return {
+        supabase,
+        pipeline,
+        stages: stages as PipelineStage[],
+        existingDeal: (existingDeal as Deal | null) ?? null,
+      };
+    },
+    [],
+  );
+
+  const handleQualifyLead = useCallback(async () => {
+    if (!conversation || !contact?.id || !user?.id || !accountId) return;
+    setQualifying(true);
+    try {
+      const resolved = await resolvePipelineAndDeal(contact.id);
+      if ("error" in resolved) {
+        toast.error(t("noPipelineError"));
+        return;
+      }
+      const { supabase, pipeline, stages, existingDeal } = resolved;
+
+      const exactStage = stages.find((s) => s.name === QUALIFIED_STAGE_NAME);
+      // Name may have been renamed/deleted by the user — fall back to the
+      // second stage by position ("New Lead" is conventionally first).
+      const fallbackStage = stages.find((s) => s.position === 1) ?? stages[1];
+      const stage = exactStage ?? fallbackStage;
+      if (!stage) {
+        toast.error(t("noPipelineError"));
+        return;
+      }
+
+      if (existingDeal) {
+        const { error } = await supabase
+          .from("deals")
+          .update({ stage_id: stage.id })
+          .eq("id", existingDeal.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("deals").insert({
+          title: contact.name || contact.phone,
+          pipeline_id: pipeline.id,
+          stage_id: stage.id,
+          contact_id: contact.id,
+          conversation_id: conversation.id,
+          account_id: accountId,
+          user_id: user.id,
+          value: 0,
+        });
+        if (error) throw error;
+      }
+
+      toast.success(
+        exactStage ? t("qualifySuccess") : t("qualifySuccessFallback"),
+      );
+    } catch (err) {
+      console.error("Failed to qualify lead:", err);
+      toast.error(t("qualifyError"));
+    } finally {
+      setQualifying(false);
+    }
+  }, [conversation, contact, user?.id, accountId, resolvePipelineAndDeal, t]);
+
+  const handleRegisterSale = useCallback(async () => {
+    if (!conversation || !contact?.id || !user?.id || !accountId) return;
+    const parsedValue = parseFloat(saleValue.replace(",", "."));
+    if (!saleProduct.trim() || !parsedValue) {
+      toast.error(t("saleValidationError"));
+      return;
+    }
+
+    setSaleSaving(true);
+    try {
+      const resolved = await resolvePipelineAndDeal(contact.id);
+      if ("error" in resolved) {
+        toast.error(t("noPipelineError"));
+        return;
+      }
+      const { supabase, pipeline, stages, existingDeal } = resolved;
+
+      const exactStage = stages.find((s) => s.name === WON_STAGE_NAME);
+      // Fall back to the last stage by position — the pipeline's terminal
+      // column is the closest analog to "Won" if it was renamed/removed.
+      const fallbackStage = stages[stages.length - 1];
+      const stage = exactStage ?? fallbackStage;
+      if (!stage) {
+        toast.error(t("noPipelineError"));
+        return;
+      }
+
+      const payload = {
+        title: saleProduct.trim(),
+        value: parsedValue,
+        stage_id: stage.id,
+        status: "won" as const,
+      };
+
+      if (existingDeal) {
+        const { error } = await supabase
+          .from("deals")
+          .update(payload)
+          .eq("id", existingDeal.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("deals").insert({
+          ...payload,
+          pipeline_id: pipeline.id,
+          contact_id: contact.id,
+          conversation_id: conversation.id,
+          account_id: accountId,
+          user_id: user.id,
+          currency: defaultCurrency,
+        });
+        if (error) throw error;
+      }
+
+      toast.success(t("saleSuccess"));
+      setSaleOpen(false);
+      setSaleProduct("");
+      setSaleValue("");
+    } catch (err) {
+      console.error("Failed to register sale:", err);
+      toast.error(t("saleError"));
+    } finally {
+      setSaleSaving(false);
+    }
+  }, [
+    conversation,
+    contact,
+    user?.id,
+    accountId,
+    defaultCurrency,
+    saleProduct,
+    saleValue,
+    resolvePipelineAndDeal,
+    t,
+  ]);
+
   // Empty state — same WhatsApp-style doodle background as the active
   // thread below, so swapping between empty/selected doesn't change the
   // pattern under the user's eye.
@@ -969,6 +1165,66 @@ export function MessageThread({
               />
             </button>
           )}
+
+          {/* Quick pipeline actions — mirror the Assign dropdown's visual
+              treatment (h-7 pill button). Disabled without a contact_id
+              since deals require one. */}
+          <button
+            type="button"
+            onClick={() => void handleQualifyLead()}
+            disabled={!contact?.id || qualifying}
+            title={t("qualifyLead")}
+            className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Target className="h-3 w-3" />
+            <span className="hidden sm:inline">{t("qualifyLead")}</span>
+          </button>
+
+          <Popover open={saleOpen} onOpenChange={setSaleOpen}>
+            <PopoverTrigger
+              disabled={!contact?.id}
+              title={t("registerSale")}
+              className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <DollarSign className="h-3 w-3" />
+              <span className="hidden sm:inline">{t("registerSale")}</span>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="border-border bg-popover">
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    {t("saleProduct")}
+                  </Label>
+                  <Input
+                    value={saleProduct}
+                    onChange={(e) => setSaleProduct(e.target.value)}
+                    placeholder={t("saleProductPlaceholder")}
+                    className="h-8 border-border bg-muted text-sm text-foreground"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    {t("saleValue")}
+                  </Label>
+                  <Input
+                    value={saleValue}
+                    onChange={(e) => setSaleValue(e.target.value)}
+                    placeholder="0.00"
+                    inputMode="decimal"
+                    className="h-8 border-border bg-muted text-sm text-foreground"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => void handleRegisterSale()}
+                  disabled={saleSaving}
+                  className="h-8 bg-primary text-xs text-primary-foreground hover:bg-primary/90"
+                >
+                  {saleSaving ? t("saving") : t("saleConfirm")}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Status dropdown */}
           <DropdownMenu>

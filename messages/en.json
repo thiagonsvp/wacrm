@@ -170,7 +170,21 @@
       "selectConversation": "Select a conversation",
       "selectConversationHint": "Choose a conversation from the left to start messaging",
       "today": "Today",
-      "yesterday": "Yesterday"
+      "yesterday": "Yesterday",
+      "qualifyLead": "Qualified Lead",
+      "qualifySuccess": "Deal moved to Qualified",
+      "qualifySuccessFallback": "Deal moved to the second stage (\"Qualified\" stage not found)",
+      "qualifyError": "Failed to qualify lead",
+      "registerSale": "Register Sale",
+      "saleProduct": "Product",
+      "saleProductPlaceholder": "What was sold?",
+      "saleValue": "Value",
+      "saleConfirm": "Confirm sale",
+      "saleValidationError": "Enter a product and a value greater than zero",
+      "saleSuccess": "Sale registered",
+      "saleError": "Failed to register sale",
+      "noPipelineError": "No pipeline found — create one in Pipelines first",
+      "saving": "Saving..."
     },
     "sessionTimer": {
       "expired": "Expired",
