@@ -2,6 +2,8 @@ import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact } from '@/lib/contacts/dedupe'
+import { decrypt } from '@/lib/whatsapp/encryption'
+import { downloadMedia } from '@/lib/whatsapp/providers/uazapi'
 import {
   findOrCreateContact,
   findOrCreateConversation,
@@ -126,6 +128,29 @@ function inferContentType(msg: UazapiMessage): string {
   return 'text'
 }
 
+const MEDIA_CONTENT_TYPES = new Set(['image', 'video', 'audio', 'document'])
+
+/**
+ * Resolve the plaintext, publicly-fetchable URL for a media message.
+ * Best-effort — the message still gets persisted (with a null
+ * mediaUrl) if this fails, rather than dropping it.
+ */
+async function resolveMediaUrl(
+  config: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  contentType: string,
+  messageId: string,
+): Promise<string | null> {
+  if (!MEDIA_CONTENT_TYPES.has(contentType)) return null
+  try {
+    const token = decrypt(config.uazapi_token)
+    const result = await downloadMedia({ baseUrl: config.uazapi_base_url, token, messageId })
+    return result.fileUrl
+  } catch (err) {
+    console.error('[uazapi-webhook] media download failed:', err instanceof Error ? err.message : err)
+    return null
+  }
+}
+
 async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (body.EventType !== 'messages') return
 
@@ -153,6 +178,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   const externalMessageId = msg.messageid || msg.id || `uazapi-${Date.now()}`
 
   const db = supabaseAdmin()
+  const mediaUrl = await resolveMediaUrl(config, contentType, externalMessageId)
 
   if (msg.fromMe) {
     // Sent from the agent's own linked phone, not through the CRM
@@ -169,7 +195,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
       conversation: convResult.conversation,
       contentType,
       contentText,
-      mediaUrl: null,
+      mediaUrl,
       externalMessageId,
       timestamp,
     })
@@ -205,7 +231,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
     conversationWasCreated: convResult.created,
     contentType,
     contentText,
-    mediaUrl: null,
+    mediaUrl,
     externalMessageId,
     timestamp,
   })

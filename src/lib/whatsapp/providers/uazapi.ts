@@ -171,6 +171,40 @@ export async function setWebhook(args: SetWebhookArgs): Promise<void> {
 }
 
 // ============================================================
+// Inbound media
+// ============================================================
+//
+// Inbound media/audio messages carry only an ENCRYPTED WhatsApp CDN
+// URL (mmg.whatsapp.net/.../*.enc) plus a mediaKey — unusable directly
+// as an <img>/<audio> src. UAZAPI decrypts it server-side and re-hosts
+// the plaintext file; confirmed live against a real server.
+
+export interface DownloadMediaArgs extends UazapiInstanceArgs {
+  /** The message's `messageid` (short form, not the `owner:id` composite). */
+  messageId: string
+}
+
+export interface DownloadMediaResult {
+  fileUrl: string
+  mimetype?: string
+}
+
+export async function downloadMedia(args: DownloadMediaArgs): Promise<DownloadMediaResult> {
+  const { baseUrl, token, messageId } = args
+  const response = await fetch(`${trimBaseUrl(baseUrl)}/message/download`, {
+    method: 'POST',
+    headers: baseHeaders(token),
+    body: JSON.stringify({ id: messageId }),
+  })
+  if (!response.ok) {
+    await throwUazapiError(response, `UAZAPI error: ${response.status}`)
+  }
+  const data = await response.json()
+  if (!data?.fileURL) throw new Error('UAZAPI did not return a fileURL.')
+  return { fileUrl: data.fileURL, mimetype: data.mimetype }
+}
+
+// ============================================================
 // Sending
 // ============================================================
 
