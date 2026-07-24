@@ -71,7 +71,7 @@ export async function POST(
 
   after(async () => {
     try {
-      await processUazapiWebhook(body, config)
+      await processUazapiWebhook(body as UazapiWebhookPayload, config)
     } catch (error) {
       console.error('[uazapi-webhook] processing error:', error)
     }
@@ -80,71 +80,68 @@ export async function POST(
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
 
-// Baileys-like shape, mirroring the Evolution webhook's payload —
-// UNCONFIRMED for UAZAPI (docs could not be scraped). Both APIs wrap
-// Baileys under the hood, so this is the best available guess; the
-// TEMP DIAGNOSTIC table above exists specifically to verify/correct
-// this shape against real deliveries.
-interface UazapiMessageKey {
-  remoteJid: string
-  fromMe: boolean
-  id: string
-  remoteJidAlt?: string
-}
-
-interface UazapiMessageContent {
-  conversation?: string
-  extendedTextMessage?: { text: string }
-  imageMessage?: { caption?: string }
-  videoMessage?: { caption?: string }
-  documentMessage?: { caption?: string; fileName?: string }
-  audioMessage?: Record<string, unknown>
-}
-
-interface UazapiUpsertLike {
-  key?: UazapiMessageKey
-  message?: UazapiMessageContent
+// Confirmed live against real UAZAPI traffic (captured via the TEMP
+// DIAGNOSTIC table above) — NOT a Baileys `key`/`message` envelope
+// like Evolution. UAZAPI flattens the message and includes rich
+// `chat` metadata alongside it.
+interface UazapiMessage {
+  messageid?: string
+  id?: string
+  text?: string
+  type?: string
+  messageType?: string
+  fromMe?: boolean
+  isGroup?: boolean
+  chatid?: string
+  sender?: string
+  /** Phone-based JID for the sender — reliable even when `sender`/`chatid` use `@lid` addressing. */
+  sender_pn?: string
+  senderName?: string
+  /** Epoch MILLISECONDS (not seconds, unlike Evolution/raw Baileys). */
   messageTimestamp?: number
-  pushName?: string
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function processUazapiWebhook(body: any, config: any) {
-  // UAZAPI may nest the message under `.message`/`.data`, or send it
-  // flat at the top level — try both since the exact envelope is
-  // unconfirmed.
-  const data: UazapiUpsertLike | undefined = body?.message ?? body?.data ?? body
+interface UazapiWebhookPayload {
+  EventType?: string
+  message?: UazapiMessage
+  chat?: { wa_contactName?: string; lead_name?: string; name?: string }
+  instanceName?: string
+}
 
-  if (!data?.key || data.key.fromMe) return
+const MEDIA_TYPE_MAP: Record<string, string> = {
+  image: 'image',
+  video: 'video',
+  document: 'document',
+  audio: 'audio',
+  ptt: 'audio',
+}
 
-  const rawJid = data.key.remoteJid?.endsWith('@lid') && data.key.remoteJidAlt
-    ? data.key.remoteJidAlt
-    : data.key.remoteJid
+function inferContentType(msg: UazapiMessage): string {
+  const messageType = (msg.messageType || '').toLowerCase()
+  for (const [needle, contentType] of Object.entries(MEDIA_TYPE_MAP)) {
+    if (messageType.includes(needle)) return contentType
+  }
+  return 'text'
+}
+
+async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (body.EventType !== 'messages') return
+
+  const msg = body.message
+  if (!msg || msg.fromMe || msg.isGroup) return
+
+  // `chatid`/`sender` can be `@lid` (opaque linked-device id) for an
+  // increasing share of traffic — `sender_pn` is UAZAPI's own
+  // phone-based JID field for exactly that case.
+  const rawJid = msg.chatid?.endsWith('@lid') && msg.sender_pn ? msg.sender_pn : msg.chatid
   if (!rawJid) return
 
   const phone = normalizePhone(rawJid.replace(/@.*/, ''))
-  const contactName = data.pushName || phone
-  const msg = data.message ?? {}
+  const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
 
-  let contentText: string | null = null
-  let contentType = 'text'
-  if (msg.conversation) {
-    contentText = msg.conversation
-  } else if (msg.extendedTextMessage?.text) {
-    contentText = msg.extendedTextMessage.text
-  } else if (msg.imageMessage) {
-    contentType = 'image'
-    contentText = msg.imageMessage.caption ?? null
-  } else if (msg.videoMessage) {
-    contentType = 'video'
-    contentText = msg.videoMessage.caption ?? null
-  } else if (msg.documentMessage) {
-    contentType = 'document'
-    contentText = msg.documentMessage.caption ?? msg.documentMessage.fileName ?? null
-  } else if (msg.audioMessage) {
-    contentType = 'audio'
-  }
+  let contentType = inferContentType(msg)
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) contentType = 'text'
+  const contentText = msg.text ?? null
 
   const db = supabaseAdmin()
   const contactOutcome = await findOrCreateContact(
@@ -164,9 +161,7 @@ async function processUazapiWebhook(body: any, config: any) {
   )
   if (!convResult) return
 
-  const timestamp = data.messageTimestamp
-    ? new Date(data.messageTimestamp * 1000)
-    : new Date()
+  const timestamp = msg.messageTimestamp ? new Date(msg.messageTimestamp) : new Date()
 
   await persistInboundMessage({
     db,
@@ -179,7 +174,7 @@ async function processUazapiWebhook(body: any, config: any) {
     contentType,
     contentText,
     mediaUrl: null,
-    externalMessageId: data.key.id,
+    externalMessageId: msg.messageid || msg.id || `uazapi-${Date.now()}`,
     timestamp,
   })
 }
