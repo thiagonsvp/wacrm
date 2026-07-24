@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     // returned nothing for teammates who didn't author the row.
     const { data: profile } = await supabase
       .from('profiles')
-      .select('account_id')
+      .select('account_id, account_role')
       .eq('user_id', user.id)
       .maybeSingle()
     const accountId = profile?.account_id as string | undefined
@@ -59,6 +59,10 @@ export async function POST(request: Request) {
         { status: 403 },
       )
     }
+    // Admin/owner override the assignment lock below; only a plain
+    // 'agent' can be blocked from a teammate's thread.
+    const isAdminOrOwner =
+      profile?.account_role === 'admin' || profile?.account_role === 'owner'
 
     const body = await request.json()
     const {
@@ -116,7 +120,7 @@ export async function POST(request: Request) {
     if (conversationIdInput) {
       const { data, error: convError } = await supabase
         .from('conversations')
-        .select('id')
+        .select('id, assigned_agent_id')
         .eq('id', conversationIdInput)
         .eq('account_id', accountId)
         .single()
@@ -127,6 +131,18 @@ export async function POST(request: Request) {
           { status: 404 }
         )
       }
+
+      const lockResult = await enforceAssignmentLock(
+        supabase,
+        data.id,
+        data.assigned_agent_id,
+        user.id,
+        isAdminOrOwner,
+      )
+      if (lockResult !== 'ok') {
+        return lockResult
+      }
+
       conversationId = data.id
     } else {
       // contact_id path: verify the contact is in this account first so a
@@ -157,7 +173,24 @@ export async function POST(request: Request) {
           { status: 500 }
         )
       }
-      conversationId = resolved
+
+      // findOrCreateConversation already auto-assigns brand-new
+      // conversations to the caller at INSERT time; for a pre-existing
+      // one, apply the same lock/claim logic as the conversation_id path.
+      if (!resolved.isNew) {
+        const lockResult = await enforceAssignmentLock(
+          supabase,
+          resolved.id,
+          resolved.assignedAgentId,
+          user.id,
+          isAdminOrOwner,
+        )
+        if (lockResult !== 'ok') {
+          return lockResult
+        }
+      }
+
+      conversationId = resolved.id
     }
 
     if (!conversationId) {
@@ -212,6 +245,47 @@ export async function POST(request: Request) {
 type SendSupabase = Awaited<ReturnType<typeof createClient>>
 
 /**
+ * Block a send into a conversation assigned to a different agent, or —
+ * if unassigned — auto-claim it for the caller. `AND assigned_agent_id
+ * IS NULL` in the claim's WHERE clause is what makes this race-safe:
+ * if two agents reply to the same fresh lead at once, only the first
+ * UPDATE matches a row, and the second becomes a no-op (best-effort,
+ * not re-checked) rather than both claiming it.
+ */
+async function enforceAssignmentLock(
+  supabase: SendSupabase,
+  conversationId: string,
+  assignedAgentId: string | null,
+  userId: string,
+  isAdminOrOwner: boolean,
+): Promise<'ok' | NextResponse> {
+  if (
+    assignedAgentId &&
+    assignedAgentId !== userId &&
+    !isAdminOrOwner
+  ) {
+    return NextResponse.json(
+      { error: 'Esta conversa está atribuída a outro agente.' },
+      { status: 403 },
+    )
+  }
+
+  if (!assignedAgentId) {
+    const { error } = await supabase
+      .from('conversations')
+      .update({ assigned_agent_id: userId })
+      .eq('id', conversationId)
+      .is('assigned_agent_id', null)
+
+    if (error) {
+      console.error('Failed to auto-assign conversation on send:', error.message)
+    }
+  }
+
+  return 'ok'
+}
+
+/**
  * Return the contact's conversation id in this account, creating one if
  * it doesn't exist yet. Mirrors the webhook's find-or-create so an
  * inbound-then-outbound (or outbound-first) sequence converges on a single
@@ -223,15 +297,17 @@ async function findOrCreateConversation(
   accountId: string,
   userId: string,
   contactId: string,
-): Promise<string | null> {
+): Promise<{ id: string; isNew: boolean; assignedAgentId: string | null } | null> {
   const { data: existing } = await supabase
     .from('conversations')
-    .select('id')
+    .select('id, assigned_agent_id')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
     .maybeSingle()
 
-  if (existing) return existing.id
+  if (existing) {
+    return { id: existing.id, isNew: false, assignedAgentId: existing.assigned_agent_id }
+  }
 
   const { data: created, error } = await supabase
     .from('conversations')
@@ -239,6 +315,7 @@ async function findOrCreateConversation(
       account_id: accountId,
       user_id: userId,
       contact_id: contactId,
+      assigned_agent_id: userId,
     })
     .select('id')
     .single()
@@ -248,5 +325,5 @@ async function findOrCreateConversation(
     return null
   }
 
-  return created.id
+  return { id: created.id, isNew: true, assignedAgentId: userId }
 }

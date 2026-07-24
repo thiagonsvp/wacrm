@@ -172,7 +172,7 @@ export function MessageThread({
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
 
-  const { user } = useAuth();
+  const { user, isAdmin, isOwner } = useAuth();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -867,6 +867,11 @@ export function MessageThread({
   const assignLabel = assignedAgentId
     ? (currentAssignee?.full_name ?? t("assigned"))
     : t("assign");
+  // Admin/owner keep an override — consistent with the same rule enforced
+  // server-side in /api/whatsapp/send.
+  const assignmentLocked = Boolean(
+    assignedAgentId && assignedAgentId !== user?.id && !isAdmin && !isOwner
+  );
 
   return (
     // `min-w-0` is load-bearing: the page already puts min-w-0 on the
@@ -1150,6 +1155,11 @@ export function MessageThread({
       />
 
       {/* Composer */}
+      {assignmentLocked && (
+        <div className="mx-3 mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+          {t("assignedToOther", { name: currentAssignee?.full_name ?? t("assigned") })}
+        </div>
+      )}
       <MessageComposer
         conversationId={conversation.id}
         sessionExpired={sessionInfo.expired}
@@ -1159,6 +1169,7 @@ export function MessageThread({
         onOpenTemplates={handleOpenTemplates}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
+        assignmentLocked={assignmentLocked}
       />
 
       <TemplatePicker

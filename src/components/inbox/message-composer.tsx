@@ -118,6 +118,10 @@ interface MessageComposerProps {
   onOpenTemplates: () => void;
   replyTo?: ReplyDraft | null;
   onClearReply?: () => void;
+  /** True when the conversation is assigned to a different agent than the
+   *  caller (and the caller isn't admin/owner). Folds into the same
+   *  `readOnly` gating as the viewer role, below. */
+  assignmentLocked?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -140,6 +144,7 @@ export function MessageComposer({
   onOpenTemplates,
   replyTo,
   onClearReply,
+  assignmentLocked = false,
 }: MessageComposerProps) {
   const t = useTranslations("Inbox.composer");
 
@@ -188,7 +193,7 @@ export function MessageComposer({
   // For solo users this is always true — single-owner accounts pass
   // every capability — so the disabled branch is a no-op there.
   const canSend = useCan("send-messages");
-  const readOnly = !canSend;
+  const readOnly = !canSend || assignmentLocked;
   // Media (like free-form text) is only allowed inside the 24h window.
   const inputsDisabled = readOnly || sessionExpired;
 
@@ -732,18 +737,26 @@ export function MessageComposer({
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             placeholder={
-              readOnly
-                ? t("readOnlyPlaceholder")
-                : sessionExpired
-                  ? t("sessionExpiredPlaceholder")
-                  : t("typeMessagePlaceholder")
+              assignmentLocked
+                ? t("assignmentLockedPlaceholder")
+                : readOnly
+                  ? t("readOnlyPlaceholder")
+                  : sessionExpired
+                    ? t("sessionExpiredPlaceholder")
+                    : t("typeMessagePlaceholder")
             }
             disabled={sessionExpired || readOnly}
             rows={1}
             // Textarea keeps its own inline title — the GatedButton
             // wrapping pattern doesn't apply to non-button inputs.
             // The placeholder text also surfaces the read-only state.
-            title={readOnly ? t("readOnlyTitle") : undefined}
+            title={
+              assignmentLocked
+                ? t("assignmentLockedTitle")
+                : readOnly
+                  ? t("readOnlyTitle")
+                  : undefined
+            }
             className={cn(
               "flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
               (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"

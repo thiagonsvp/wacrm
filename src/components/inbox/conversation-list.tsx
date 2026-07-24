@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import {
   CONVERSATION_SELECT,
   matchesContactFilters,
@@ -46,6 +47,10 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 type InboxFilter = ConversationStatus | "all" | "unread";
 
+// Distinct from InboxFilter above (conversation status). This gates on
+// `assigned_agent_id` — "who owns this lead" — not conversation state.
+type QueueFilter = "mine" | "queue" | "all";
+
 export function ConversationList({
   activeConversationId,
   onSelect,
@@ -54,7 +59,8 @@ export function ConversationList({
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
-  
+  const { user } = useAuth();
+
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
     { label: t("filterUnread"), value: "unread" },
@@ -63,8 +69,15 @@ export function ConversationList({
     { label: t("filterClosed"), value: "closed" },
   ], [t]);
 
+  const QUEUE_FILTER_OPTIONS: { label: string; value: QueueFilter }[] = useMemo(() => [
+    { label: t("queueFilterMine"), value: "mine" },
+    { label: t("queueFilterQueue"), value: "queue" },
+    { label: t("queueFilterAll"), value: "all" },
+  ], [t]);
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
+  const [assignmentFilter, setAssignmentFilter] = useState<QueueFilter>("all");
   const [loading, setLoading] = useState(true);
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
@@ -158,8 +171,24 @@ export function ConversationList({
     return m;
   }, [tags]);
 
+  const queueCounts = useMemo(() => {
+    let mine = 0;
+    let queue = 0;
+    for (const c of conversations) {
+      if (!c.assigned_agent_id) queue++;
+      else if (c.assigned_agent_id === user?.id) mine++;
+    }
+    return { mine, queue, all: conversations.length };
+  }, [conversations, user?.id]);
+
   const filtered = useMemo(() => {
     let result = conversations;
+
+    if (assignmentFilter === "mine") {
+      result = result.filter((c) => c.assigned_agent_id === user?.id);
+    } else if (assignmentFilter === "queue") {
+      result = result.filter((c) => !c.assigned_agent_id);
+    }
 
     if (filter === "unread") {
       result = result.filter((c) => c.unread_count > 0);
@@ -188,7 +217,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, search, selectedTagIds, selectedCompany]);
+  }, [conversations, assignmentFilter, filter, search, selectedTagIds, selectedCompany, user?.id]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -234,6 +263,29 @@ export function ConversationList({
             placeholder={t("searchPlaceholder")}
             className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
           />
+        </div>
+
+        {/* Assignment queue segmented control — Meus Leads / Fila / Todas.
+            Distinct from the status dropdown below (open/pending/closed);
+            this filters on `assigned_agent_id`, i.e. who owns the lead. */}
+        <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
+          {QUEUE_FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setAssignmentFilter(opt.value)}
+              className={cn(
+                "flex-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors",
+                assignmentFilter === opt.value
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {opt.label}
+              <span className="ml-1 text-[10px] text-muted-foreground">
+                {queueCounts[opt.value]}
+              </span>
+            </button>
+          ))}
         </div>
 
         <div className="flex flex-wrap items-center gap-1">

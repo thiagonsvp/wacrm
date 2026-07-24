@@ -15,7 +15,7 @@
     "createAccount": "Create account"
   },
   "Sidebar": {
-    "title": "CRM Template for WhatsApp",
+    "title": "Natividade CRM",
     "dashboard": "Dashboard",
     "inbox": "Inbox",
     "notifications": "Notifications",
@@ -142,9 +142,13 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "queueFilterMine": "My Leads",
+      "queueFilterQueue": "Queue",
+      "queueFilterAll": "All"
     },
     "messageThread": {
+      "assignedToOther": "This conversation is assigned to {name} — you can't send messages.",
       "backToConversations": "Back to conversations",
       "hideContactPanel": "Hide contact panel",
       "showContactPanel": "Show contact panel",
@@ -182,6 +186,8 @@
       "sessionExpiredPlaceholder": "Session expired - use a template",
       "typeMessagePlaceholder": "Type a message... (Shift+Enter for new line)",
       "readOnlyTitle": "Read-only — your role can't send messages",
+      "assignmentLockedPlaceholder": "Conversation assigned to another agent",
+      "assignmentLockedTitle": "This conversation is assigned to another agent",
       "recording": "Recording… {current} / {max}",
       "cancel": "Cancel",
       "stopAndAttach": "Stop and attach",

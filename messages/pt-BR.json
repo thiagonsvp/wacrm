@@ -15,7 +15,7 @@
     "createAccount": "Criar conta"
   },
   "Sidebar": {
-    "title": "Template de CRM para WhatsApp",
+    "title": "Natividade CRM",
     "dashboard": "Painel",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
@@ -142,9 +142,13 @@
       "clearAll": "Limpar tudo",
       "noConversations": "Nenhuma conversa encontrada",
       "noMessagesYet": "Nenhuma mensagem ainda",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
+      "queueFilterMine": "Meus Leads",
+      "queueFilterQueue": "Fila",
+      "queueFilterAll": "Todas"
     },
     "messageThread": {
+      "assignedToOther": "Esta conversa está atribuída a {name} — você não pode enviar mensagens.",
       "backToConversations": "Voltar às conversas",
       "hideContactPanel": "Ocultar painel do contato",
       "showContactPanel": "Mostrar painel do contato",
@@ -182,6 +186,8 @@
       "sessionExpiredPlaceholder": "Sessão expirada - use um template",
       "typeMessagePlaceholder": "Digite uma mensagem... (Shift+Enter para nova linha)",
       "readOnlyTitle": "Somente leitura — seu perfil não pode enviar mensagens",
+      "assignmentLockedPlaceholder": "Conversa atribuída a outro agente",
+      "assignmentLockedTitle": "Esta conversa está atribuída a outro agente",
       "recording": "Gravando… {current} / {max}",
       "cancel": "Cancelar",
       "stopAndAttach": "Parar e anexar",
