@@ -150,9 +150,9 @@ export async function POST(request: Request) {
       )
     }
 
-    if (config.provider === 'evolution') {
+    if (config.provider !== 'meta') {
       return NextResponse.json(
-        { error: 'Broadcasts por template não são suportados pelo provedor Evolution API.' },
+        { error: 'Broadcasts por template só são suportados pelo provedor Meta Cloud API.' },
         { status: 400 },
       )
     }

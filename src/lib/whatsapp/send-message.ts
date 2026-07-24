@@ -37,6 +37,7 @@ import {
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { sendText as evolutionSendText, sendMedia as evolutionSendMedia } from '@/lib/whatsapp/providers/evolution-api';
+import { sendText as uazapiSendText, sendMedia as uazapiSendMedia } from '@/lib/whatsapp/providers/uazapi';
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -264,22 +265,25 @@ export async function sendMessageToConversation(
   }
 
   const isEvolution = config.provider === 'evolution';
+  const isUazapi = config.provider === 'uazapi';
+  const isMeta = !isEvolution && !isUazapi;
 
   // Meta-only capabilities — fail clearly instead of attempting a send
-  // Evolution has no equivalent for.
-  if (isEvolution && (messageType === 'template' || messageType === 'interactive')) {
+  // neither unofficial provider has an equivalent for.
+  if (!isMeta && (messageType === 'template' || messageType === 'interactive')) {
     throw new SendMessageError(
       'unsupported_by_provider',
-      'Recurso não suportado pelo provedor Evolution API',
+      `Recurso não suportado pelo provedor ${isEvolution ? 'Evolution API' : 'UAZAPI'}`,
       400
     );
   }
 
-  const accessToken = isEvolution ? '' : decrypt(config.access_token);
+  const accessToken = isMeta ? decrypt(config.access_token) : '';
   const evolutionApiKey = isEvolution ? decrypt(config.evolution_api_key) : '';
+  const uazapiToken = isUazapi ? decrypt(config.uazapi_token) : '';
 
   // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
-  if (!isEvolution && isLegacyFormat(config.access_token)) {
+  if (isMeta && isLegacyFormat(config.access_token)) {
     void db
       .from('whatsapp_config')
       .update({ access_token: encrypt(accessToken) })
@@ -362,6 +366,26 @@ export async function sendMessageToConversation(
         baseUrl: config.evolution_base_url,
         apiKey: evolutionApiKey,
         instanceName: config.evolution_instance_name,
+        number: phone,
+        text: contentText!,
+      });
+      return result.messageId;
+    }
+    if (isUazapi) {
+      if (isMediaKind) {
+        const result = await uazapiSendMedia({
+          baseUrl: config.uazapi_base_url,
+          token: uazapiToken,
+          number: phone,
+          type: messageType as 'image' | 'video' | 'document' | 'audio',
+          file: mediaUrl!,
+          caption: contentText || undefined,
+        });
+        return result.messageId;
+      }
+      const result = await uazapiSendText({
+        baseUrl: config.uazapi_base_url,
+        token: uazapiToken,
         number: phone,
         text: contentText!,
       });

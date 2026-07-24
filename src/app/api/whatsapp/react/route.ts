@@ -122,9 +122,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (config.provider === 'evolution') {
+    if (config.provider !== 'meta') {
       return NextResponse.json(
-        { error: 'Reações não são suportadas pelo provedor Evolution API.' },
+        { error: 'Reações só são suportadas pelo provedor Meta Cloud API.' },
         { status: 400 },
       );
     }

@@ -1,14 +1,15 @@
 /**
- * Provider abstraction over the two supported WhatsApp backends
- * (Meta Cloud API, Evolution API). Only covers what both share —
- * text + media sending. Capabilities that only Meta has (templates,
- * interactive, reactions, phone registration) stay off this
- * interface; callers check `capabilities` before touching them.
+ * Provider abstraction over the three supported WhatsApp backends
+ * (Meta Cloud API, Evolution API, UAZAPI). Only covers what all
+ * share — text + media sending. Capabilities that only Meta has
+ * (templates, interactive, reactions, phone registration) stay off
+ * this interface; callers check `capabilities` before touching them.
  */
 
 import type { MediaKind } from '@/lib/whatsapp/meta-api'
 import { createMetaProvider } from '@/lib/whatsapp/providers/meta-provider'
 import { createEvolutionProvider } from '@/lib/whatsapp/providers/evolution-provider'
+import { createUazapiProvider } from '@/lib/whatsapp/providers/uazapi-provider'
 
 export interface WhatsAppSendResult {
   messageId: string
@@ -37,7 +38,7 @@ export interface WhatsAppProviderCapabilities {
 }
 
 export interface WhatsAppProvider {
-  readonly name: 'meta' | 'evolution'
+  readonly name: 'meta' | 'evolution' | 'uazapi'
   readonly capabilities: WhatsAppProviderCapabilities
   sendText(input: SendTextInput): Promise<WhatsAppSendResult>
   sendMedia(input: SendMediaInput): Promise<WhatsAppSendResult>
@@ -55,6 +56,9 @@ export interface WhatsAppConfigRow {
   evolution_base_url?: string | null
   evolution_instance_name?: string | null
   evolution_api_key?: string | null
+  uazapi_base_url?: string | null
+  uazapi_instance_name?: string | null
+  uazapi_token?: string | null
   [key: string]: unknown
 }
 
@@ -72,18 +76,32 @@ const EVOLUTION_CAPABILITIES: WhatsAppProviderCapabilities = {
   registration: false,
 }
 
-export { META_CAPABILITIES, EVOLUTION_CAPABILITIES }
+const UAZAPI_CAPABILITIES: WhatsAppProviderCapabilities = {
+  templates: false,
+  interactive: false,
+  reactions: false,
+  registration: false,
+}
+
+export { META_CAPABILITIES, EVOLUTION_CAPABILITIES, UAZAPI_CAPABILITIES }
 
 /**
  * Resolve the right provider implementation for a `whatsapp_config`
  * row. Callers must have already decrypted any tokens on `config`
- * (both provider constructors read the plaintext fields).
+ * (provider constructors read the plaintext fields).
  */
 export function resolveProvider(
-  config: WhatsAppConfigRow & { decryptedAccessToken?: string; decryptedEvolutionApiKey?: string },
+  config: WhatsAppConfigRow & {
+    decryptedAccessToken?: string
+    decryptedEvolutionApiKey?: string
+    decryptedUazapiToken?: string
+  },
 ): WhatsAppProvider {
   if (config.provider === 'evolution') {
     return createEvolutionProvider(config)
+  }
+  if (config.provider === 'uazapi') {
+    return createUazapiProvider(config)
   }
   return createMetaProvider(config)
 }

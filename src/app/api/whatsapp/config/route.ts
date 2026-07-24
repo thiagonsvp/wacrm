@@ -8,6 +8,7 @@ import {
 } from '@/lib/whatsapp/meta-api'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 import { createInstance, getConnectionState } from '@/lib/whatsapp/providers/evolution-api'
+import { getInstanceStatus } from '@/lib/whatsapp/providers/uazapi'
 
 /**
  * Resolve the caller's account_id from their profile. Inlined here
@@ -89,7 +90,7 @@ export async function GET() {
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
       .select(
-        'id, phone_number_id, access_token, status, provider, evolution_base_url, evolution_instance_name, evolution_api_key',
+        'id, phone_number_id, access_token, status, provider, evolution_base_url, evolution_instance_name, evolution_api_key, uazapi_base_url, uazapi_instance_name, uazapi_token',
       )
       .eq('account_id', accountId)
       .maybeSingle()
@@ -160,6 +161,43 @@ export async function GET() {
           connected: false,
           provider: 'evolution',
           reason: 'evolution_api_error',
+          message,
+        })
+      }
+    }
+
+    if (config.provider === 'uazapi') {
+      // Same self-heal rationale as Evolution above: the QR-scan poll
+      // only runs while the settings page is mounted, so reconcile the
+      // live status on every hit of this endpoint too.
+      if (!config.uazapi_base_url || !config.uazapi_instance_name || !config.uazapi_token) {
+        return NextResponse.json({ connected: false, provider: 'uazapi', reason: 'incomplete_config' })
+      }
+      try {
+        const token = decrypt(config.uazapi_token)
+        const result = await getInstanceStatus({ baseUrl: config.uazapi_base_url, token })
+        const connected = result.connected
+        if (connected !== (config.status === 'connected')) {
+          const update: Record<string, unknown> = {
+            status: connected ? 'connected' : 'disconnected',
+          }
+          if (connected) update.connected_at = new Date().toISOString()
+          await supabaseAdmin().from('whatsapp_config').update(update).eq('id', config.id)
+        }
+        return NextResponse.json({ connected, provider: 'uazapi', state: result.status })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown UAZAPI error'
+        console.error('[whatsapp/config GET] UAZAPI status check failed:', message)
+        if (config.status === 'connected') {
+          await supabaseAdmin()
+            .from('whatsapp_config')
+            .update({ status: 'disconnected' })
+            .eq('id', config.id)
+        }
+        return NextResponse.json({
+          connected: false,
+          provider: 'uazapi',
+          reason: 'uazapi_api_error',
           message,
         })
       }
@@ -250,6 +288,9 @@ export async function POST(request: Request) {
       evolution_base_url,
       evolution_instance_name,
       evolution_api_key,
+      uazapi_base_url,
+      uazapi_instance_name,
+      uazapi_token,
     } = body
 
     if (provider === 'evolution') {
@@ -257,6 +298,14 @@ export async function POST(request: Request) {
         evolution_base_url,
         evolution_instance_name,
         evolution_api_key,
+      })
+    }
+
+    if (provider === 'uazapi') {
+      return saveUazapiConfig(supabase, accountId, user.id, {
+        uazapi_base_url,
+        uazapi_instance_name,
+        uazapi_token,
       })
     }
 
@@ -609,6 +658,98 @@ async function saveEvolutionConfig(
   }
 
   return NextResponse.json({ success: true, saved: true, provider: 'evolution' })
+}
+
+/**
+ * Save (create or update) a UAZAPI config for the account.
+ * `uazapi_token` is whatever the user pastes in — either the server's
+ * admin/master token (first save, instance not created yet) or an
+ * existing per-instance token. /api/whatsapp/uazapi/connect decides
+ * which one it has and, on init, overwrites this field with the
+ * instance-specific token UAZAPI returns.
+ */
+async function saveUazapiConfig(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  accountId: string,
+  userId: string,
+  fields: {
+    uazapi_base_url?: string
+    uazapi_instance_name?: string
+    uazapi_token?: string
+  }
+) {
+  const { uazapi_base_url, uazapi_instance_name, uazapi_token } = fields
+
+  if (!uazapi_base_url || !uazapi_instance_name || !uazapi_token) {
+    return NextResponse.json(
+      { error: 'uazapi_base_url, uazapi_instance_name and uazapi_token are required' },
+      { status: 400 }
+    )
+  }
+
+  let encryptedToken: string
+  try {
+    encryptedToken = encrypt(uazapi_token)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown encryption error'
+    console.error('Encryption failed:', message)
+    return NextResponse.json(
+      {
+        error:
+          'Failed to encrypt token. Check that ENCRYPTION_KEY is a valid 64-character hex string in your environment variables.',
+      },
+      { status: 500 }
+    )
+  }
+
+  const { data: existing } = await supabase
+    .from('whatsapp_config')
+    .select('id')
+    .eq('account_id', accountId)
+    .maybeSingle()
+
+  const baseRow = {
+    provider: 'uazapi',
+    uazapi_base_url,
+    uazapi_instance_name,
+    uazapi_token: encryptedToken,
+    phone_number_id: null,
+    waba_id: null,
+    status: 'disconnected',
+    updated_at: new Date().toISOString(),
+  }
+
+  if (existing) {
+    const { error: updateError } = await supabase
+      .from('whatsapp_config')
+      .update(baseRow)
+      .eq('account_id', accountId)
+    if (updateError) {
+      console.error('Error updating whatsapp_config (uazapi):', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update configuration' },
+        { status: 500 }
+      )
+    }
+  } else {
+    const { error: insertError } = await supabase.from('whatsapp_config').insert({
+      account_id: accountId,
+      user_id: userId,
+      ...baseRow,
+    })
+    if (insertError) {
+      console.error('Error inserting whatsapp_config (uazapi):', insertError)
+      return NextResponse.json(
+        { error: 'Failed to save configuration' },
+        { status: 500 }
+      )
+    }
+  }
+
+  // Instance creation + connect happen in /api/whatsapp/uazapi/connect,
+  // which the UI calls right after this save succeeds — mirrors the
+  // Evolution flow.
+  return NextResponse.json({ success: true, saved: true, provider: 'uazapi' })
 }
 
 /**

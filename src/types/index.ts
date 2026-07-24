@@ -287,11 +287,14 @@ export interface WhatsAppConfig {
   subscribed_apps_at?: string;
   /** Last error from /register; cleared on success. */
   last_registration_error?: string;
-  /** Which WhatsApp backend this row uses. Defaults to 'meta' (migration 036). */
-  provider?: 'meta' | 'evolution';
+  /** Which WhatsApp backend this row uses. Defaults to 'meta' (migration 036, 037). */
+  provider?: 'meta' | 'evolution' | 'uazapi';
   evolution_base_url?: string | null;
   evolution_instance_name?: string | null;
   evolution_api_key?: string | null;
+  uazapi_base_url?: string | null;
+  uazapi_instance_name?: string | null;
+  uazapi_token?: string | null;
 }
 
 // Raw Meta status enum. We persist this verbatim from Meta (sync + webhook)
