@@ -1,10 +1,12 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
+import { findExistingContact } from '@/lib/contacts/dedupe'
 import {
   findOrCreateContact,
   findOrCreateConversation,
   persistInboundMessage,
+  persistAgentDeviceMessage,
   ALLOWED_CONTENT_TYPES,
 } from '@/lib/whatsapp/inbound'
 
@@ -128,22 +130,54 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   if (body.EventType !== 'messages') return
 
   const msg = body.message
-  if (!msg || msg.fromMe || msg.isGroup) return
+  if (!msg || msg.isGroup) return
 
-  // `chatid`/`sender` can be `@lid` (opaque linked-device id) for an
-  // increasing share of traffic — `sender_pn` is UAZAPI's own
-  // phone-based JID field for exactly that case.
-  const rawJid = msg.chatid?.endsWith('@lid') && msg.sender_pn ? msg.sender_pn : msg.chatid
-  if (!rawJid) return
+  // `chatid` identifies the CHAT (the lead), regardless of who sent
+  // this particular message — never the sender. It can be `@lid`
+  // (opaque linked-device id); `sender_pn` is a safe phone-based
+  // fallback ONLY for inbound (non-fromMe) messages, where the sender
+  // IS the chat partner. For an agent-device (fromMe) message the
+  // sender is the agent's own number, so no such fallback applies —
+  // skip rather than risk misattributing to the wrong contact.
+  const rawJid = msg.chatid?.endsWith('@lid') && msg.sender_pn && !msg.fromMe
+    ? msg.sender_pn
+    : msg.chatid
+  if (!rawJid || rawJid.endsWith('@lid')) return
 
   const phone = normalizePhone(rawJid.replace(/@.*/, ''))
-  const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
 
   let contentType = inferContentType(msg)
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) contentType = 'text'
   const contentText = msg.text ?? null
+  const timestamp = msg.messageTimestamp ? new Date(msg.messageTimestamp) : new Date()
+  const externalMessageId = msg.messageid || msg.id || `uazapi-${Date.now()}`
 
   const db = supabaseAdmin()
+
+  if (msg.fromMe) {
+    // Sent from the agent's own linked phone, not through the CRM
+    // (UAZAPI's `excludeMessages: wasSentByApi` keeps CRM-originated
+    // sends from ever reaching this webhook). Only sync onto an
+    // EXISTING lead's conversation — never fabricate a new contact
+    // from the agent's personal chats.
+    const existingContact = await findExistingContact(db, config.account_id, phone)
+    if (!existingContact) return
+    const convResult = await findOrCreateConversation(db, config.account_id, config.user_id, existingContact.id)
+    if (!convResult) return
+    await persistAgentDeviceMessage({
+      db,
+      conversation: convResult.conversation,
+      contentType,
+      contentText,
+      mediaUrl: null,
+      externalMessageId,
+      timestamp,
+    })
+    return
+  }
+
+  const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
+
   const contactOutcome = await findOrCreateContact(
     db,
     config.account_id,
@@ -161,8 +195,6 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   )
   if (!convResult) return
 
-  const timestamp = msg.messageTimestamp ? new Date(msg.messageTimestamp) : new Date()
-
   await persistInboundMessage({
     db,
     accountId: config.account_id,
@@ -174,7 +206,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
     contentType,
     contentText,
     mediaUrl: null,
-    externalMessageId: msg.messageid || msg.id || `uazapi-${Date.now()}`,
+    externalMessageId,
     timestamp,
   })
 }

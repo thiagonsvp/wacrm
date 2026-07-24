@@ -163,6 +163,60 @@ export async function lookupInternalIdByExternalId(
   return data?.id ?? null
 }
 
+export interface PersistAgentDeviceMessageParams {
+  db: SupabaseClient
+  conversation: Row
+  contentType: string
+  contentText: string | null
+  mediaUrl: string | null
+  externalMessageId: string
+  timestamp: Date
+}
+
+/**
+ * Persist a message the agent sent from their own linked phone
+ * (WhatsApp app), not through the CRM's compose box — QR-code
+ * providers (Evolution/UAZAPI) report these as `fromMe: true` webhook
+ * events. Unlike `persistInboundMessage`, this must NOT trigger
+ * automations/Flows/AI auto-reply/broadcast-reply flagging or bump
+ * `unread_count` — none of those make sense for the agent's own
+ * outgoing message.
+ */
+export async function persistAgentDeviceMessage(
+  params: PersistAgentDeviceMessageParams,
+): Promise<void> {
+  const { db, conversation, contentType, contentText, mediaUrl, externalMessageId, timestamp } = params
+
+  const { error: msgError } = await db.from('messages').insert({
+    conversation_id: conversation.id,
+    sender_type: 'agent',
+    content_type: contentType,
+    content_text: contentText,
+    media_url: mediaUrl,
+    message_id: externalMessageId,
+    status: 'sent',
+    created_at: timestamp.toISOString(),
+  })
+
+  if (msgError) {
+    console.error('[inbound] Error inserting agent-device message:', msgError)
+    return
+  }
+
+  const { error: convError } = await db
+    .from('conversations')
+    .update({
+      last_message_text: contentText || `[${contentType}]`,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', conversation.id)
+
+  if (convError) {
+    console.error('[inbound] Error updating conversation after agent-device message:', convError)
+  }
+}
+
 export const ALLOWED_CONTENT_TYPES = new Set([
   'text', 'image', 'document', 'audio', 'video',
   'location', 'template', 'interactive',
