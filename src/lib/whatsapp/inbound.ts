@@ -79,15 +79,19 @@ export async function findOrCreateConversation(
   configOwnerUserId: string,
   contactId: string,
 ): Promise<ConversationOutcome | null> {
-  const { data: existing, error: findError } = await db
+  // Do not use `.single()` here: historical duplicate rows (created by
+  // older inbound versions) make it return an error, which previously
+  // caused every new message to create yet another conversation.
+  const { data: existingRows, error: findError } = await db
     .from('conversations')
     .select('*')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
-    .single()
+    .order('created_at', { ascending: false })
+    .limit(1)
 
-  if (!findError && existing) {
-    return { conversation: existing, created: false }
+  if (!findError && existingRows?.[0]) {
+    return { conversation: existingRows[0], created: false }
   }
 
   const { data: newConv, error: createError } = await db
