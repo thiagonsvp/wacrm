@@ -22,6 +22,7 @@ export function normalizeKey(phone: string): string {
 export interface ExistingContact {
   id: string;
   phone: string;
+  phone_normalized?: string | null;
   name?: string | null;
   [key: string]: unknown;
 }
@@ -40,8 +41,21 @@ export async function findExistingContact(
   const normalized = normalizePhone(phone);
   if (!normalized) return null;
 
-  const suffix = normalized.length >= 8 ? normalized.slice(-8) : normalized;
+  // Prefer the generated canonical column. Looking only at the raw
+  // `phone` value misses contacts saved as `+55 (21) ...` when the
+  // provider sends the same number as digits-only (which caused a new
+  // contact to be created for every inbound message).
+  const { data: exactData, error: exactError } = await db
+    .from("contacts")
+    .select("*")
+    .eq("account_id", accountId)
+    .eq("phone_normalized", normalized);
 
+  if (!exactError && exactData?.[0]) {
+    return exactData[0] as ExistingContact;
+  }
+
+  const suffix = normalized.length >= 8 ? normalized.slice(-8) : normalized;
   const { data, error } = await db
     .from("contacts")
     .select("*")

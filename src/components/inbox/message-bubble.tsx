@@ -14,6 +14,7 @@ import {
   ImageOff,
   CornerDownLeft,
   Sparkles,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
@@ -56,7 +57,7 @@ function MediaUnavailable({ label, t }: { label: string, t: ReturnType<typeof us
   );
 }
 
-function MediaImage({ url, alt }: { url: string; alt: string }) {
+function MediaImage({ url, alt, onClick }: { url: string; alt: string; onClick?: () => void }) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -113,13 +114,28 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
     <img
       src={src ?? ""}
       alt={alt}
-      className="max-h-64 max-w-60 rounded-lg object-cover"
+      onClick={onClick}
+      className={cn("max-h-64 max-w-60 rounded-lg object-cover", onClick && "cursor-zoom-in")}
       onError={() => setError(true)}
     />
   );
 }
 
 function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof useTranslations> }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const media = message.media_url;
+  const preview = previewOpen && media ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewOpen(false)}>
+      <button type="button" aria-label="Close preview" className="absolute right-4 top-4 text-white" onClick={() => setPreviewOpen(false)}>
+        <X className="h-6 w-6" />
+      </button>
+      {message.content_type === "image" ? (
+        <img src={media} alt="Shared image preview" className="max-h-[90vh] max-w-[95vw] object-contain" onClick={(e) => e.stopPropagation()} />
+      ) : (
+        <video src={media} controls autoPlay className="max-h-[90vh] max-w-[95vw]" onClick={(e) => e.stopPropagation()} />
+      )}
+    </div>
+  ) : null;
   switch (message.content_type) {
     case "text":
       return (
@@ -129,10 +145,10 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
       );
 
     case "image":
-      return (
+      return (<>
         <div>
           {message.media_url ? (
-            <MediaImage url={message.media_url} alt="Shared image" />
+            <MediaImage url={message.media_url} alt="Shared image" onClick={() => setPreviewOpen(true)} />
           ) : (
             <MediaUnavailable label={t("photo")} t={t} />
           )}
@@ -141,17 +157,17 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
               {message.content_text}
             </p>
           )}
-        </div>
-      );
+        </div>{preview}</>);
 
     case "video":
-      return (
+      return (<>
         <div>
           {message.media_url ? (
             <video
               src={message.media_url}
               controls
-              className="max-h-64 max-w-60 rounded-lg"
+              onClick={() => setPreviewOpen(true)}
+              className="max-h-64 max-w-60 cursor-zoom-in rounded-lg"
             />
           ) : (
             <MediaUnavailable label={t("video")} t={t} />
@@ -161,8 +177,7 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
               {message.content_text}
             </p>
           )}
-        </div>
-      );
+        </div>{preview}</>);
 
     case "audio":
       return (
