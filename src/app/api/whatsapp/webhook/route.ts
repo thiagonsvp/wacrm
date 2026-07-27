@@ -64,8 +64,11 @@ interface WhatsAppMessage {
   context?: { id: string }
   referral?: {
     source_url?: string
+    source_id?: string
     source_type?: string
     platform?: string
+    headline?: string
+    body?: string
   }
 }
 
@@ -536,7 +539,13 @@ async function processMessage(
     configOwnerUserId,
     senderPhone,
     contactName,
-    acquisitionSource
+    message.referral ? {
+      source: acquisitionSource,
+      sourceId: message.referral.source_id,
+      campaign: message.referral.headline,
+      adText: message.referral.body,
+      url: message.referral.source_url,
+    } : undefined
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact

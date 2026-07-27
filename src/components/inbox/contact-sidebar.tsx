@@ -158,10 +158,20 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 Lead via {contact.acquisition_source}
               </span>
             )}
+            {contact.acquisition_campaign && (
+              <p className="mt-1 max-w-full truncate text-[10px] text-muted-foreground" title={contact.acquisition_campaign}>
+                Campanha: {contact.acquisition_campaign}
+              </p>
+            )}
           </div>
 
           {/* Phone */}
           <div className="mt-4 space-y-2">
+            {contact.acquisition_source_id && (
+              <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                Source ID: <span className="font-mono">{contact.acquisition_source_id}</span>
+              </div>
+            )}
             <button
               onClick={handleCopyPhone}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted"

@@ -110,6 +110,10 @@ export interface Contact {
   avatar_url?: string;
   /** Platform that originated a Meta click-to-WhatsApp ad. */
   acquisition_source?: 'Facebook' | 'Instagram' | null;
+  acquisition_source_id?: string | null;
+  acquisition_campaign?: string | null;
+  acquisition_ad_text?: string | null;
+  acquisition_url?: string | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the

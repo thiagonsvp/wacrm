@@ -24,23 +24,35 @@ export interface ContactOutcome {
   wasCreated: boolean
 }
 
+export interface AcquisitionData {
+  source?: 'Facebook' | 'Instagram' | null
+  sourceId?: string | null
+  campaign?: string | null
+  adText?: string | null
+  url?: string | null
+}
+
 export async function findOrCreateContact(
   db: SupabaseClient,
   accountId: string,
   configOwnerUserId: string,
   phone: string,
   name: string,
-  acquisitionSource?: 'Facebook' | 'Instagram' | null,
+  acquisition?: AcquisitionData,
 ): Promise<ContactOutcome | null> {
   const existingContact = await findExistingContact(db, accountId, phone)
 
   if (existingContact) {
-    if ((name && name !== existingContact.name) || (acquisitionSource && acquisitionSource !== existingContact.acquisition_source)) {
+    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.adText || acquisition?.url) {
       await db
         .from('contacts')
         .update({
           ...(name ? { name } : {}),
-          ...(acquisitionSource ? { acquisition_source: acquisitionSource } : {}),
+          ...(acquisition?.source ? { acquisition_source: acquisition.source } : {}),
+          ...(acquisition?.sourceId ? { acquisition_source_id: acquisition.sourceId } : {}),
+          ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
+          ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
+          ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingContact.id)
@@ -55,7 +67,11 @@ export async function findOrCreateContact(
       user_id: configOwnerUserId,
       phone,
       name: name || phone,
-      ...(acquisitionSource ? { acquisition_source: acquisitionSource } : {}),
+      ...(acquisition?.source ? { acquisition_source: acquisition.source } : {}),
+      ...(acquisition?.sourceId ? { acquisition_source_id: acquisition.sourceId } : {}),
+      ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
+      ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
+      ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
     })
     .select()
     .single()
