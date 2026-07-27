@@ -30,14 +30,19 @@ export async function findOrCreateContact(
   configOwnerUserId: string,
   phone: string,
   name: string,
+  acquisitionSource?: 'Facebook' | 'Instagram' | null,
 ): Promise<ContactOutcome | null> {
   const existingContact = await findExistingContact(db, accountId, phone)
 
   if (existingContact) {
-    if (name && name !== existingContact.name) {
+    if ((name && name !== existingContact.name) || (acquisitionSource && acquisitionSource !== existingContact.acquisition_source)) {
       await db
         .from('contacts')
-        .update({ name, updated_at: new Date().toISOString() })
+        .update({
+          ...(name ? { name } : {}),
+          ...(acquisitionSource ? { acquisition_source: acquisitionSource } : {}),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', existingContact.id)
     }
     return { contact: existingContact, wasCreated: false }
@@ -50,6 +55,7 @@ export async function findOrCreateContact(
       user_id: configOwnerUserId,
       phone,
       name: name || phone,
+      ...(acquisitionSource ? { acquisition_source: acquisitionSource } : {}),
     })
     .select()
     .single()

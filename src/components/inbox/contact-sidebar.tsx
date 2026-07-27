@@ -153,6 +153,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             {contact.company && (
               <p className="text-xs text-muted-foreground">{contact.company}</p>
             )}
+            {contact.acquisition_source && (
+              <span className="mt-1 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                Lead via {contact.acquisition_source}
+              </span>
+            )}
           </div>
 
           {/* Phone */}

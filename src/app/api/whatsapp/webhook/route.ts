@@ -62,6 +62,11 @@ interface WhatsAppMessage {
   }
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
+  referral?: {
+    source_url?: string
+    source_type?: string
+    platform?: string
+  }
 }
 
 interface WhatsAppWebhookEntry {
@@ -515,6 +520,13 @@ async function processMessage(
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
+  const referralText = [message.referral?.platform, message.referral?.source_type, message.referral?.source_url]
+    .filter(Boolean).join(' ').toLowerCase()
+  const acquisitionSource = referralText.includes('instagram')
+    ? 'Instagram' as const
+    : referralText.includes('facebook') || message.referral
+      ? 'Facebook' as const
+      : null
 
   // Find or create contact / conversation — shared with the Evolution
   // webhook via src/lib/whatsapp/inbound.ts.
@@ -523,7 +535,8 @@ async function processMessage(
     accountId,
     configOwnerUserId,
     senderPhone,
-    contactName
+    contactName,
+    acquisitionSource
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
