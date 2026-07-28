@@ -30,6 +30,7 @@ export interface AcquisitionData {
   campaign?: string | null
   adText?: string | null
   url?: string | null
+  avatarUrl?: string | null
 }
 
 export async function findOrCreateContact(
@@ -53,6 +54,7 @@ export async function findOrCreateContact(
           ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
           ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
           ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
+          ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingContact.id)
@@ -72,6 +74,7 @@ export async function findOrCreateContact(
       ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
       ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
       ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
+      ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
     })
     .select()
     .single()

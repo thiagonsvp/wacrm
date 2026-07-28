@@ -123,7 +123,7 @@ interface UazapiMessage {
 interface UazapiWebhookPayload {
   EventType?: string
   message?: UazapiMessage
-  chat?: { wa_contactName?: string; lead_name?: string; name?: string }
+  chat?: { wa_contactName?: string; lead_name?: string; name?: string; image?: string; imagePreview?: string }
   instanceName?: string
 }
 
@@ -160,7 +160,8 @@ function extractAcquisition(msg: UazapiMessage) {
     sourceId: ad.sourceID || ad.sourceId || null,
     campaign: ad.title || null,
     adText: ad.body || null,
-    url: sourceUrl,
+      url: sourceUrl,
+      avatarUrl: null,
   }
 }
 
@@ -238,6 +239,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
 
   const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
   const acquisition = extractAcquisition(msg)
+  const avatarUrl = body.chat?.imagePreview || body.chat?.image || null
 
   const contactOutcome = await findOrCreateContact(
     db,
@@ -245,7 +247,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
     config.user_id,
     phone,
     contactName,
-    acquisition,
+    { ...acquisition, avatarUrl },
   )
   if (!contactOutcome) return
 
