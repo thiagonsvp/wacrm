@@ -103,6 +103,21 @@ interface UazapiMessage {
   senderName?: string
   /** Epoch MILLISECONDS (not seconds, unlike Evolution/raw Baileys). */
   messageTimestamp?: number
+  content?: {
+    contextInfo?: {
+      externalAdReply?: {
+        sourceID?: string
+        sourceId?: string
+        sourceApp?: string
+        sourceURL?: string
+        sourceUrl?: string
+        sourceType?: string
+        title?: string
+        body?: string
+        ctwaClid?: string
+      }
+    }
+  }
 }
 
 interface UazapiWebhookPayload {
@@ -129,6 +144,25 @@ function inferContentType(msg: UazapiMessage): string {
 }
 
 const MEDIA_CONTENT_TYPES = new Set(['image', 'video', 'audio', 'document'])
+
+function extractAcquisition(msg: UazapiMessage) {
+  const ad = msg.content?.contextInfo?.externalAdReply
+  if (!ad) return undefined
+  const sourceUrl = ad.sourceURL || ad.sourceUrl || null
+  const sourceText = `${ad.sourceApp || ''} ${sourceUrl || ''}`.toLowerCase()
+  const source = sourceText.includes('instagram')
+    ? 'Instagram' as const
+    : sourceText.includes('facebook')
+      ? 'Facebook' as const
+      : null
+  return {
+    source,
+    sourceId: ad.sourceID || ad.sourceId || null,
+    campaign: ad.title || null,
+    adText: ad.body || null,
+    url: sourceUrl,
+  }
+}
 
 /**
  * Resolve the plaintext, publicly-fetchable URL for a media message.
@@ -203,6 +237,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   }
 
   const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
+  const acquisition = extractAcquisition(msg)
 
   const contactOutcome = await findOrCreateContact(
     db,
@@ -210,6 +245,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
     config.user_id,
     phone,
     contactName,
+    acquisition,
   )
   if (!contactOutcome) return
 
