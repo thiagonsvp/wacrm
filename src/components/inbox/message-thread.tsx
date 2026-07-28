@@ -810,10 +810,17 @@ export function MessageThread({
     async (agentId: string | null) => {
       if (!conversation) return;
 
+      // Pending is the shared queue; assigning starts an open treatment.
+      // A closed conversation is finalised and must keep its closed state.
+      const nextStatus: ConversationStatus = conversation.status === "closed"
+        ? "closed"
+        : agentId
+          ? "open"
+          : "pending";
       const supabase = createClient();
       const { error } = await supabase
         .from("conversations")
-        .update({ assigned_agent_id: agentId })
+        .update({ assigned_agent_id: agentId, status: nextStatus })
         .eq("id", conversation.id);
 
       if (error) {
@@ -823,8 +830,11 @@ export function MessageThread({
       }
 
       onAssignChange(conversation.id, agentId);
+      if (nextStatus !== conversation.status) {
+        onStatusChange(conversation.id, nextStatus);
+      }
     },
-    [conversation, onAssignChange],
+    [conversation, onAssignChange, onStatusChange],
   );
 
   const [qualifying, setQualifying] = useState(false);

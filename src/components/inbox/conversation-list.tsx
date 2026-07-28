@@ -175,8 +175,8 @@ export function ConversationList({
     let mine = 0;
     let queue = 0;
     for (const c of conversations) {
-      if (!c.assigned_agent_id) queue++;
-      else if (c.assigned_agent_id === user?.id) mine++;
+      if (c.status === "pending") queue++;
+      if (c.status === "open" && c.assigned_agent_id === user?.id) mine++;
     }
     return { mine, queue, all: conversations.length };
   }, [conversations, user?.id]);
@@ -185,9 +185,9 @@ export function ConversationList({
     let result = conversations;
 
     if (assignmentFilter === "mine") {
-      result = result.filter((c) => c.assigned_agent_id === user?.id);
+      result = result.filter((c) => c.status === "open" && c.assigned_agent_id === user?.id);
     } else if (assignmentFilter === "queue") {
-      result = result.filter((c) => !c.assigned_agent_id);
+      result = result.filter((c) => c.status === "pending");
     }
 
     if (filter === "unread") {
