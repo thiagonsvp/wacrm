@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     // returned nothing for teammates who didn't author the row.
     const { data: profile } = await supabase
       .from('profiles')
-      .select('account_id, account_role')
+      .select('account_id, account_role, full_name')
       .eq('user_id', user.id)
       .maybeSingle()
     const accountId = profile?.account_id as string | undefined
@@ -81,7 +81,17 @@ export async function POST(request: Request) {
       template_message_params,
       interactive_payload,
       reply_to_message_id,
-    } = body
+      } = body
+
+    // Keep the attribution at the API boundary as well as in the inbox UI:
+    // templates, integrations, and older deployed clients should get the
+    // same WhatsApp format. Avoid double-prefixing messages from the newer UI.
+    const senderName = profile?.full_name?.trim() || user.email || 'Usuário'
+    const outboundText = message_type === 'text' && typeof content_text === 'string'
+      ? /^\*[^*\n]+:\*\n/.test(content_text)
+        ? content_text
+        : `*${senderName}:*\n${content_text}`
+      : content_text
 
     if ((!conversationIdInput && !contact_id) || !message_type) {
       return NextResponse.json(
@@ -99,7 +109,7 @@ export async function POST(request: Request) {
     try {
       validateSendMessageParams({
         messageType: message_type,
-        contentText: content_text,
+        contentText: outboundText,
         mediaUrl: media_url,
         templateName: template_name,
         interactivePayload: interactive_payload,
@@ -208,7 +218,7 @@ export async function POST(request: Request) {
       const result = await sendMessageToConversation(supabase, accountId, {
         conversationId,
         messageType: message_type,
-        contentText: content_text,
+        contentText: outboundText,
         mediaUrl: media_url,
         filename,
         templateName: template_name,
