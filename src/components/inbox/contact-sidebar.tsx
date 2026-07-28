@@ -37,6 +37,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [dealPickerOpen, setDealPickerOpen] = useState(false);
+  const [dealTitle, setDealTitle] = useState("");
+  const [addingDeal, setAddingDeal] = useState(false);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -44,7 +49,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     const supabase = createClient();
 
     // Fetch deals, notes, and tags in parallel
-    const [dealsRes, notesRes, tagsRes] = await Promise.all([
+    const [dealsRes, notesRes, tagsRes, availableTagsRes] = await Promise.all([
       supabase
         .from("deals")
         .select("*, stage:pipeline_stages(*)")
@@ -59,6 +64,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         .from("contact_tags")
         .select("id, tag_id, tags(*)")
         .eq("contact_id", contact.id),
+      supabase.from("tags").select("*").order("name"),
     ]);
 
     if (dealsRes.data) setDeals(dealsRes.data);
@@ -72,7 +78,33 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         }));
       setTags(mapped);
     }
+    if (availableTagsRes.data) setAvailableTags(availableTagsRes.data as Tag[]);
   }, [contact]);
+
+  const handleAddTag = useCallback(async (tag: Tag) => {
+    if (!contact) return;
+    const supabase = createClient();
+    const { data, error } = await supabase.from("contact_tags").insert({ contact_id: contact.id, tag_id: tag.id }).select("id").single();
+    if (!error && data) setTags((prev) => [...prev, { ...tag, contact_tag_id: data.id }]);
+    setTagPickerOpen(false);
+  }, [contact]);
+
+  const handleAddDeal = useCallback(async () => {
+    if (!contact || !dealTitle.trim() || !accountId) return;
+    setAddingDeal(true);
+    const supabase = createClient();
+    const [{ data: pipeline }, { data: userData }] = await Promise.all([
+      supabase.from("pipelines").select("id").order("created_at").limit(1).maybeSingle(),
+      supabase.auth.getUser(),
+    ]);
+    if (!pipeline || !userData.user) { setAddingDeal(false); return; }
+    const { data: stage } = await supabase.from("pipeline_stages").select("id").eq("pipeline_id", pipeline.id).order("position").limit(1).maybeSingle();
+    if (stage) {
+      const { data } = await supabase.from("deals").insert({ user_id: userData.user.id, account_id: accountId, pipeline_id: pipeline.id, stage_id: stage.id, contact_id: contact.id, title: dealTitle.trim(), value: 0, status: "open" }).select("*, stage:pipeline_stages(*)").single();
+      if (data) setDeals((prev) => [data as Deal, ...prev]);
+    }
+    setDealTitle(""); setDealPickerOpen(false); setAddingDeal(false);
+  }, [accountId, contact, dealTitle]);
 
   // Load on contact change. setContactData/setTags run inside async
   // Supabase callbacks, not synchronously in the effect body.
@@ -229,7 +261,16 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   </span>
                 ))
               )}
+              <button type="button" onClick={() => setTagPickerOpen((open) => !open)} className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-primary/20 hover:text-primary">+ adicionar</button>
             </div>
+            {tagPickerOpen && (
+              <div className="mt-2 rounded-lg border border-border bg-popover p-1 shadow-lg">
+                {availableTags.filter((tag) => !tags.some((current) => current.id === tag.id)).map((tag) => (
+                  <button key={tag.id} type="button" onClick={() => void handleAddTag(tag)} className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-muted">{tag.name}</button>
+                ))}
+                {availableTags.length === tags.length && <p className="px-2 py-1 text-[10px] text-muted-foreground">Nenhuma tag disponível</p>}
+              </div>
+            )}
           </div>
 
           {/* Divider */}
@@ -274,6 +315,13 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 ))
               )}
             </div>
+            <button type="button" onClick={() => setDealPickerOpen((open) => !open)} className="mt-2 w-full rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground hover:bg-primary/20 hover:text-primary">+ adicionar negócio</button>
+            {dealPickerOpen && (
+              <div className="mt-2 rounded-lg border border-border bg-popover p-2">
+                <input value={dealTitle} onChange={(event) => setDealTitle(event.target.value)} placeholder="Nome do negócio" className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs outline-none" />
+                <button type="button" onClick={() => void handleAddDeal()} disabled={addingDeal || !dealTitle.trim()} className="mt-2 w-full rounded bg-primary px-2 py-1.5 text-xs text-primary-foreground disabled:opacity-50">Adicionar</button>
+              </div>
+            )}
           </div>
 
           {/* Divider */}
