@@ -57,6 +57,25 @@ function MediaUnavailable({ label, t }: { label: string, t: ReturnType<typeof us
   );
 }
 
+function renderWhatsAppText(text: string | null | undefined) {
+  if (!text) return null;
+  return text.split("\n").map((line, lineIndex, lines) => {
+    const parts = line.split(/(\*[^*\n]+\*)/g);
+    return (
+      <span key={lineIndex}>
+        {parts.map((part, index) =>
+          /^\*[^*\n]+\*$/.test(part) ? (
+            <strong key={index}>{part.slice(1, -1)}</strong>
+          ) : (
+            <span key={index}>{part}</span>
+          ),
+        )}
+        {lineIndex < lines.length - 1 && <br />}
+      </span>
+    );
+  });
+}
+
 function MediaImage({ url, alt, onClick }: { url: string; alt: string; onClick?: () => void }) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -140,7 +159,7 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
     case "text":
       return (
         <p className="whitespace-pre-wrap break-words text-sm">
-          {message.content_text}
+          {renderWhatsAppText(message.content_text)}
         </p>
       );
 
