@@ -188,7 +188,7 @@ export function MessageThread({
   const t = useTranslations("Inbox.messageThread");
   const tQuote = useTranslations("Inbox.replyQuote");
 
-  const { user, isAdmin, isOwner, accountId, defaultCurrency } = useAuth();
+  const { user, profile, isAdmin, isOwner, accountId, defaultCurrency } = useAuth();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -438,6 +438,9 @@ export function MessageThread({
     async (text: string, replyToId?: string) => {
       if (!conversation) return;
 
+      const senderName = profile?.full_name?.trim() || user?.email || "Usuário";
+      const formattedText = `*${senderName}:*\n${text}`;
+
       const tempId = `temp-${Date.now()}`;
 
       // Optimistic update — shows the message immediately with "sending" status
@@ -446,7 +449,7 @@ export function MessageThread({
         conversation_id: conversation.id,
         sender_type: "agent",
         content_type: "text",
-        content_text: text,
+        content_text: formattedText,
         status: "sending",
         created_at: new Date().toISOString(),
         reply_to_message_id: replyToId,
@@ -461,7 +464,7 @@ export function MessageThread({
           body: JSON.stringify({
             conversation_id: conversation.id,
             message_type: "text",
-            content_text: text,
+            content_text: formattedText,
             reply_to_message_id: replyToId,
           }),
         });
@@ -488,7 +491,7 @@ export function MessageThread({
         onUpdateMessage(tempId, { status: "failed" });
       }
     },
-    [conversation, onNewMessage, onUpdateMessage]
+    [conversation, onNewMessage, onUpdateMessage, profile?.full_name, user?.email]
   );
 
   const handleSendMedia = useCallback(
