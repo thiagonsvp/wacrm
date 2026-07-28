@@ -145,6 +145,27 @@ function inferContentType(msg: UazapiMessage): string {
 
 const MEDIA_CONTENT_TYPES = new Set(['image', 'video', 'audio', 'document'])
 
+async function fetchFullProfilePhoto(config: any, phone: string): Promise<string | null> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!config.uazapi_base_url || !config.uazapi_token || !config.uazapi_instance_name) return null
+  try {
+    const token = decrypt(config.uazapi_token)
+    const response = await fetch(
+      `${config.uazapi_base_url.replace(/\/+$/, '')}/chat/fetchProfilePictureUrl/${encodeURIComponent(config.uazapi_instance_name)}`,
+      {
+        method: 'POST',
+        headers: { token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: phone }),
+      },
+    )
+    if (!response.ok) return null
+    const data = await response.json()
+    return data?.profilePictureUrl || data?.profile_picture_url || data?.url || null
+  } catch (error) {
+    console.warn('[uazapi-webhook] full profile photo lookup failed:', error)
+    return null
+  }
+}
+
 function extractAcquisition(msg: UazapiMessage) {
   const ad = msg.content?.contextInfo?.externalAdReply
   if (!ad) return undefined
@@ -240,7 +261,10 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
   const acquisition = extractAcquisition(msg)
   // `imagePreview` is a small thumbnail; prefer the full profile image.
-  const avatarUrl = body.chat?.image || body.chat?.imagePreview || null
+  const avatarUrl = await fetchFullProfilePhoto(config, phone)
+    || body.chat?.image
+    || body.chat?.imagePreview
+    || null
 
   const contactOutcome = await findOrCreateContact(
     db,
