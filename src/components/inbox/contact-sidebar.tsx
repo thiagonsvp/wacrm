@@ -31,6 +31,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
   const { accountId } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
@@ -138,11 +139,13 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           <div className="flex flex-col items-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
               {contact.avatar_url ? (
-                <img
-                  src={contact.avatar_url}
-                  alt={displayName}
-                  className="h-16 w-16 rounded-full object-cover"
-                />
+                <button type="button" onClick={() => setPhotoOpen(true)} className="cursor-zoom-in rounded-full" aria-label={`Ampliar foto de ${displayName}`}>
+                  <img
+                    src={contact.avatar_url}
+                    alt={displayName}
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                </button>
               ) : (
                 initials
               )}
@@ -164,6 +167,13 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               </p>
             )}
           </div>
+
+          {photoOpen && contact.avatar_url && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPhotoOpen(false)}>
+              <button type="button" onClick={() => setPhotoOpen(false)} className="absolute right-5 top-5 text-2xl text-white" aria-label="Fechar foto">×</button>
+              <img src={contact.avatar_url} alt={displayName} className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" onClick={(event) => event.stopPropagation()} />
+            </div>
+          )}
 
           {/* Phone */}
           <div className="mt-4 space-y-2">

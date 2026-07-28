@@ -273,7 +273,7 @@ async function enforceAssignmentLock(
   if (!assignedAgentId) {
     const { error } = await supabase
       .from('conversations')
-      .update({ assigned_agent_id: userId })
+      .update({ assigned_agent_id: userId, status: 'open' })
       .eq('id', conversationId)
       .is('assigned_agent_id', null)
 
