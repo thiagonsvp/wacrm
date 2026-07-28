@@ -125,6 +125,7 @@ export async function findOrCreateConversation(
       account_id: accountId,
       user_id: configOwnerUserId,
       contact_id: contactId,
+      status: 'pending',
     })
     .select()
     .single()
@@ -295,6 +296,21 @@ export async function persistInboundMessage(
     interactiveReplyId = null,
     replyToInternalId = null,
   } = params
+
+  // A customer reply after a finished conversation starts a new treatment:
+  // return it to the shared pending queue and release the previous owner.
+  if (!conversationWasCreated && conversation.status === 'closed') {
+    const { error: reopenError } = await db
+      .from('conversations')
+      .update({ status: 'pending', assigned_agent_id: null })
+      .eq('id', conversation.id)
+    if (reopenError) {
+      console.error('[inbound] Error reopening closed conversation:', reopenError)
+    } else {
+      conversation.status = 'pending'
+      conversation.assigned_agent_id = null
+    }
+  }
 
   if (conversationWasCreated) {
     await dispatchWebhookEvent(db, accountId, 'conversation.created', {
