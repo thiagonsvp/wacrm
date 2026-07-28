@@ -239,7 +239,8 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
 
   const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
   const acquisition = extractAcquisition(msg)
-  const avatarUrl = body.chat?.imagePreview || body.chat?.image || null
+  // `imagePreview` is a small thumbnail; prefer the full profile image.
+  const avatarUrl = body.chat?.image || body.chat?.imagePreview || null
 
   const contactOutcome = await findOrCreateContact(
     db,
