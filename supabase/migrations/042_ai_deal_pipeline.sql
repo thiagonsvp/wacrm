@@ -27,14 +27,23 @@
 --     located by definition rather than by a guessed name.
 --
 -- Idempotent — safe to run multiple times.
+--
+-- Every object is schema-qualified and the search_path is pinned below.
+-- The Supabase SQL editor does not always run with `public` on the
+-- search_path, and an unqualified `ALTER TABLE conversations` then fails
+-- with `42P01: relation "conversations" does not exist` even though the
+-- table is right there. This matters most when cloning the CRM for a new
+-- client, where the script must behave the same on every project.
 -- ============================================================
 
-ALTER TABLE ai_configs
+SET search_path = public, extensions, pg_catalog;
+
+ALTER TABLE public.ai_configs
   ADD COLUMN IF NOT EXISTS deal_pipeline_enabled boolean NOT NULL DEFAULT false;
 
 -- Cooldown reads are always keyed by the conversation's own id, which the
 -- primary key already serves — no additional index required.
-ALTER TABLE conversations
+ALTER TABLE public.conversations
   ADD COLUMN IF NOT EXISTS ai_deal_analyzed_at timestamptz;
 
 DO $$
@@ -48,14 +57,14 @@ BEGIN
   FOR c IN
     SELECT conname
     FROM pg_constraint
-    WHERE conrelid = 'ai_usage_log'::regclass
+    WHERE conrelid = 'public.ai_usage_log'::regclass
       AND contype = 'c'
       AND pg_get_constraintdef(oid) ILIKE '%mode%auto_reply%'
   LOOP
-    EXECUTE format('ALTER TABLE ai_usage_log DROP CONSTRAINT %I', c.conname);
+    EXECUTE format('ALTER TABLE public.ai_usage_log DROP CONSTRAINT %I', c.conname);
   END LOOP;
 
-  ALTER TABLE ai_usage_log
+  ALTER TABLE public.ai_usage_log
     ADD CONSTRAINT ai_usage_log_mode_check
     CHECK (mode IN ('auto_reply', 'draft', 'deal_pipeline'));
 END $$;

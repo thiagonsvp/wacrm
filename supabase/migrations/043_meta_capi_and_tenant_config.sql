@@ -13,7 +13,19 @@
 --      per-account, and editing code per customer does not scale.
 --
 -- Idempotent — safe to run multiple times.
+--
+-- Every object is schema-qualified and the search_path is pinned below.
+-- The Supabase SQL editor does not always run with `public` on the
+-- search_path, and an unqualified `ALTER TABLE contacts` then fails with
+-- `42P01: relation "contacts" does not exist` even though the table is
+-- right there. Qualifying also matters when cloning this CRM: the script
+-- has to behave identically on every client's project, whatever the
+-- session default happens to be.
+--
+-- Prerequisite: migrations 001-042 must already be applied.
 -- ============================================================
+
+SET search_path = public, extensions, pg_catalog;
 
 -- ------------------------------------------------------------
 -- 1. The click id that makes ad attribution possible.
@@ -25,7 +37,7 @@
 -- nothing. It arrives on every ad-originated message and was previously
 -- parsed and discarded.
 -- ------------------------------------------------------------
-ALTER TABLE contacts
+ALTER TABLE public.contacts
   ADD COLUMN IF NOT EXISTS acquisition_ctwa_clid TEXT;
 
 -- ------------------------------------------------------------
@@ -54,9 +66,9 @@ ALTER TABLE contacts
 --                    may reasonably want lead events automated while
 --                    purchases stay manual.
 -- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS meta_capi_configs (
+CREATE TABLE IF NOT EXISTS public.meta_capi_configs (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  account_id          uuid NOT NULL UNIQUE REFERENCES accounts(id) ON DELETE CASCADE,
+  account_id          uuid NOT NULL UNIQUE REFERENCES public.accounts(id) ON DELETE CASCADE,
   created_by          uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   dataset_id          text NOT NULL,
   access_token        text NOT NULL,          -- AES-256-GCM encrypted
@@ -69,32 +81,32 @@ CREATE TABLE IF NOT EXISTS meta_capi_configs (
   updated_at          timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE meta_capi_configs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meta_capi_configs ENABLE ROW LEVEL SECURITY;
 
 -- Settings-class RLS, split per verb exactly like ai_configs (029): any
 -- member may read (the Setup page reports whether it is configured),
 -- admin+ only may write. The sender runs under the service-role client
 -- from a webhook, where there is no auth.uid(), so these guard dashboard
 -- access rather than the engine.
-DROP POLICY IF EXISTS meta_capi_configs_select ON meta_capi_configs;
-CREATE POLICY meta_capi_configs_select ON meta_capi_configs FOR SELECT
-  USING (is_account_member(account_id));
+DROP POLICY IF EXISTS meta_capi_configs_select ON public.meta_capi_configs;
+CREATE POLICY meta_capi_configs_select ON public.meta_capi_configs FOR SELECT
+  USING (public.is_account_member(account_id));
 
-DROP POLICY IF EXISTS meta_capi_configs_insert ON meta_capi_configs;
-CREATE POLICY meta_capi_configs_insert ON meta_capi_configs FOR INSERT
-  WITH CHECK (is_account_member(account_id, 'admin'));
+DROP POLICY IF EXISTS meta_capi_configs_insert ON public.meta_capi_configs;
+CREATE POLICY meta_capi_configs_insert ON public.meta_capi_configs FOR INSERT
+  WITH CHECK (public.is_account_member(account_id, 'admin'));
 
-DROP POLICY IF EXISTS meta_capi_configs_update ON meta_capi_configs;
-CREATE POLICY meta_capi_configs_update ON meta_capi_configs FOR UPDATE
-  USING (is_account_member(account_id, 'admin'));
+DROP POLICY IF EXISTS meta_capi_configs_update ON public.meta_capi_configs;
+CREATE POLICY meta_capi_configs_update ON public.meta_capi_configs FOR UPDATE
+  USING (public.is_account_member(account_id, 'admin'));
 
-DROP POLICY IF EXISTS meta_capi_configs_delete ON meta_capi_configs;
-CREATE POLICY meta_capi_configs_delete ON meta_capi_configs FOR DELETE
-  USING (is_account_member(account_id, 'admin'));
+DROP POLICY IF EXISTS meta_capi_configs_delete ON public.meta_capi_configs;
+CREATE POLICY meta_capi_configs_delete ON public.meta_capi_configs FOR DELETE
+  USING (public.is_account_member(account_id, 'admin'));
 
-DROP TRIGGER IF EXISTS set_updated_at ON meta_capi_configs;
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON meta_capi_configs
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS set_updated_at ON public.meta_capi_configs;
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.meta_capi_configs
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ------------------------------------------------------------
 -- 3. Sent-event ledger — the idempotency guard.
@@ -110,11 +122,11 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON meta_capi_configs
 -- `event_id` is the idempotency key echoed to Meta, which dedupes on it
 -- as a second line of defence.
 -- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS meta_capi_events (
+CREATE TABLE IF NOT EXISTS public.meta_capi_events (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  account_id    uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  deal_id       uuid REFERENCES deals(id) ON DELETE SET NULL,
-  contact_id    uuid REFERENCES contacts(id) ON DELETE SET NULL,
+  account_id    uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  deal_id       uuid REFERENCES public.deals(id) ON DELETE SET NULL,
+  contact_id    uuid REFERENCES public.contacts(id) ON DELETE SET NULL,
   event_name    text NOT NULL CHECK (event_name IN ('QualifiedLead', 'Purchase')),
   event_id      text NOT NULL,
   value         numeric,
@@ -128,15 +140,15 @@ CREATE TABLE IF NOT EXISTS meta_capi_events (
 -- must not permanently block a later retry, so only successful sends
 -- occupy the (deal, event) slot.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_meta_capi_events_sent
-  ON meta_capi_events(deal_id, event_name) WHERE status = 'sent';
+  ON public.meta_capi_events(deal_id, event_name) WHERE status = 'sent';
 
 CREATE INDEX IF NOT EXISTS idx_meta_capi_events_account
-  ON meta_capi_events(account_id, created_at DESC);
+  ON public.meta_capi_events(account_id, created_at DESC);
 
-ALTER TABLE meta_capi_events ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS meta_capi_events_select ON meta_capi_events;
-CREATE POLICY meta_capi_events_select ON meta_capi_events FOR SELECT
-  USING (is_account_member(account_id));
+ALTER TABLE public.meta_capi_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS meta_capi_events_select ON public.meta_capi_events;
+CREATE POLICY meta_capi_events_select ON public.meta_capi_events FOR SELECT
+  USING (public.is_account_member(account_id));
 -- No INSERT/UPDATE/DELETE policy: the ledger is written by the
 -- service-role sender only, never from the browser.
 
@@ -155,8 +167,8 @@ CREATE POLICY meta_capi_events_select ON meta_capi_events FOR SELECT
 -- offer a dropdown of the board that actually exists. Null falls back to
 -- the old name matching, so existing deployments keep working untouched.
 -- ------------------------------------------------------------
-ALTER TABLE ai_configs
+ALTER TABLE public.ai_configs
   ADD COLUMN IF NOT EXISTS deal_product_scope TEXT,
-  ADD COLUMN IF NOT EXISTS deal_stage_qualified_id  uuid REFERENCES pipeline_stages(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS deal_stage_negotiating_id uuid REFERENCES pipeline_stages(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS deal_stage_closed_id      uuid REFERENCES pipeline_stages(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS deal_stage_qualified_id  uuid REFERENCES public.pipeline_stages(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS deal_stage_negotiating_id uuid REFERENCES public.pipeline_stages(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS deal_stage_closed_id      uuid REFERENCES public.pipeline_stages(id) ON DELETE SET NULL;
