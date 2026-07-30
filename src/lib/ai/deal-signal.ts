@@ -139,6 +139,51 @@ export function renderTranscript(messages: ChatMessage[]): string {
 }
 
 /**
+ * Amounts quoted as an upgrade top-up ("Diferença a pagar") in a thread.
+ *
+ * These conversations put the top-up and the device price side by side,
+ * often with one amount per colour, and the top-up is the more prominent
+ * number. Measured on real threads, the model still reported the top-up
+ * as the price about a third of the time even with the rule spelled out
+ * and the store's own context supplied — so the check moves into code,
+ * where it is exact.
+ */
+export function upgradeTopUpAmounts(transcript: string): number[] {
+  const amounts: number[] = []
+  // Take the text after each "Diferença a pagar" up to the next line that
+  // starts a new section, then pull every currency amount out of it.
+  const blocks = transcript.split(/diferen[çc]a a pagar/i).slice(1)
+  for (const block of blocks) {
+    const segment = block.split(/condi[çc][õo]es|\n\s*\n/i)[0] ?? ''
+    for (const m of segment.matchAll(/R?\$?\s*([\d.,]{3,})/g)) {
+      const n = Number(
+        m[1].replace(/\.(?=\d{3}\b)/g, '').replace(',', '.'),
+      )
+      if (Number.isFinite(n) && n > 0) amounts.push(Math.round(n * 100) / 100)
+    }
+  }
+  return amounts
+}
+
+/**
+ * Drop a price that exactly matches a top-up quoted in the same thread.
+ *
+ * Failing to null is the safe direction: a card with no value is an
+ * obvious gap a human fills in, whereas a card carrying the top-up looks
+ * perfectly plausible and quietly understates the deal — and, once the
+ * Conversions API is on, reports that wrong number to Meta as revenue.
+ */
+export function rejectUpgradeTopUp(
+  signal: DealSignal,
+  transcript: string,
+): DealSignal {
+  if (signal.price == null) return signal
+  const topUps = upgradeTopUpAmounts(transcript)
+  if (!topUps.includes(signal.price)) return signal
+  return { ...signal, price: null }
+}
+
+/**
  * Parse the model's raw output into a `DealSignal`, or null when it is
  * not usable. Never guesses a value: a field that fails validation
  * becomes null, and a bad `outcome` fails the whole parse so no write

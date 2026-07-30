@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  rejectUpgradeTopUp,
+  upgradeTopUpAmounts,
   buildDealSignalPrompt,
   dealProductScope,
   renderTranscript,
@@ -77,5 +79,68 @@ describe('buildDealSignalPrompt — product scoping', () => {
       businessContext: null,
     })
     expect(prompt).toContain('Samsung Galaxy phone')
+  })
+})
+
+describe('upgradeTopUpAmounts', () => {
+  const proposal = [
+    'Loja: Tudo pronto! Veja como fica o seu upgrade:',
+    'Seu aparelho: 11 128gb',
+    'Aparelho novo: 16 plus 128gb lacrado',
+    'Diferença a pagar: R$ 4.900',
+    'Condições de pagamento da diferença: (Pix/Dinheiro) Ou EM ATÉ 18x no cartão.',
+  ].join('\n')
+
+  it('pulls a single top-up out of the store proposal format', () => {
+    expect(upgradeTopUpAmounts(proposal)).toContain(4900)
+  })
+
+  it('pulls every per-colour top-up', () => {
+    const multi =
+      'Diferença a pagar: azul R$ 5.049 laranja R$ 4.849 silver R$ 5.099\nCondições de pagamento'
+    const found = upgradeTopUpAmounts(multi)
+    expect(found).toEqual(expect.arrayContaining([5049, 4849, 5099]))
+  })
+
+  it('stops at the payment-conditions section', () => {
+    // "18x" must not be mistaken for an amount.
+    expect(upgradeTopUpAmounts(proposal)).not.toContain(18)
+  })
+
+  it('returns nothing for a thread with no upgrade proposal', () => {
+    expect(upgradeTopUpAmounts('Loja: o 15 sai 4200. Cliente: fechado')).toEqual([])
+  })
+})
+
+describe('rejectUpgradeTopUp', () => {
+  const proposal = 'Diferença a pagar: R$ 4.900\nCondições de pagamento'
+  const sig = (price: number | null) => ({
+    outcome: 'negotiating' as const,
+    model: 'iPhone 16 Plus 128GB',
+    price,
+  })
+
+  it('nulls a price that matches the quoted top-up', () => {
+    // Measured on live threads: the model reported the top-up as the
+    // device price in roughly a third of upgrade conversations.
+    expect(rejectUpgradeTopUp(sig(4900), proposal).price).toBeNull()
+  })
+
+  it('keeps a price that is genuinely the device price', () => {
+    expect(rejectUpgradeTopUp(sig(7350), proposal).price).toBe(7350)
+  })
+
+  it('leaves a null price alone', () => {
+    expect(rejectUpgradeTopUp(sig(null), proposal).price).toBeNull()
+  })
+
+  it('never touches the outcome or the model', () => {
+    const out = rejectUpgradeTopUp(sig(4900), proposal)
+    expect(out.outcome).toBe('negotiating')
+    expect(out.model).toBe('iPhone 16 Plus 128GB')
+  })
+
+  it('is a no-op on a thread with no upgrade proposal', () => {
+    expect(rejectUpgradeTopUp(sig(4200), 'Loja: o 15 sai 4200').price).toBe(4200)
   })
 })

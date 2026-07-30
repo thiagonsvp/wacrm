@@ -8,6 +8,7 @@ import {
   buildDealSignalPrompt,
   dealProductScope,
   parseDealSignal,
+  rejectUpgradeTopUp,
   renderTranscript,
 } from './deal-signal'
 import { resolvePipelineStages, type PipelineStageMap } from '@/lib/deals/stage-map'
@@ -264,6 +265,8 @@ export async function runDealPipelineForConversation(
     return { signal: null, plan: null, applied: null }
   }
 
+  const transcript = renderTranscript(messages)
+
   const systemPrompt = buildDealSignalPrompt({
     // Per-account first: what the shop sells is the single biggest thing
     // that differs between customers, and an env var cannot vary by
@@ -277,7 +280,7 @@ export async function runDealPipelineForConversation(
   const { text, usage } = await generateReply({
     config,
     systemPrompt,
-    messages: [{ role: 'user', content: renderTranscript(messages) }],
+    messages: [{ role: 'user', content: transcript }],
   })
 
   // Fire-and-forget: logAiUsage swallows its own errors, so this floating
@@ -292,7 +295,11 @@ export async function runDealPipelineForConversation(
     usage,
   })
 
-  const signal: DealSignal | null = parseDealSignal(text)
+  const parsed: DealSignal | null = parseDealSignal(text)
+  // Cross-check the price against the thread before it can reach the
+  // board: an upgrade top-up read as the device price understates the
+  // deal and would be reported to Meta as revenue.
+  const signal = parsed ? rejectUpgradeTopUp(parsed, transcript) : null
   if (!signal) {
     console.warn(
       `[ai deal pipeline] unusable model output for conversation ${conversationId}:`,
