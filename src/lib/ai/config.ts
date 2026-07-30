@@ -56,6 +56,20 @@ export interface AiConfigRowResult {
   error: { code?: string; message?: string } | null
 }
 
+/**
+ * Pull the offending column out of a Postgres "undefined column" error.
+ * The message is `column ai_configs.foo does not exist` (sometimes
+ * unqualified), and the column name is the only part we can act on.
+ */
+export function undefinedColumnName(
+  error: { message?: string } | null,
+): string | null {
+  const m = /column\s+(?:[\w.]+\.)?"?([\w]+)"?\s+does not exist/i.exec(
+    error?.message ?? '',
+  )
+  return m?.[1] ?? null
+}
+
 export async function selectAiConfigRow(
   db: SupabaseClient,
   accountId: string,
@@ -76,19 +90,33 @@ export async function selectAiConfigRow(
     }
   }
 
-  const first = await read(columns)
-  if (!isUndefinedColumnError(first.error)) return first
+  let cols = columns.split(',').map((c) => c.trim())
 
-  console.warn(
-    '[ai config] migration 042 and/or 043 has not been applied to this project — ' +
-      'the AI deal pipeline and its per-account settings stay off until they are.',
-  )
-  const reduced = columns
-    .split(',')
-    .map((c) => c.trim())
-    .filter((c) => !OPTIONAL_COLUMNS.includes(c))
-    .join(', ')
-  return read(reduced)
+  // Drop ONLY the column Postgres actually complained about, one per
+  // round. Dropping the whole optional set instead would disable
+  // features whose migration *is* applied: with 042 applied and 043 not,
+  // a blanket retry took `deal_pipeline_enabled` down with it, so the
+  // pipeline read as "off" and silently never ran. Bounded by the number
+  // of optional columns, so a genuinely broken query still surfaces.
+  for (let attempt = 0; attempt <= OPTIONAL_COLUMNS.length; attempt++) {
+    const res = await read(cols.join(', '))
+    if (!isUndefinedColumnError(res.error)) return res
+
+    const missing = undefinedColumnName(res.error)
+    // Anything not on the optional list is a real bug, not a pending
+    // migration — surface it rather than quietly narrowing the query.
+    if (!missing || !OPTIONAL_COLUMNS.includes(missing) || !cols.includes(missing)) {
+      return res
+    }
+    console.warn(
+      `[ai config] column "${missing}" is missing — its migration has not been ` +
+        'applied to this project. The features that depend on it stay off; ' +
+        'everything else keeps working.',
+    )
+    cols = cols.filter((c) => c !== missing)
+  }
+
+  return read(cols.join(', '))
 }
 
 /** True when Postgres rejected the statement for an undefined column. */
