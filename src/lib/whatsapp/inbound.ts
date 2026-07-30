@@ -398,17 +398,35 @@ export async function persistInboundMessage(
   }
   if (contactWasCreated) automationTriggers.unshift('new_contact_created')
   if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
+  // Awaited, NOT detached — same hazard as issue #301 (see the `after()`
+  // comment in api/whatsapp/webhook/route.ts). This function runs inside
+  // the webhook's `after()` callback, and the runtime may freeze the
+  // instance as soon as that callback's promise resolves. A floating
+  // dispatch promise was therefore killed mid-flight on a
+  // non-deterministic subset of inbound messages: the engine had already
+  // inserted the automation_logs row but had not yet run the steps, so
+  // runs surfaced as status='success' with an empty steps_executed and no
+  // execution_count increment — an automation that silently did nothing.
+  //
+  // Sequential rather than Promise.all so the unshifted
+  // new_contact_created / first_inbound_message triggers still run ahead
+  // of the generic ones. runAutomationsForTrigger is documented never to
+  // throw; the try/catch only preserves that guarantee for the caller.
   for (const triggerType of automationTriggers) {
-    runAutomationsForTrigger({
-      accountId,
-      triggerType,
-      contactId: contact.id,
-      context: {
-        message_text: inboundText,
-        conversation_id: conversation.id,
-        interactive_reply_id: interactiveReplyId ?? undefined,
-      },
-    }).catch((err) => console.error('[automations] dispatch failed:', err))
+    try {
+      await runAutomationsForTrigger({
+        accountId,
+        triggerType,
+        contactId: contact.id,
+        context: {
+          message_text: inboundText,
+          conversation_id: conversation.id,
+          interactive_reply_id: interactiveReplyId ?? undefined,
+        },
+      })
+    } catch (err) {
+      console.error('[automations] dispatch failed:', err)
+    }
   }
 
   if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {

@@ -24,6 +24,14 @@ function supabaseAdmin() {
   return _adminClient
 }
 
+// Matches the Meta webhook (api/whatsapp/webhook/route.ts). The `after()`
+// callback below runs within this route's max duration, and that callback
+// owns the whole inbound chain — media download, profile photo fetch,
+// contact/conversation/message writes, flows, automations, AI reply. The
+// platform default is far too tight for that, and anything still running
+// when it expires is killed silently.
+export const maxDuration = 60
+
 /**
  * POST /api/whatsapp/webhook/uazapi/[configId]
  *
