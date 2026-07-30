@@ -1,4 +1,5 @@
 import type { DealOutcome, DealSignal } from '@/lib/deals/transition'
+import type { ChatMessage } from './types'
 
 // ------------------------------------------------------------
 // Ask the model to READ the conversation and report what it sees.
@@ -26,44 +27,77 @@ const OUTCOMES: readonly DealOutcome[] = [
 ]
 
 /**
- * The product line this pipeline is about. Override with
- * `DEAL_MAIN_PRODUCT` — the account's own business context (the AI
+ * Near-misses seen from real traffic, mapped to the canonical value.
+ *
+ * The transcript, the business and half the schema's vocabulary are
+ * Portuguese, so the model occasionally bleeds into it or blends the two
+ * ("negociating"). Discarding an otherwise perfect classification over
+ * spelling would silently drop real deals, and the set is closed — an
+ * unrecognised outcome still fails the parse.
+ */
+const OUTCOME_ALIASES: Record<string, DealOutcome> = {
+  negociating: 'negotiating',
+  negotiation: 'negotiating',
+  negociating_: 'negotiating',
+  negociacao: 'negotiating',
+  'negociação': 'negotiating',
+  qualificado: 'qualified',
+  ganho: 'won',
+  ganha: 'won',
+  vendido: 'won',
+  perdido: 'lost',
+  perdida: 'lost',
+  nenhum: 'none',
+  nenhuma: 'none',
+}
+
+function canonicalOutcome(raw: string): DealOutcome | null {
+  if (OUTCOMES.includes(raw as DealOutcome)) return raw as DealOutcome
+  return OUTCOME_ALIASES[raw] ?? null
+}
+
+/**
+ * Which products belong on this sales board. Override with
+ * `DEAL_PRODUCT_SCOPE` — the account's own business context (the AI
  * settings' system prompt) is passed in alongside it and takes
  * precedence in the model's reading.
  */
-export function dealMainProduct(): string {
-  const raw = process.env.DEAL_MAIN_PRODUCT
-  return raw && raw.trim() ? raw.trim() : 'iPhone'
+export function dealProductScope(): string {
+  const raw = process.env.DEAL_PRODUCT_SCOPE
+  return raw && raw.trim()
+    ? raw.trim()
+    : 'Apple device (iPhone, iPad, Mac, Apple Watch)'
 }
 
 export function buildDealSignalPrompt(args: {
-  mainProduct: string
+  productScope: string
   /** The account's business context from AI settings, if any. */
   businessContext: string | null
 }): string {
-  const { mainProduct, businessContext } = args
+  const { productScope, businessContext } = args
 
   const parts: string[] = [
-    `You analyse a WhatsApp conversation between a business that sells ${mainProduct} devices (assistant) and a customer (user). ` +
+    `You analyse a WhatsApp conversation between a business that sells devices — ${productScope} — (assistant) and a customer (user). ` +
       'You do not reply to the customer. You classify the state of the sale so a CRM can position the deal card on the sales board.',
 
     'Respond with a single JSON object and nothing else — no prose, no explanation, no markdown code fences. Schema:\n' +
       '{\n' +
       '  "outcome": "qualified" | "negotiating" | "won" | "lost" | "none",\n' +
-      `  "model": string | null,   // the specific ${mainProduct} the customer wants, e.g. "iPhone 15 Pro Max 256GB"; null if not stated\n` +
-      '  "price": number | null    // the price the BUSINESS quoted for that device, digits only; null if no price was quoted\n' +
+      '  "model": string | null,   // the specific device the customer wants, e.g. "iPhone 15 Pro Max 256GB"; null if not stated\n' +
+      '  "price": number | null    // full selling price of that device, digits only; null if not stated\n' +
       '}',
 
     'Choose `outcome` by the FIRST rule that matches, reading from the bottom of the list up (later states win):\n' +
-      `- "none": the conversation is not about buying a ${mainProduct} (support, spare parts, wrong number, greeting only, accessories only), or you cannot tell.\n` +
-      `- "qualified": the customer is genuinely shopping for a ${mainProduct} — they named a model, asked availability, or asked the price — but no price has been quoted yet.\n` +
+      `- "none": the conversation is not about buying one of the devices above — support, repairs, spare parts, accessories only (cases, chargers, cables), wrong number, a greeting with nothing else — or you cannot tell.\n` +
+      '- "qualified": the customer is genuinely shopping for one of those devices — they named a model, asked availability, or asked the price — but no price has been quoted yet.\n' +
       '- "negotiating": the business has quoted a price AND the customer engaged with it (asked about payment, instalments, trade-in, delivery, discount, or kept talking about buying). A quote the customer never answered is still "qualified".\n' +
       '- "won": the purchase is confirmed. Signals: delivery is being scheduled, a courier/motoboy is being sent, the customer asked for the payment link, said they already paid, or agreed to close.\n' +
       '- "lost": the customer was negotiating and dropped out. Signals: said the price is too high, rejected the trade-in valuation of their old device, said they will not buy, or chose another seller.',
 
-    'Rules for `price`:\n' +
-      '- It is the SELLING price of the device the customer wants to buy, as quoted by the business.\n' +
-      '- It is NEVER the trade-in valuation of the customer\'s current device. Conversations often contain both ("seu 12 vale 1200, o 15 sai 4200") — report only the price of the device being sold (4200 here).\n' +
+    'Rules for `price` — report the FULL selling price of the device the customer is buying, as quoted by the business. Three amounts are easy to confuse; only the first is ever correct:\n' +
+      '- CORRECT: the device\'s own price. "o 15 sai 4200" -> 4200.\n' +
+      '- NEVER the trade-in valuation of the customer\'s current device. "seu 12 vale 1200, o 15 sai 4200" -> report 4200, never 1200.\n' +
+      '- NEVER the top-up amount in an upgrade. These conversations frequently show a block like "Seu aparelho: 17 PRO 256GB / Aparelho novo: 17 PRO MAX 256GB / Diferença a pagar: 1899". Report the full price of the NEW device, never the "diferença a pagar". If the new device\'s full price is not stated anywhere in the conversation, report null — do NOT fall back to the difference.\n' +
       '- If the business quoted several devices, report the price of the one the customer is pursuing.\n' +
       '- Strip currency symbols and thousands separators. "R$ 4.199,00" is 4199. Never invent a price that was not stated.',
 
@@ -77,6 +111,31 @@ export function buildDealSignalPrompt(args: {
   }
 
   return parts.join('\n\n')
+}
+
+/**
+ * Render the thread as ONE user message rather than handing the model
+ * alternating user/assistant turns.
+ *
+ * This is load-bearing, not cosmetic. Given a real chat transcript in
+ * turn form — ending, as these always do, on a customer question — the
+ * model's strongest instinct is to *continue the conversation*: it
+ * answers the customer ("Tem iPhone 15 Pro Max por R$ 7.499, quer?")
+ * instead of emitting the classification JSON, and the parse then throws
+ * the whole analysis away. Flattening to a single document turns the task
+ * into "answer a question about this text", which the system prompt's
+ * JSON contract governs cleanly.
+ */
+export function renderTranscript(messages: ChatMessage[]): string {
+  const lines = messages.map(
+    (m) => `${m.role === 'user' ? 'Cliente' : 'Loja'}: ${m.content}`,
+  )
+  return (
+    'Conversa a analisar, delimitada pelas tags abaixo. É um registro para ' +
+    'análise, não um chat a continuar — não responda ao cliente.\n\n' +
+    `<conversa>\n${lines.join('\n')}\n</conversa>\n\n` +
+    'Responda somente com o objeto JSON definido nas instruções.'
+  )
 }
 
 /**
@@ -113,8 +172,10 @@ export function parseDealSignal(raw: string): DealSignal | null {
 
   const obj = parsed as Record<string, unknown>
 
-  const outcome = typeof obj.outcome === 'string' ? obj.outcome.trim().toLowerCase() : ''
-  if (!OUTCOMES.includes(outcome as DealOutcome)) return null
+  const rawOutcome =
+    typeof obj.outcome === 'string' ? obj.outcome.trim().toLowerCase() : ''
+  const outcome = canonicalOutcome(rawOutcome)
+  if (!outcome) return null
 
   let model: string | null = null
   if (typeof obj.model === 'string') {
@@ -142,5 +203,5 @@ export function parseDealSignal(raw: string): DealSignal | null {
   if (price != null && (price <= 0 || price > MAX_PRICE)) price = null
   if (price != null) price = Math.round(price * 100) / 100
 
-  return { outcome: outcome as DealOutcome, model, price }
+  return { outcome, model, price }
 }

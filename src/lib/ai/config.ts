@@ -19,6 +19,86 @@ const CONFIG_COLUMNS =
   'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, deal_pipeline_enabled'
 
 /**
+ * Columns introduced by migration 042 (`042_ai_deal_pipeline.sql`).
+ *
+ * Migrations in this project are applied by hand, out of band, so the
+ * code can reach production before the SQL does. Selecting a column that
+ * doesn't exist yet is a hard PostgREST error, which would take down the
+ * AI settings page and the assistant — including the very page an
+ * operator needs in order to finish setting AI up. Degrading to "the
+ * feature is off" is the only safe failure direction here.
+ *
+ * Delete this list and `selectAiConfigRow`'s retry once 042 is applied
+ * everywhere.
+ */
+const POST_042_COLUMNS = ['deal_pipeline_enabled']
+
+/**
+ * Read the account's `ai_configs` row, retrying once without the post-042
+ * columns when Postgres reports one as undefined (SQLSTATE 42703).
+ *
+ * Any other error is returned untouched — only the "migration not applied
+ * yet" case is papered over, and it is papered over loudly.
+ */
+export interface AiConfigRowResult {
+  data: Record<string, unknown> | null
+  error: { code?: string; message?: string } | null
+}
+
+export async function selectAiConfigRow(
+  db: SupabaseClient,
+  accountId: string,
+  columns: string,
+): Promise<AiConfigRowResult> {
+  // `columns` is a runtime string, so PostgREST's generic inference can't
+  // derive a row type from it — normalise to a plain record and let the
+  // callers assert the shape they asked for.
+  const read = async (cols: string): Promise<AiConfigRowResult> => {
+    const res = await db
+      .from('ai_configs')
+      .select(cols)
+      .eq('account_id', accountId)
+      .maybeSingle()
+    return {
+      data: (res.data ?? null) as Record<string, unknown> | null,
+      error: res.error,
+    }
+  }
+
+  const first = await read(columns)
+  if (!isUndefinedColumnError(first.error)) return first
+
+  console.warn(
+    '[ai config] supabase/migrations/042_ai_deal_pipeline.sql has not been applied ' +
+      'to this project — the AI deal pipeline stays off until it is.',
+  )
+  const reduced = columns
+    .split(',')
+    .map((c) => c.trim())
+    .filter((c) => !POST_042_COLUMNS.includes(c))
+    .join(', ')
+  return read(reduced)
+}
+
+/** True when Postgres rejected the statement for an undefined column. */
+export function isUndefinedColumnError(error: { code?: string } | null): boolean {
+  return error?.code === '42703'
+}
+
+/**
+ * Drop the post-042 columns from a write payload, so a save can be
+ * retried on a project that hasn't applied the migration. The toggle then
+ * simply isn't persisted — which matches the read side degrading to off.
+ */
+export function withoutPost042Columns(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = { ...payload }
+  for (const column of POST_042_COLUMNS) delete out[column]
+  return out
+}
+
+/**
  * Load and decrypt the account's AI config for *use* (draft or
  * auto-reply). Returns `null` when there's no row or the master switch
  * (`is_active`) is off — both mean "AI is not available", which callers
@@ -35,16 +115,14 @@ export async function loadAiConfig(
   opts: { requireActive?: boolean } = {},
 ): Promise<AiConfig | null> {
   const { requireActive = true } = opts
-  const { data, error } = await db
-    .from('ai_configs')
-    .select(CONFIG_COLUMNS)
-    .eq('account_id', accountId)
-    .maybeSingle()
+  const { data, error } = await selectAiConfigRow(db, accountId, CONFIG_COLUMNS)
 
   if (error) throw error
   if (!data) return null
 
-  const row = data as AiConfigRow
+  // `deal_pipeline_enabled` is absent when the retry above dropped it;
+  // the mapping below coalesces it to false.
+  const row = data as unknown as AiConfigRow
   // The Playground passes requireActive:false so an admin can test the
   // agent before flipping the master switch on.
   if (requireActive && !row.is_active) return null

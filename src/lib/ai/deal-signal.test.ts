@@ -38,6 +38,29 @@ describe('parseDealSignal — happy paths', () => {
     }
   })
 
+  it('accepts the Portuguese-bleed spellings seen in real traffic', () => {
+    // "negociating" was observed live and cost a real classification.
+    const cases: [string, string][] = [
+      ['negociating', 'negotiating'],
+      ['negotiation', 'negotiating'],
+      ['negociacao', 'negotiating'],
+      ['qualificado', 'qualified'],
+      ['ganho', 'won'],
+      ['perdido', 'lost'],
+      ['nenhum', 'none'],
+    ]
+    for (const [raw, expected] of cases) {
+      expect(parseDealSignal(`{"outcome":"${raw}"}`), raw).toMatchObject({
+        outcome: expected,
+      })
+    }
+  })
+
+  it('still rejects an outcome that is not a known alias', () => {
+    expect(parseDealSignal('{"outcome":"negotiatingish"}')).toBeNull()
+    expect(parseDealSignal('{"outcome":"talvez"}')).toBeNull()
+  })
+
   it('collapses whitespace in the model', () => {
     expect(
       parseDealSignal('{"outcome":"qualified","model":"  iPhone   15  Pro  "}'),
@@ -116,12 +139,12 @@ describe('parseDealSignal — field hardening', () => {
 
 describe('buildDealSignalPrompt', () => {
   const prompt = buildDealSignalPrompt({
-    mainProduct: 'iPhone',
+    productScope: 'Apple device (iPhone, iPad, Mac, Apple Watch)',
     businessContext: 'Loja TNS, Rio de Janeiro.',
   })
 
-  it('states the product and the JSON-only contract', () => {
-    expect(prompt).toContain('iPhone')
+  it('states the product scope and the JSON-only contract', () => {
+    expect(prompt).toContain('iPhone, iPad, Mac, Apple Watch')
     expect(prompt).toContain('single JSON object and nothing else')
   })
 
@@ -131,8 +154,16 @@ describe('buildDealSignalPrompt', () => {
     }
   })
 
-  it('distinguishes the sale price from the trade-in valuation', () => {
+  it('separates all three amounts these conversations contain', () => {
+    // Observed live: the classifier reported R$1.899 for an iPhone 17 Pro
+    // Max because that was the upgrade top-up, not the device's price.
     expect(prompt).toContain('NEVER the trade-in valuation')
+    expect(prompt).toContain('NEVER the top-up amount in an upgrade')
+    expect(prompt).toContain('Diferença a pagar')
+  })
+
+  it('prefers a null price over falling back to the top-up amount', () => {
+    expect(prompt).toContain('report null — do NOT fall back to the difference')
   })
 
   it('carries the account business context as reference, not instructions', () => {
@@ -145,7 +176,10 @@ describe('buildDealSignalPrompt', () => {
   })
 
   it('omits the context block when the account has none', () => {
-    const bare = buildDealSignalPrompt({ mainProduct: 'iPhone', businessContext: null })
+    const bare = buildDealSignalPrompt({
+      productScope: 'Apple device',
+      businessContext: null,
+    })
     expect(bare).not.toContain('Business context')
   })
 })

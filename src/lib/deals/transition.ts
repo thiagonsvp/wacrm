@@ -114,6 +114,18 @@ export function planTransition(args: {
     if (signal.outcome === 'lost') {
       return { action: 'none', reason: 'no deal to mark lost' }
     }
+    // Invariant 5: never open a *closed-won* card with nothing in it. A
+    // brand-new "won" carrying neither a model nor a price would land in
+    // the closed stage titled with the contact's name and valued at zero,
+    // which silently drags reported revenue down. Real closes name at
+    // least one of the two; a signal this thin is far more likely to be a
+    // misread, so leave it for a human.
+    if (signal.outcome === 'won' && !signal.model?.trim() && signal.price == null) {
+      return {
+        action: 'none',
+        reason: 'won with neither model nor price — too thin to open a closed deal',
+      }
+    }
     // Non-null for every remaining outcome, but keep the guard so a new
     // outcome added later fails closed instead of creating a stageless card.
     if (!targetStage) {

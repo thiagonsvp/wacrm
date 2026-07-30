@@ -4,7 +4,12 @@ import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
 import { generateReply } from './generate'
 import { logAiUsage } from './usage'
-import { buildDealSignalPrompt, dealMainProduct, parseDealSignal } from './deal-signal'
+import {
+  buildDealSignalPrompt,
+  dealProductScope,
+  parseDealSignal,
+  renderTranscript,
+} from './deal-signal'
 import { resolvePipelineStages, type PipelineStageMap } from '@/lib/deals/stage-map'
 import {
   planTransition,
@@ -230,11 +235,16 @@ export async function runDealPipelineForConversation(
   }
 
   const systemPrompt = buildDealSignalPrompt({
-    mainProduct: dealMainProduct(),
+    productScope: dealProductScope(),
     businessContext: config.systemPrompt,
   })
 
-  const { text, usage } = await generateReply({ config, systemPrompt, messages })
+  // Single flattened document, not chat turns — see renderTranscript.
+  const { text, usage } = await generateReply({
+    config,
+    systemPrompt,
+    messages: [{ role: 'user', content: renderTranscript(messages) }],
+  })
 
   // Fire-and-forget: logAiUsage swallows its own errors, so this floating
   // promise cannot reject. Logged regardless of what the model said — the

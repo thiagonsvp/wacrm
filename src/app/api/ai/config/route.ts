@@ -7,6 +7,11 @@ import {
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
+import {
+  isUndefinedColumnError,
+  selectAiConfigRow,
+  withoutPost042Columns,
+} from '@/lib/ai/config'
 import { embedTexts } from '@/lib/ai/embeddings'
 import { AiError, type AiProvider } from '@/lib/ai/types'
 
@@ -25,15 +30,15 @@ export async function GET() {
   try {
     const { supabase, accountId } = await getCurrentAccount()
 
-    const { data, error } = await supabase
-      .from('ai_configs')
-      // `api_key` is selected only to derive `has_key` — it is stripped
-      // out below and never returned to the client.
-      .select(
-        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, deal_pipeline_enabled',
-      )
-      .eq('account_id', accountId)
-      .maybeSingle()
+    // `api_key` is selected only to derive `has_key` — it is stripped out
+    // below and never returned to the client. Read through
+    // `selectAiConfigRow` so this page still loads on a project that
+    // hasn't applied migration 042 yet.
+    const { data, error } = await selectAiConfigRow(
+      supabase,
+      accountId,
+      'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, deal_pipeline_enabled',
+    )
 
     if (error) {
       console.error('[ai/config GET] fetch error:', error)
@@ -218,32 +223,38 @@ export async function POST(request: Request) {
       shared.embeddings_api_key = null
     }
 
-    if (existing) {
-      const { error: upErr } = await supabase
-        .from('ai_configs')
-        .update(encryptedKey ? { ...shared, api_key: encryptedKey } : shared)
-        .eq('account_id', accountId)
-      if (upErr) {
-        console.error('[ai/config POST] update error:', upErr)
-        return NextResponse.json(
-          { error: 'Failed to save AI configuration' },
-          { status: 500 },
-        )
-      }
-    } else {
-      const { error: insErr } = await supabase.from('ai_configs').insert({
-        account_id: accountId,
-        created_by: userId,
-        api_key: encryptedKey, // guaranteed non-null: rawKey required when no existing row
-        ...shared,
-      })
-      if (insErr) {
-        console.error('[ai/config POST] insert error:', insErr)
-        return NextResponse.json(
-          { error: 'Failed to save AI configuration' },
-          { status: 500 },
-        )
-      }
+    // Retry once without the post-042 columns when the project hasn't run
+    // that migration yet, so saving the key/model/prompt keeps working —
+    // only the deal-pipeline toggle is dropped, matching the read side.
+    const write = async (payload: Record<string, unknown>) => {
+      const run = (body: Record<string, unknown>) =>
+        existing
+          ? supabase.from('ai_configs').update(body).eq('account_id', accountId)
+          : supabase.from('ai_configs').insert(body)
+
+      const first = await run(payload)
+      if (!first.error || !isUndefinedColumnError(first.error)) return first
+      return run(withoutPost042Columns(payload))
+    }
+
+    const payload = existing
+      ? encryptedKey
+        ? { ...shared, api_key: encryptedKey }
+        : shared
+      : {
+          account_id: accountId,
+          created_by: userId,
+          api_key: encryptedKey, // non-null: rawKey required when no existing row
+          ...shared,
+        }
+
+    const { error: writeErr } = await write(payload)
+    if (writeErr) {
+      console.error('[ai/config POST] save error:', writeErr)
+      return NextResponse.json(
+        { error: 'Failed to save AI configuration' },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({ success: true })

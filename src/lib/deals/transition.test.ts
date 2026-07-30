@@ -81,6 +81,36 @@ describe('planTransition — creating a card', () => {
     expect(plan(signal({ outcome: 'lost' }))).toMatchObject({ action: 'none' })
   })
 
+  it('refuses to open a closed-won card with neither model nor price', () => {
+    // Would otherwise land in Finalizado titled "Fulano" at R$0 and drag
+    // reported revenue down.
+    expect(plan(signal({ outcome: 'won' }))).toMatchObject({
+      action: 'none',
+      reason: 'won with neither model nor price — too thin to open a closed deal',
+    })
+  })
+
+  it('still opens a won card when either the model or the price is known', () => {
+    expect(plan(signal({ outcome: 'won', model: 'iPhone 14' }))).toMatchObject({
+      action: 'create',
+      status: 'won',
+    })
+    expect(plan(signal({ outcome: 'won', price: 2700 }))).toMatchObject({
+      action: 'create',
+      status: 'won',
+      value: 2700,
+    })
+  })
+
+  it('still closes an EXISTING deal as won on a thin signal', () => {
+    // The card already carries the model and value a human entered, so
+    // there is nothing thin about the outcome here.
+    expect(plan(signal({ outcome: 'won' }), deal({ stagePosition: 2 }))).toMatchObject({
+      action: 'update',
+      changes: { stage_id: 'stage-fim', status: 'won' },
+    })
+  })
+
   it('does nothing when there is no signal', () => {
     expect(plan(signal({ outcome: 'none', model: 'iPhone 15' }))).toMatchObject({
       action: 'none',
