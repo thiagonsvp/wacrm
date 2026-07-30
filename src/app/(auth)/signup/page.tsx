@@ -139,7 +139,7 @@ function SignupPageInner() {
             )}
           </div>
           <CardTitle className="text-xl text-foreground">
-            {inviteToken ? "Create account & join" : "Create account"}
+            {inviteToken ? "Criar conta e entrar" : "Criar conta"}
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             {inviteToken
@@ -220,7 +220,7 @@ function SignupPageInner() {
               disabled={loading}
               className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {loading ? "Creating account..." : "Create account"}
+              {loading ? "Criando conta..." : "Criar conta"}
             </Button>
           </form>
 

@@ -104,7 +104,7 @@ export default function NotificationsPage() {
         .eq("id", id)
         .is("read_at", null);
       if (updateErr) {
-        toast.error("Failed to mark notification as read");
+        toast.error('Não foi possível marcar a notificação como lida');
         load();
       }
     },
@@ -137,7 +137,7 @@ export default function NotificationsPage() {
       .is("read_at", null);
     setMarkingAll(false);
     if (updateErr) {
-      toast.error("Failed to mark all as read");
+        toast.error('Não foi possível marcar todas como lidas');
       load();
     }
   }, [unreadIds.length, load]);

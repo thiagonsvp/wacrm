@@ -43,9 +43,9 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (data.code === 'ai_not_configured') {
-          toast.error('No agent configured yet — finish Setup first.');
+          toast.error('Nenhum agente configurado — conclua a configuração primeiro.');
         } else {
-          toast.error(data.error ?? "Couldn't get a reply.");
+          toast.error(data.error ?? 'Não foi possível obter uma resposta.');
         }
         // Roll the unsent user turn back so the transcript stays clean.
         setTurns(turns);
@@ -64,7 +64,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
         },
       ]);
     } catch {
-      toast.error("Couldn't reach the agent.");
+      toast.error('Não foi possível acessar o agente.');
       setTurns(turns);
       setInput(text);
     } finally {
@@ -106,10 +106,10 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
         {turns.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
             <Bot className="mb-2 h-8 w-8 text-muted-foreground/60" />
-            <p>Send a message to see how your agent would reply.</p>
+            <p>Envie uma mensagem para ver como seu agente responderia.</p>
             <p className="mt-1 text-xs">
-              It uses your knowledge base and behaves exactly like the
-              auto-reply bot — including handoff.
+              Ele usa sua base de conhecimento e se comporta exatamente como o
+              bot de resposta automática — incluindo a transferência para um atendente.
             </p>
             {onGoToSetup && (
               <Button

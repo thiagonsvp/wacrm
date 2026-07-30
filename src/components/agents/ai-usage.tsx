@@ -70,13 +70,13 @@ export function AiUsageCard() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
-        toast.error(json?.error ?? 'Failed to load usage');
+        toast.error(json?.error ?? 'Não foi possível carregar o uso');
         setData(null);
         return;
       }
       setData(json as UsageResponse);
     } catch {
-      toast.error('Failed to load usage');
+      toast.error('Não foi possível carregar o uso');
       setData(null);
     } finally {
       setLoading(false);
@@ -135,7 +135,7 @@ export function AiUsageCard() {
         ) : !hasSpend ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-sm text-muted-foreground">
             <BarChart3 className="h-8 w-8 opacity-40" />
-            <p>No AI usage in the last {data.window_days} days yet.</p>
+            <p>Ainda não há uso de IA nos últimos {data.window_days} dias.</p>
             <p className="text-xs">
               This fills in as the assistant drafts and auto-replies.
             </p>

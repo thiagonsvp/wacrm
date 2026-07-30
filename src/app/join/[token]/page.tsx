@@ -77,8 +77,8 @@ const FAIL_COPY: Record<PeekFail['reason'], { title: string; body: string }> = {
     body: 'This link doesn’t match a valid invitation. Double-check the URL or ask the person who invited you to send a new one.',
   },
   used: {
-    title: 'Invite already used',
-    body: 'This invitation has already been accepted. If that wasn’t you, ask the account admin to send a fresh link.',
+    title: 'Convite já utilizado',
+    body: 'Este convite já foi aceito. Se não foi você, peça ao administrador da conta para enviar um novo link.',
   },
   expired: {
     title: 'Invite expired',
@@ -183,21 +183,21 @@ export default function JoinPage() {
         if (res.status === 409) {
           setConflictMessage(
             payload.error ||
-              'You are already in another account. Sign in with a different email to join this one.',
+              'Você já está em outra conta. Entre com um e-mail diferente para participar desta.',
           );
         } else {
-          toast.error(payload.error || 'Failed to accept invitation');
+          toast.error(payload.error || 'Não foi possível aceitar o convite');
         }
         setAccepting(false);
         return;
       }
-      toast.success('Welcome to the team');
+      toast.success('Bem-vindo à equipe');
       // Full reload (not router.push) so AuthProvider re-fetches
       // the profile with the new account_id and account_role.
       window.location.href = '/dashboard';
     } catch (err) {
       console.error('[join] redeem error:', err);
-      toast.error('Could not reach the server');
+      toast.error('Não foi possível acessar o servidor');
       setAccepting(false);
     }
   }, [token]);
@@ -212,7 +212,7 @@ export default function JoinPage() {
       window.location.reload();
     } catch (err) {
       console.error('[join] sign-out error:', err);
-      toast.error('Could not sign out. Try refreshing the page.');
+      toast.error('Não foi possível sair. Tente atualizar a página.');
       setSigningOut(false);
     }
   }, []);
@@ -257,7 +257,7 @@ export default function JoinPage() {
                 onClick={loadPeekAndAuth}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                Try again
+                Tentar novamente
               </Button>
               <Link href="/signup">
                 <Button
@@ -397,7 +397,7 @@ export default function JoinPage() {
                     Signing out…
                   </>
                 ) : (
-                  'Sign out & use a different email'
+                  'Sair e usar outro e-mail'
                 )}
               </Button>
             </DialogFooter>
@@ -414,7 +414,7 @@ export default function JoinPage() {
       <CardContent className="flex flex-col gap-2">
         <Link href={`/signup?invite=${encodeURIComponent(token!)}`}>
           <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-            Create account &amp; join
+            Criar conta e entrar
           </Button>
         </Link>
         <Link href={`/login?invite=${encodeURIComponent(token!)}`}>
@@ -422,7 +422,7 @@ export default function JoinPage() {
             variant="outline"
             className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
           >
-            I already have an account
+            Já tenho uma conta
           </Button>
         </Link>
       </CardContent>
