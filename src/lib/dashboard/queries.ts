@@ -27,6 +27,24 @@ import type {
 
 type DB = SupabaseClient
 
+const EXCLUDED_CONTACT_TAGS = new Set(['fornecedor', 'outros'])
+
+type DashboardContactRow = {
+  id: string
+  contact_tags?: { tags?: { name?: string | null } | null }[]
+}
+
+function countDashboardContacts(
+  rows: DashboardContactRow[] | null,
+): number {
+  return (rows ?? []).filter((contact) =>
+    !(contact.contact_tags ?? []).some((join) => {
+      const tagName = join.tags?.name?.trim().toLocaleLowerCase()
+      return tagName && EXCLUDED_CONTACT_TAGS.has(tagName)
+    }),
+  ).length
+}
+
 // --- 1. Metric cards ---------------------------------------------------
 
 export async function loadMetrics(db: DB): Promise<MetricsBundle> {
@@ -55,10 +73,13 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .eq('status', 'open')
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
-    db.from('contacts').select('id', { count: 'exact', head: true }).gte('created_at', todayStart),
     db
       .from('contacts')
-      .select('id', { count: 'exact', head: true })
+      .select('id, contact_tags(tags(name))')
+      .gte('created_at', todayStart),
+    db
+      .from('contacts')
+      .select('id, contact_tags(tags(name))')
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
     db.from('deals').select('value, status').eq('status', 'open'),
@@ -87,8 +108,8 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       previous: (newConvToday.count ?? 0) - (newConvYesterday.count ?? 0),
     },
     newContactsToday: {
-      current: newContactsToday.count ?? 0,
-      previous: newContactsYesterday.count ?? 0,
+      current: countDashboardContacts(newContactsToday.data as DashboardContactRow[] | null),
+      previous: countDashboardContacts(newContactsYesterday.data as DashboardContactRow[] | null),
     },
     openDealsValue,
     openDealsCount: openDealsRows.length,

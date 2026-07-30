@@ -491,6 +491,7 @@ function ConversationItem({
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || t("unknown");
   const initials = displayName.charAt(0).toUpperCase();
+  const source = getLeadSource(contact?.tags);
 
   const handleClick = useCallback(() => {
     onSelect(conversation);
@@ -529,6 +530,7 @@ function ConversationItem({
           <span className="truncate text-sm font-medium text-foreground">
             {displayName}
           </span>
+          {source && <LeadSourceIcon source={source} />}
           <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
@@ -552,5 +554,54 @@ function ConversationItem({
         </div>
       </div>
     </button>
+  );
+}
+
+type LeadSource = "facebook" | "instagram" | "google";
+
+function getLeadSource(tags?: Tag[]): LeadSource | null {
+  const names = new Set((tags ?? []).map((tag) => tag.name.trim().toLocaleLowerCase()));
+  if (names.has("facebook")) return "facebook";
+  if (names.has("instagram")) return "instagram";
+  if (names.has("google") || names.has("orgânico") || names.has("organico")) {
+    return "google";
+  }
+  return null;
+}
+
+function LeadSourceIcon({ source }: { source: LeadSource }) {
+  const label = source === "facebook"
+    ? "Facebook"
+    : source === "instagram"
+      ? "Instagram"
+      : "Google / Orgânico";
+
+  return (
+    <span
+      aria-label={label}
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center"
+      title={label}
+    >
+      {source === "facebook" && (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-[#1877F2]">
+          <path d="M14 8h3V4h-3c-3.3 0-5 1.9-5 5v3H6v4h3v8h4v-8h3.5l.5-4H13V9c0-.7.3-1 1-1Z" />
+        </svg>
+      )}
+      {source === "instagram" && (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none stroke-[#E4405F]" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.5" cy="6.5" r="1" className="fill-[#E4405F] stroke-none" />
+        </svg>
+      )}
+      {source === "google" && (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+          <path fill="#4285F4" d="M21.35 12.27c0-.72-.06-1.42-.18-2.09H12v3.96h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.26Z" />
+          <path fill="#34A853" d="M12 21.75c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.7-1.72-5.47-4.03H3.28v2.53A9.75 9.75 0 0 0 12 21.75Z" />
+          <path fill="#FBBC05" d="M6.53 13.83a5.86 5.86 0 0 1 0-3.66V7.64H3.28a9.76 9.76 0 0 0 0 8.72l3.25-2.53Z" />
+          <path fill="#EA4335" d="M12 6.14c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.22 14.63 2.25 12 2.25a9.75 9.75 0 0 0-8.72 5.39l3.25 2.53C7.3 7.86 9.46 6.14 12 6.14Z" />
+        </svg>
+      )}
+    </span>
   );
 }
