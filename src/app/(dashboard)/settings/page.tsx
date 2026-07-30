@@ -8,6 +8,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { SettingsRail } from '@/components/settings/settings-rail';
 import { SettingsOverview } from '@/components/settings/settings-overview';
+import { SetupGuide } from '@/components/settings/setup-guide';
+import { MetaAdsConfig } from '@/components/settings/meta-ads-config';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
@@ -55,6 +57,7 @@ export default function SettingsPage() {
 
   const panel: Record<SettingsSection, ReactNode> = {
     overview: <SettingsOverview onSelect={go} />,
+    setup: <SetupGuide onSelect={go} />,
     profile: <ProfileForm />,
     security: <SecurityPanel />,
     appearance: <AppearancePanel />,
@@ -64,6 +67,7 @@ export default function SettingsPage() {
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
     members: <MembersTab />,
+    'meta-ads': <MetaAdsConfig />,
     api: <ApiKeysSettings />,
   };
 

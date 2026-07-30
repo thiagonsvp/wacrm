@@ -10,7 +10,7 @@ import { validateAiCredentials } from '@/lib/ai/validate'
 import {
   isUndefinedColumnError,
   selectAiConfigRow,
-  withoutPost042Columns,
+  withoutOptionalColumns,
 } from '@/lib/ai/config'
 import { embedTexts } from '@/lib/ai/embeddings'
 import { AiError, type AiProvider } from '@/lib/ai/types'
@@ -37,7 +37,7 @@ export async function GET() {
     const { data, error } = await selectAiConfigRow(
       supabase,
       accountId,
-      'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, deal_pipeline_enabled',
+      'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, deal_pipeline_enabled, deal_product_scope',
     )
 
     if (error) {
@@ -96,6 +96,13 @@ export async function POST(request: Request) {
     const isActive = body.is_active === true
     const autoReplyEnabled = body.auto_reply_enabled === true
     const dealPipelineEnabled = body.deal_pipeline_enabled === true
+    // What this account sells, in the operator's words. Feeds the deal
+    // classifier's prompt; the single field that most needs to differ
+    // between one deployment and the next.
+    const dealProductScope =
+      typeof body.deal_product_scope === 'string' && body.deal_product_scope.trim()
+        ? body.deal_product_scope.trim().slice(0, 300)
+        : null
 
     let maxPer = Number(body.auto_reply_max_per_conversation)
     if (!Number.isFinite(maxPer)) maxPer = 3
@@ -163,18 +170,7 @@ export async function POST(request: Request) {
 
     if (credentialsChanged) {
       try {
-        await validateAiCredentials({
-          provider,
-          model,
-          apiKey: apiKeyPlain,
-          systemPrompt,
-          isActive,
-          autoReplyEnabled,
-          autoReplyMaxPerConversation: maxPer,
-          handoffAgentId: null,
-          embeddingsApiKey: null,
-          dealPipelineEnabled: false,
-        })
+        await validateAiCredentials({ provider, model, apiKey: apiKeyPlain })
       } catch (err) {
         if (err instanceof AiError) {
           return NextResponse.json(
@@ -213,6 +209,7 @@ export async function POST(request: Request) {
       auto_reply_enabled: autoReplyEnabled,
       auto_reply_max_per_conversation: maxPer,
       deal_pipeline_enabled: dealPipelineEnabled,
+      deal_product_scope: dealProductScope,
     }
     // Only touch the handoff target when the form actually sent the field,
     // so a partial save (e.g. flipping a toggle) doesn't wipe it.
@@ -234,7 +231,7 @@ export async function POST(request: Request) {
 
       const first = await run(payload)
       if (!first.error || !isUndefinedColumnError(first.error)) return first
-      return run(withoutPost042Columns(payload))
+      return run(withoutOptionalColumns(payload))
     }
 
     const payload = existing

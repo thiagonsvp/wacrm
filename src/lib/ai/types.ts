@@ -34,7 +34,25 @@ export interface AiConfig {
    *  replies must not start writing to the deals board as a side effect,
    *  since that mutates business records (stage, value, won/lost). */
   dealPipelineEnabled: boolean
+  /** What this account sells, in the operator's own words — the single
+   *  biggest thing that differs between customers, so it lives in the
+   *  database rather than in DEAL_PRODUCT_SCOPE. Null falls back to the
+   *  env var, then to the built-in default. */
+  dealProductScope: string | null
+  /** Stage ids chosen in Settings. Null falls back to matching stage
+   *  names, which cannot work for a board in another language. */
+  dealStageQualifiedId: string | null
+  dealStageNegotiatingId: string | null
+  dealStageClosedId: string | null
 }
+
+/**
+ * The only fields a provider call actually needs. Narrower than
+ * `AiConfig` on purpose: connectivity checks and one-off generations
+ * should not have to invent values for every unrelated account setting,
+ * and widening `AiConfig` should not break them.
+ */
+export type AiCredentials = Pick<AiConfig, 'provider' | 'model' | 'apiKey'>
 
 /** A single conversation turn in the shape both providers accept. */
 export interface ChatMessage {

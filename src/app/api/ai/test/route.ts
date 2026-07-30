@@ -63,18 +63,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await validateAiCredentials({
-        provider,
-        model,
-        apiKey: apiKeyPlain,
-        systemPrompt: null,
-        isActive: true,
-        dealPipelineEnabled: false,
-        autoReplyEnabled: false,
-        autoReplyMaxPerConversation: 3,
-        handoffAgentId: null,
-        embeddingsApiKey: null,
-      })
+      await validateAiCredentials({ provider, model, apiKey: apiKeyPlain })
     } catch (err) {
       if (err instanceof AiError) {
         return NextResponse.json(

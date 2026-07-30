@@ -1,19 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { generateReply, parseGeneration } from './generate'
-import { AiError, type AiConfig } from './types'
+import { AiError, type AiCredentials } from './types'
 
-function config(overrides: Partial<AiConfig> = {}): AiConfig {
+function config(overrides: Partial<AiCredentials> = {}): AiCredentials {
   return {
     provider: 'openai',
     model: 'gpt-test',
     apiKey: 'sk-test',
-    systemPrompt: null,
-    isActive: true,
-    autoReplyEnabled: false,
-    autoReplyMaxPerConversation: 3,
-    handoffAgentId: null,
-    embeddingsApiKey: null,
-    dealPipelineEnabled: false,
     ...overrides,
   }
 }

@@ -189,8 +189,12 @@ function extractAcquisition(msg: UazapiMessage) {
     sourceId: ad.sourceID || ad.sourceId || null,
     campaign: ad.title || null,
     adText: ad.body || null,
-      url: sourceUrl,
-      avatarUrl: null,
+    url: sourceUrl,
+    avatarUrl: null,
+    // The click id is what makes a later conversion attributable to the
+    // ad that produced it. It only ever appears on the FIRST message
+    // after the click, so if it is not stored now it is gone for good.
+    ctwaClid: ad.ctwaClid || null,
   }
 }
 

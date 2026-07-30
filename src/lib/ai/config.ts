@@ -13,25 +13,36 @@ interface AiConfigRow {
   handoff_agent_id: string | null
   embeddings_api_key: string | null
   deal_pipeline_enabled: boolean | null
+  deal_product_scope: string | null
+  deal_stage_qualified_id: string | null
+  deal_stage_negotiating_id: string | null
+  deal_stage_closed_id: string | null
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, deal_pipeline_enabled'
+  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, deal_pipeline_enabled, deal_product_scope, deal_stage_qualified_id, deal_stage_negotiating_id, deal_stage_closed_id'
 
 /**
- * Columns introduced by migration 042 (`042_ai_deal_pipeline.sql`).
+ * Columns added to `ai_configs` after the table's original migration —
+ * `deal_pipeline_enabled` by 042, the rest by 043.
  *
- * Migrations in this project are applied by hand, out of band, so the
- * code can reach production before the SQL does. Selecting a column that
- * doesn't exist yet is a hard PostgREST error, which would take down the
- * AI settings page and the assistant — including the very page an
- * operator needs in order to finish setting AI up. Degrading to "the
- * feature is off" is the only safe failure direction here.
+ * Migrations here are applied by hand, out of band, so the code can reach
+ * production before the SQL does. Selecting a column that doesn't exist
+ * yet is a hard PostgREST error, which would take down the AI settings
+ * page and the assistant — including the very page an operator needs in
+ * order to finish setting AI up. Degrading to "the feature is off" is the
+ * only safe failure direction here.
  *
- * Delete this list and `selectAiConfigRow`'s retry once 042 is applied
- * everywhere.
+ * Delete this list, `selectAiConfigRow`'s retry and `withoutOptionalColumns`
+ * once 042 and 043 are applied everywhere.
  */
-const POST_042_COLUMNS = ['deal_pipeline_enabled']
+const OPTIONAL_COLUMNS = [
+  'deal_pipeline_enabled',
+  'deal_product_scope',
+  'deal_stage_qualified_id',
+  'deal_stage_negotiating_id',
+  'deal_stage_closed_id',
+]
 
 /**
  * Read the account's `ai_configs` row, retrying once without the post-042
@@ -69,13 +80,13 @@ export async function selectAiConfigRow(
   if (!isUndefinedColumnError(first.error)) return first
 
   console.warn(
-    '[ai config] supabase/migrations/042_ai_deal_pipeline.sql has not been applied ' +
-      'to this project — the AI deal pipeline stays off until it is.',
+    '[ai config] migration 042 and/or 043 has not been applied to this project — ' +
+      'the AI deal pipeline and its per-account settings stay off until they are.',
   )
   const reduced = columns
     .split(',')
     .map((c) => c.trim())
-    .filter((c) => !POST_042_COLUMNS.includes(c))
+    .filter((c) => !OPTIONAL_COLUMNS.includes(c))
     .join(', ')
   return read(reduced)
 }
@@ -90,11 +101,11 @@ export function isUndefinedColumnError(error: { code?: string } | null): boolean
  * retried on a project that hasn't applied the migration. The toggle then
  * simply isn't persisted — which matches the read side degrading to off.
  */
-export function withoutPost042Columns(
+export function withoutOptionalColumns(
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
   const out = { ...payload }
-  for (const column of POST_042_COLUMNS) delete out[column]
+  for (const column of OPTIONAL_COLUMNS) delete out[column]
   return out
 }
 
@@ -162,6 +173,10 @@ export async function loadAiConfig(
     // once migration 042 is applied, but treating a null as "off" keeps a
     // project that hasn't run it yet from silently enabling board writes.
     dealPipelineEnabled: row.deal_pipeline_enabled === true,
+    dealProductScope: row.deal_product_scope ?? null,
+    dealStageQualifiedId: row.deal_stage_qualified_id ?? null,
+    dealStageNegotiatingId: row.deal_stage_negotiating_id ?? null,
+    dealStageClosedId: row.deal_stage_closed_id ?? null,
   }
 }
 

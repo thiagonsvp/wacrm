@@ -78,6 +78,10 @@ function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
     handoffAgentId: null,
     embeddingsApiKey: null,
     dealPipelineEnabled: false,
+    dealProductScope: null,
+    dealStageQualifiedId: null,
+    dealStageNegotiatingId: null,
+    dealStageClosedId: null,
     ...overrides,
   }
 }

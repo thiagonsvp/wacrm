@@ -84,15 +84,60 @@ export function matchStageSlots(
   return { qualified, negotiating, closed }
 }
 
+/** Stage ids chosen explicitly in Settings, when the operator set them. */
+export interface ConfiguredStageIds {
+  qualified?: string | null
+  negotiating?: string | null
+  closed?: string | null
+}
+
 /**
- * Load the account's pipelines and return the first one whose stages
- * cover all three slots. Returns null (with a breadcrumb) when no
- * pipeline qualifies — a renamed or half-built board must degrade to
- * "do nothing", never to "put the card somewhere arbitrary".
+ * Build the map from stage ids the operator picked in Settings.
+ *
+ * Preferred over name matching: it survives a renamed column, and it is
+ * the only thing that works for a customer whose board is not in
+ * Portuguese. Returns null if any id is missing or no longer exists on
+ * the board (a deleted stage), so the caller falls back rather than
+ * writing a card into a stage that is gone.
+ */
+export function mapConfiguredStages(
+  configured: ConfiguredStageIds,
+  stages: StageRow[],
+): PipelineStageMap | null {
+  const { qualified, negotiating, closed } = configured
+  if (!qualified || !negotiating || !closed) return null
+
+  const byId = new Map(stages.map((s) => [s.id, s]))
+  const q = byId.get(qualified)
+  const n = byId.get(negotiating)
+  const c = byId.get(closed)
+  if (!q || !n || !c) return null
+  // All three must live on one board, or "never move backwards" would be
+  // comparing positions from different pipelines.
+  if (!q.pipeline_id) return null
+  if (q.pipeline_id !== n.pipeline_id || q.pipeline_id !== c.pipeline_id) return null
+
+  return {
+    pipelineId: q.pipeline_id,
+    qualified: { id: q.id, position: q.position },
+    negotiating: { id: n.id, position: n.position },
+    closed: { id: c.id, position: c.position },
+  }
+}
+
+/**
+ * Resolve the three stages this pipeline drives.
+ *
+ * Prefers the ids configured in Settings; falls back to matching stage
+ * names so deployments that predate that setting keep working untouched.
+ * Returns null (with a breadcrumb) when neither resolves — a renamed or
+ * half-built board must degrade to "do nothing", never to "put the card
+ * somewhere arbitrary".
  */
 export async function resolvePipelineStages(
   db: SupabaseClient,
   accountId: string,
+  configured?: ConfiguredStageIds,
 ): Promise<PipelineStageMap | null> {
   const { data: pipelines, error: pipeErr } = await db
     .from('pipelines')
@@ -113,18 +158,22 @@ export async function resolvePipelineStages(
     .order('position', { ascending: true })
 
   if (stageErr) throw stageErr
+  const allStages = (stages ?? []) as StageRow[]
+
+  if (configured) {
+    const explicit = mapConfiguredStages(configured, allStages)
+    if (explicit) return explicit
+  }
 
   for (const pipeline of pipelines) {
-    const own = ((stages ?? []) as StageRow[]).filter(
-      (s) => s.pipeline_id === pipeline.id,
-    )
+    const own = allStages.filter((s) => s.pipeline_id === pipeline.id)
     const slots = matchStageSlots(own)
     if (slots) return { pipelineId: pipeline.id, ...slots }
   }
 
   console.warn(
-    `[ai deal pipeline] account ${accountId}: no pipeline has stages matching ` +
-      'Lead Qualificado / Negociação / Finalizado — skipping classification.',
+    `[ai deal pipeline] account ${accountId}: no stages configured in Settings and ` +
+      'none match Lead Qualificado / Negociação / Finalizado — skipping classification.',
   )
   return null
 }

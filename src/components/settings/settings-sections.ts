@@ -1,6 +1,8 @@
 import {
   Coins,
   FileText,
+  ListChecks,
+  Megaphone,
   KeyRound,
   LayoutGrid,
   Palette,
@@ -23,6 +25,7 @@ import {
  */
 export const SETTINGS_SECTIONS = [
   'overview',
+  'setup',
   'profile',
   'security',
   'appearance',
@@ -32,6 +35,7 @@ export const SETTINGS_SECTIONS = [
   'fields',
   'deals',
   'members',
+  'meta-ads',
   'api',
 ] as const;
 
@@ -49,6 +53,7 @@ export interface SectionMeta {
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
+  setup: { id: 'setup', label: 'Setup guide', icon: ListChecks, group: 'top' },
   profile: { id: 'profile', label: 'Your profile', icon: User, group: 'account' },
   security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
@@ -58,6 +63,12 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
+  'meta-ads': {
+    id: 'meta-ads',
+    label: 'Meta Ads',
+    icon: Megaphone,
+    group: 'workspace',
+  },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };
 

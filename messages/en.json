@@ -378,9 +378,9 @@
         "notes": "Notes",
         "custom": "Custom Fields",
         "deals": "Deals",
-      "noTags": "No tags",
-      "noDeals": "No deals",
-      "addNotePlaceholder": "Add a note..."
+        "noTags": "No tags",
+        "noDeals": "No deals",
+        "addNotePlaceholder": "Add a note..."
       },
       "actions": {
         "edit": "Edit",
@@ -1350,13 +1350,11 @@
       "deleteLocallyAria": "Delete template locally",
       "deleteMetaLocallyTitle": "Delete from Meta and locally",
       "deleteLocallyTitle": "Delete locally",
-      
       "dialogEditTitle": "Edit Message Template",
       "dialogNewTitle": "New Message Template",
       "dialogEditDesc": "Save your changes to re-submit to Meta. Status will flip back to PENDING during review.",
       "dialogNewDesc": "Build a template and submit it to Meta for approval. Once approved, you can use it in broadcasts and the inbox.",
       "authWarning": "AUTHENTICATION templates have a fixed body + OTP button shape that needs a different builder. Create them in Meta WhatsApp Manager for now and use <bold>Sync from Meta</bold> to bring them in.",
-      
       "templateName": "Template Name",
       "namePlaceholder": "e.g. order_confirmation",
       "nameFixed": "Name is fixed once a template exists on Meta — create a new template to change it.",
@@ -1365,7 +1363,6 @@
       "language": "Language",
       "langFixed": "Language is fixed once a template exists on Meta.",
       "langHint": "Must match the exact code on Meta — <code>en_US</code> and <code>en</code> are distinct.",
-      
       "header": "Header",
       "headerNone": "None",
       "headerText": "Text",
@@ -1375,7 +1372,6 @@
       "headerTextPlaceholder": "Header text (max 60 chars, optional {{1}})",
       "headerSampleAria": "Sample value for header variable",
       "headerSamplePlaceholder": "Sample value for {{1}} (required for Meta review)",
-      
       "uploadImage": "Upload image",
       "uploadHint": "JPEG or PNG, ≤5 MB",
       "mediaUrlPlaceholder": "https://… (or paste a public {format} link)",
@@ -1383,17 +1379,14 @@
       "mediaHint": "Must be a publicly accessible HTTPS link. Meta fetches it once during review, so it needs to stay live for ~24 hrs.",
       "videoHint": " Recommended: MP4 / 3GPP, ≤16 MB, ≤60 seconds.",
       "documentHint": " Recommended: PDF, ≤100 MB.",
-      
       "bodyText": "Body Text",
       "bodyPlaceholder": "Hello {{1}}, your order {{2}} is confirmed.",
       "bodyHint": "Use {{1}}, {{2}} for variables (must be contiguous starting at {{1}}).",
       "sampleValues": "Sample values (Meta uses these to review your template)",
       "sampleAria": "Sample value for body variable {var}",
       "samplePlaceholder": "Sample for {var}",
-      
       "footer": "Footer (optional)",
       "footerPlaceholder": "Optional footer text (max 60 chars)",
-      
       "buttons": "Buttons (optional)",
       "addButton": "Add Button",
       "buttonsLimit": "Up to {max} buttons. QUICK_REPLY buttons must come before URL / phone / copy-code buttons.",
@@ -1406,19 +1399,16 @@
       "urlSamplePlaceholder": "Example value for {{1}} (required when URL has a variable)",
       "phonePlaceholder": "+15551234567",
       "codePlaceholder": "Example code (e.g. SUMMER20)",
-      
       "cancel": "Cancel",
       "saving": "Saving…",
       "submitting": "Submitting…",
       "saveResubmit": "Save & Resubmit",
       "submitApproval": "Submit for Approval",
-      
       "deleteDialogTitle": "Delete template?",
       "deleteMetaDesc": "\"{name}\" will be deleted from Meta and from wacrm. Active broadcasts using this template will start failing on their next send. This can't be undone.",
       "deleteLocalDesc": "\"{name}\" will be deleted from wacrm. It was never submitted to Meta, so no remote cleanup is needed.",
       "deleting": "Deleting…",
       "delete": "Delete",
-      
       "toastLoadFailed": "Failed to load templates",
       "toastSubmitFailed": "Failed to submit",
       "toastSubmitEditSuccess": "Edit submitted — Meta typically reviews within 24 hours.",
@@ -1523,7 +1513,9 @@
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
-      "api": "API keys"
+      "api": "API keys",
+      "setup": "Setup guide",
+      "meta-ads": "Meta Ads"
     },
     "groups": {
       "account": "Account",
@@ -1557,7 +1549,6 @@
       "profileSaved": "Profile saved",
       "emailChangeFailed": "Email change failed: {message}",
       "profileSavedEmailCheck": "Profile saved — check your email to confirm the address change",
-      
       "passwordTitle": "Password",
       "passwordDesc": "Use at least {min} characters. You will stay signed in on this device after changing it.",
       "currentPassword": "Current password",
@@ -1571,7 +1562,6 @@
       "currentPasswordIncorrect": "Current password is incorrect",
       "passwordUpdateFailed": "Password update failed: {message}",
       "passwordUpdated": "Password updated",
-      
       "sessionsTitle": "Active sessions",
       "sessionsDesc": "Sign out of every device where you're logged in — including this one. Useful if you lost a laptop or shared your password.",
       "signOutAll": "Sign out of all devices",
@@ -1685,7 +1675,10 @@
       "saveSuccess": "AI assistant saved.",
       "saveFailed": "Failed to save.",
       "removeSuccess": "AI configuration removed.",
-      "removeFailed": "Failed to remove."
+      "removeFailed": "Failed to remove.",
+      "productScope": "What this shop sells",
+      "productScopePlaceholder": "iPhone, iPad, Mac and Apple Watch",
+      "productScopeDesc": "Teaches the AI to tell a genuine lead from any other conversation. List the product lines that generate deals — anyone shopping for something else, or asking about support and accessories, gets no card. Leave blank to use the system default."
     },
     "aiKnowledge": {
       "loadFailed": "Failed to load knowledge base",
@@ -1713,6 +1706,76 @@
       "reindex": "Reindex",
       "reindexTooltip": "Re-embed all documents (e.g. after adding an embeddings key)",
       "loading": "Loading…"
+    },
+    "setup": {
+      "title": "Setup guide",
+      "description": "The five steps to get this CRM running on a new account. Each step says what it is, where to get the credential, and its real state here — green only when it actually works, not when a form was saved.",
+      "progress": "{done} of {total} done",
+      "goConfigure": "Configure",
+      "goPipelines": "Open Deals",
+      "goAgents": "Open Agents",
+      "s1Title": "Connect WhatsApp",
+      "s1What": "This is how messages arrive. Without it nothing else works — no tagging, no pipeline, no conversions.",
+      "s1Where": "Supported providers: Meta official API, uazapi, or Evolution. For uazapi/Evolution you need the instance URL and token from that provider's own dashboard.",
+      "whatsappOk": "Connected via {provider}.",
+      "whatsappDisconnected": "Configured, but the status is not connected — reconnect before continuing.",
+      "s2Title": "Create the pipeline stages",
+      "s2What": "The AI moves cards between three stages. They must exist before the automation can run.",
+      "s2Where": "In Deals, create the columns: Lead Qualificado, Negociação and Finalizado. They can be renamed later — Qualificado, Fechado and Ganho are also recognised.",
+      "stagesOk": "{count} stages found, including the three required.",
+      "stagesMissing": "Stages are missing. Without Lead Qualificado, Negociação and Finalizado the pipeline automation cannot run.",
+      "s3Title": "Add the AI key",
+      "s3What": "The AI reads conversations to qualify the lead and pick out the product and price. The key is yours — cost goes straight to your provider, with nobody in between.",
+      "s3Where": "Get one at platform.openai.com/api-keys (OpenAI) or console.anthropic.com (Anthropic). A mini-tier model is plenty for classification and much cheaper.",
+      "aiNoKey": "Configured, but no key saved.",
+      "aiInactive": "Key saved, but the assistant is off — turn on Enable AI assistant.",
+      "aiOk": "Active on {model}.",
+      "s4Title": "Turn on the automatic pipeline",
+      "s4What": "With this on, every inbound message repositions the card: created in Lead Qualificado with the model as its title, moved to Negociação with the price, then marked won or lost.",
+      "s4Where": "In Agents, turn on Move deals automatically. Also describe what the shop sells in the business context — that is what teaches the AI to recognise a genuine lead.",
+      "pipelineOk": "Automatic pipeline is on.",
+      "pipelineOff": "Off. Cards are still moved by hand.",
+      "s5Title": "Send conversions to Meta",
+      "s5What": "Reports back who became a qualified lead and who bought, so ads optimise for real sales instead of message volume. Only works for leads that came from a Click-to-WhatsApp ad.",
+      "s5Where": "Three values, all at business.facebook.com: the dataset id and token under Events Manager › Data sets › Settings; and the WhatsApp Business Account id under Business Settings › Accounts › WhatsApp Accounts.",
+      "metaMigration": "Migration 043 has not been applied to this Supabase project yet.",
+      "metaInactive": "Credentials saved, but sending is off.",
+      "metaNoWaba": "The WhatsApp Business Account id is missing — Meta requires it for the WhatsApp channel.",
+      "metaOk": "Sending conversions to Meta.",
+      "migrationsTitle": "When cloning for a new client",
+      "migrationsDesc": "Run every SQL file in the migrations folder through the Supabase SQL editor, in numeric order, before the first deploy. They are all idempotent — re-running does no harm. Then copy .env.local.example and fill in the Supabase keys and ENCRYPTION_KEY, which must be unique per client."
+    },
+    "metaAds": {
+      "title": "Meta Ads — conversions",
+      "description": "Sends qualified leads and sales back to Meta so Click-to-WhatsApp ads can optimise for real outcomes.",
+      "loading": "Loading…",
+      "loadFailed": "Could not load the Meta configuration.",
+      "saveFailed": "Could not save.",
+      "saved": "Configuration saved.",
+      "testOk": "Test event accepted by Meta. Check Events Manager › Test Events.",
+      "testFailed": "Meta rejected the test event.",
+      "migrationPending": "Run this migration in the Supabase SQL editor before configuring:",
+      "credentials": "Credentials",
+      "credentialsDesc": "The three values below come from Business Manager. They are created once per client and do not change afterwards.",
+      "openEventsManager": "Open Events Manager",
+      "datasetLabel": "Dataset ID",
+      "datasetHint": "Events Manager › Data sets. It is the number shown under the data set name. Digits only.",
+      "tokenLabel": "Access token",
+      "tokenHint": "On that same data set, Settings tab, Conversions API section, Generate access token. Stored encrypted and never shown again.",
+      "wabaLabel": "WhatsApp Business Account ID",
+      "wabaHint": "Business Settings › Accounts › WhatsApp Accounts. Meta requires this for the WhatsApp channel. Unofficial providers (uazapi, Evolution) never expose it, so it has to be copied by hand.",
+      "testCodeLabel": "Test event code (optional)",
+      "testCodeHint": "Events Manager › Test Events. While this is filled in, events appear only on that tab and do not count as real conversions — use it to verify before going live.",
+      "behaviour": "Behaviour",
+      "enable": "Send conversions",
+      "enableDesc": "Master switch. With this off, nothing is sent to Meta.",
+      "sendLead": "Send qualified lead",
+      "sendLeadDesc": "Fires when the card enters the pipeline. A cheap signal: getting it wrong costs little.",
+      "sendPurchase": "Send purchase",
+      "sendPurchaseDesc": "Fires when a deal is marked won, carrying the card's value. This is the signal that weighs most in optimisation — one false purchase can send Meta chasing the wrong audience for weeks. Consider leaving it off until you trust the classification.",
+      "save": "Save",
+      "test": "Test connection",
+      "testHint": "The test always uses the test event code, so it can never write a real conversion."
     }
   }
 }

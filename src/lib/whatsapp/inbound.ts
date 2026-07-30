@@ -32,6 +32,9 @@ export interface AcquisitionData {
   adText?: string | null
   url?: string | null
   avatarUrl?: string | null
+  /** Click-to-WhatsApp click id, required to attribute a later
+   *  conversion back to the ad (Conversions API `user_data.ctwa_clid`). */
+  ctwaClid?: string | null
 }
 
 export async function findOrCreateContact(
@@ -55,6 +58,9 @@ export async function findOrCreateContact(
           ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
           ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
           ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
+          ...(acquisition?.ctwaClid
+            ? { acquisition_ctwa_clid: acquisition.ctwaClid }
+            : {}),
           ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
           updated_at: new Date().toISOString(),
         })
@@ -75,6 +81,9 @@ export async function findOrCreateContact(
       ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
       ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
       ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
+      ...(acquisition?.ctwaClid
+        ? { acquisition_ctwa_clid: acquisition.ctwaClid }
+        : {}),
       ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
     })
     .select()

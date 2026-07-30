@@ -72,6 +72,7 @@ export function AiConfig() {
   const [isActive, setIsActive] = useState(false);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
   const [dealPipelineEnabled, setDealPipelineEnabled] = useState(false);
+  const [dealProductScope, setDealProductScope] = useState('');
   const [maxPerConversation, setMaxPerConversation] = useState(3);
   // Empty string = leave unassigned (shared queue).
   const [handoffAgentId, setHandoffAgentId] = useState('');
@@ -100,6 +101,7 @@ export function AiConfig() {
         setIsActive(data.is_active);
         setAutoReplyEnabled(data.auto_reply_enabled);
         setDealPipelineEnabled(data.deal_pipeline_enabled === true);
+        setDealProductScope(data.deal_product_scope ?? '');
         setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
         setHandoffAgentId(data.handoff_agent_id ?? '');
         setHasStoredKey(Boolean(data.has_key));
@@ -152,6 +154,7 @@ export function AiConfig() {
     is_active: isActive,
     auto_reply_enabled: autoReplyEnabled,
     deal_pipeline_enabled: dealPipelineEnabled,
+    deal_product_scope: dealProductScope.trim() || null,
     auto_reply_max_per_conversation: maxPerConversation,
     handoff_agent_id: handoffAgentId || null,
   });
@@ -450,6 +453,19 @@ export function AiConfig() {
                 onCheckedChange={setDealPipelineEnabled}
                 disabled={disabled || !isActive}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ai-scope">{t('productScope')}</Label>
+              <Input
+                id="ai-scope"
+                value={dealProductScope}
+                onChange={(e) => setDealProductScope(e.target.value)}
+                placeholder={t('productScopePlaceholder')}
+                disabled={disabled || !dealPipelineEnabled}
+                className="bg-muted text-foreground"
+              />
+              <p className="text-xs text-muted-foreground">{t('productScopeDesc')}</p>
             </div>
 
             <div className="flex items-center justify-between gap-4">

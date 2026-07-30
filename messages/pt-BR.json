@@ -378,9 +378,9 @@
         "notes": "Notas",
         "custom": "Campos personalizados",
         "deals": "Negócios",
-      "noTags": "Nenhuma tag",
-      "noDeals": "Nenhum negócio",
-      "addNotePlaceholder": "Adicionar uma nota..."
+        "noTags": "Nenhuma tag",
+        "noDeals": "Nenhum negócio",
+        "addNotePlaceholder": "Adicionar uma nota..."
       },
       "actions": {
         "edit": "Editar",
@@ -1350,13 +1350,11 @@
       "deleteLocallyAria": "Excluir template localmente",
       "deleteMetaLocallyTitle": "Excluir da Meta e localmente",
       "deleteLocallyTitle": "Excluir localmente",
-
       "dialogEditTitle": "Editar template de mensagem",
       "dialogNewTitle": "Novo template de mensagem",
       "dialogEditDesc": "Salve suas alterações para reenviar à Meta. O status voltará para PENDENTE durante a revisão.",
       "dialogNewDesc": "Crie um template e envie-o para aprovação da Meta. Depois de aprovado, você pode usá-lo em transmissões e na caixa de entrada.",
       "authWarning": "Templates de AUTENTICAÇÃO têm um formato fixo de corpo + botão de OTP que exige um construtor diferente. Crie-os no Meta WhatsApp Manager por enquanto e use <bold>Sincronizar da Meta</bold> para trazê-los.",
-
       "templateName": "Nome do template",
       "namePlaceholder": "ex.: confirmacao_pedido",
       "nameFixed": "O nome fica fixo assim que o template existe na Meta — crie um novo template para alterá-lo.",
@@ -1365,7 +1363,6 @@
       "language": "Idioma",
       "langFixed": "O idioma fica fixo assim que o template existe na Meta.",
       "langHint": "Deve corresponder exatamente ao código na Meta — <code>en_US</code> e <code>en</code> são distintos.",
-
       "header": "Cabeçalho",
       "headerNone": "Nenhum",
       "headerText": "Texto",
@@ -1375,7 +1372,6 @@
       "headerTextPlaceholder": "Texto do cabeçalho (máx. 60 caracteres, {{1}} opcional)",
       "headerSampleAria": "Valor de exemplo para a variável do cabeçalho",
       "headerSamplePlaceholder": "Valor de exemplo para {{1}} (obrigatório para revisão da Meta)",
-
       "uploadImage": "Enviar imagem",
       "uploadHint": "JPEG ou PNG, ≤5 MB",
       "mediaUrlPlaceholder": "https://… (ou cole um link público {format})",
@@ -1383,17 +1379,14 @@
       "mediaHint": "Deve ser um link HTTPS de acesso público. A Meta o busca uma vez durante a revisão, então ele precisa ficar ativo por ~24h.",
       "videoHint": " Recomendado: MP4 / 3GPP, ≤16 MB, ≤60 segundos.",
       "documentHint": " Recomendado: PDF, ≤100 MB.",
-
       "bodyText": "Texto do corpo",
       "bodyPlaceholder": "Olá {{1}}, seu pedido {{2}} está confirmado.",
       "bodyHint": "Use {{1}}, {{2}} para variáveis (devem ser contíguas a partir de {{1}}).",
       "sampleValues": "Valores de exemplo (a Meta os usa para revisar seu template)",
       "sampleAria": "Valor de exemplo para a variável do corpo {var}",
       "samplePlaceholder": "Exemplo para {var}",
-
       "footer": "Rodapé (opcional)",
       "footerPlaceholder": "Texto de rodapé opcional (máx. 60 caracteres)",
-
       "buttons": "Botões (opcional)",
       "addButton": "Adicionar botão",
       "buttonsLimit": "Até {max} botões. Botões de RESPOSTA RÁPIDA devem vir antes dos botões de URL / telefone / código de cópia.",
@@ -1406,19 +1399,16 @@
       "urlSamplePlaceholder": "Valor de exemplo para {{1}} (obrigatório quando a URL tem uma variável)",
       "phonePlaceholder": "+5511987654321",
       "codePlaceholder": "Código de exemplo (ex.: VERAO20)",
-
       "cancel": "Cancelar",
       "saving": "Salvando…",
       "submitting": "Enviando…",
       "saveResubmit": "Salvar e reenviar",
       "submitApproval": "Enviar para aprovação",
-
       "deleteDialogTitle": "Excluir template?",
       "deleteMetaDesc": "\"{name}\" será excluído da Meta e do wacrm. Transmissões ativas usando este template começarão a falhar no próximo envio. Isso não pode ser desfeito.",
       "deleteLocalDesc": "\"{name}\" será excluído do wacrm. Ele nunca foi enviado à Meta, então nenhuma limpeza remota é necessária.",
       "deleting": "Excluindo…",
       "delete": "Excluir",
-
       "toastLoadFailed": "Falha ao carregar templates",
       "toastSubmitFailed": "Falha ao enviar",
       "toastSubmitEditSuccess": "Edição enviada — a Meta costuma revisar em até 24 horas.",
@@ -1523,7 +1513,9 @@
       "fields": "Campos e tags",
       "deals": "Negócios e moeda",
       "members": "Membros da equipe",
-      "api": "Chaves de API"
+      "api": "Chaves de API",
+      "setup": "Configuração inicial",
+      "meta-ads": "Meta Ads"
     },
     "groups": {
       "account": "Conta",
@@ -1557,7 +1549,6 @@
       "profileSaved": "Perfil salvo",
       "emailChangeFailed": "Falha ao alterar e-mail: {message}",
       "profileSavedEmailCheck": "Perfil salvo — verifique seu e-mail para confirmar a alteração de endereço",
-
       "passwordTitle": "Senha",
       "passwordDesc": "Use pelo menos {min} caracteres. Você continuará conectado neste dispositivo após alterá-la.",
       "currentPassword": "Senha atual",
@@ -1571,7 +1562,6 @@
       "currentPasswordIncorrect": "A senha atual está incorreta",
       "passwordUpdateFailed": "Falha ao atualizar a senha: {message}",
       "passwordUpdated": "Senha atualizada",
-
       "sessionsTitle": "Sessões ativas",
       "sessionsDesc": "Saia de todos os dispositivos em que você está conectado — incluindo este. Útil se você perdeu um notebook ou compartilhou sua senha.",
       "signOutAll": "Sair de todos os dispositivos",
@@ -1685,7 +1675,10 @@
       "saveSuccess": "Assistente de IA salvo.",
       "saveFailed": "Falha ao salvar.",
       "removeSuccess": "Configuração de IA removida.",
-      "removeFailed": "Falha ao remover."
+      "removeFailed": "Falha ao remover.",
+      "productScope": "O que esta loja vende",
+      "productScopePlaceholder": "iPhone, iPad, Mac e Apple Watch",
+      "productScopeDesc": "Ensina a IA a distinguir um lead de verdade de uma conversa qualquer. Escreva as linhas de produto que geram negócio — quem procurar outra coisa, ou suporte e acessórios, não vira card. Deixe em branco para usar o padrão do sistema."
     },
     "aiKnowledge": {
       "loadFailed": "Falha ao carregar a base de conhecimento",
@@ -1713,6 +1706,76 @@
       "reindex": "Reindexar",
       "reindexTooltip": "Reprocessa os embeddings de todos os documentos (ex.: após adicionar uma chave de embeddings)",
       "loading": "Carregando…"
+    },
+    "setup": {
+      "title": "Configuração inicial",
+      "description": "Os cinco passos para deixar este CRM operando numa conta nova. Cada passo mostra o que é, onde pegar a credencial, e o estado real aqui — verde só quando funciona de verdade, não quando o formulário foi salvo.",
+      "progress": "{done} de {total} prontos",
+      "goConfigure": "Configurar",
+      "goPipelines": "Abrir Negócios",
+      "goAgents": "Abrir Agentes",
+      "s1Title": "Conectar o WhatsApp",
+      "s1What": "É por aqui que as mensagens entram. Sem isso, nada mais funciona — nem TAG, nem funil, nem conversão.",
+      "s1Where": "Provedores suportados: API oficial da Meta, uazapi ou Evolution. Para uazapi/Evolution você precisa da URL da instância e do token, gerados no painel do próprio provedor.",
+      "whatsappOk": "Conectado via {provider}.",
+      "whatsappDisconnected": "Configurado, mas o status não está conectado — reconecte antes de seguir.",
+      "s2Title": "Criar as etapas do funil",
+      "s2What": "A IA move os cards entre três etapas. Elas precisam existir antes de ligar a automação.",
+      "s2Where": "Em Negócios, crie as colunas: Lead Qualificado, Negociação e Finalizado. Pode renomear depois — o sistema também aceita Qualificado, Fechado e Ganho.",
+      "stagesOk": "{count} etapas encontradas, incluindo as três necessárias.",
+      "stagesMissing": "Faltam etapas. Sem Lead Qualificado, Negociação e Finalizado a automação do funil não roda.",
+      "s3Title": "Cadastrar a chave de IA",
+      "s3What": "A IA lê as conversas para qualificar o lead e identificar o produto e o valor. A chave é sua — o custo vai direto no seu provedor, sem intermediário.",
+      "s3Where": "Pegue em platform.openai.com/api-keys (OpenAI) ou console.anthropic.com (Anthropic). Para classificação, um modelo da linha mini já basta e é bem mais barato.",
+      "aiNoKey": "Configurado, mas sem chave salva.",
+      "aiInactive": "Chave salva, mas o assistente está desligado — ligue Ativar assistente de IA.",
+      "aiOk": "Ativo com o modelo {model}.",
+      "s4Title": "Ligar o funil automático",
+      "s4What": "Com isso ligado, cada mensagem recebida reposiciona o card: cria em Lead Qualificado com o modelo no título, move para Negociação com o valor, e marca ganho ou perdido.",
+      "s4Where": "Em Agentes, ligue Mover negócios automaticamente. Escreva também o que a loja vende no contexto do negócio — é isso que ensina a IA a reconhecer um lead de verdade.",
+      "pipelineOk": "Funil automático ligado.",
+      "pipelineOff": "Desligado. Os cards continuam sendo movidos à mão.",
+      "s5Title": "Enviar conversões para o Meta",
+      "s5What": "Devolve ao Meta quem virou lead qualificado e quem comprou, para os anúncios otimizarem por venda real em vez de volume de mensagem. Só funciona para leads vindos de anúncio Click-to-WhatsApp.",
+      "s5Where": "São três valores, todos no business.facebook.com: o ID do conjunto de dados e o token em Gerenciador de Eventos › Conjuntos de dados › Configurações; e o ID da conta do WhatsApp Business em Configurações do Negócio › Contas › Contas do WhatsApp.",
+      "metaMigration": "A migração 043 ainda não foi aplicada neste Supabase.",
+      "metaInactive": "Credenciais salvas, mas o envio está desligado.",
+      "metaNoWaba": "Falta o ID da conta do WhatsApp Business — o Meta exige esse campo para o canal WhatsApp.",
+      "metaOk": "Enviando conversões para o Meta.",
+      "migrationsTitle": "Ao clonar para um cliente novo",
+      "migrationsDesc": "Rode todos os arquivos SQL da pasta de migrações no SQL editor do Supabase, na ordem numérica, antes do primeiro deploy. Todos são idempotentes — rodar de novo não causa dano. Depois copie o .env.local.example e preencha as chaves do Supabase e o ENCRYPTION_KEY, que precisa ser único por cliente."
+    },
+    "metaAds": {
+      "title": "Meta Ads — conversões",
+      "description": "Envia de volta ao Meta os leads qualificados e as vendas, para os anúncios Click-to-WhatsApp otimizarem por resultado real.",
+      "loading": "Carregando…",
+      "loadFailed": "Não foi possível carregar a configuração do Meta.",
+      "saveFailed": "Não foi possível salvar.",
+      "saved": "Configuração salva.",
+      "testOk": "Evento de teste aceito pelo Meta. Confira em Gerenciador de Eventos › Eventos de teste.",
+      "testFailed": "O Meta recusou o evento de teste.",
+      "migrationPending": "Rode esta migração no SQL editor do Supabase antes de configurar:",
+      "credentials": "Credenciais",
+      "credentialsDesc": "Os três valores abaixo saem do Business Manager. Eles são criados uma vez por cliente e não mudam depois.",
+      "openEventsManager": "Abrir o Gerenciador de Eventos",
+      "datasetLabel": "ID do conjunto de dados",
+      "datasetHint": "Gerenciador de Eventos › Conjuntos de dados. É o número que aparece embaixo do nome do conjunto. Só dígitos.",
+      "tokenLabel": "Token de acesso",
+      "tokenHint": "Na mesma tela do conjunto, aba Configurações, seção API de Conversões, botão Gerar token de acesso. Guardado criptografado e nunca exibido de volta.",
+      "wabaLabel": "ID da conta do WhatsApp Business",
+      "wabaHint": "Configurações do Negócio › Contas › Contas do WhatsApp. O Meta exige esse campo para o canal WhatsApp. Provedores não oficiais (uazapi, Evolution) não fornecem esse dado, por isso precisa ser copiado à mão.",
+      "testCodeLabel": "Código de evento de teste (opcional)",
+      "testCodeHint": "Gerenciador de Eventos › Eventos de teste. Enquanto preenchido, os eventos aparecem só nessa aba e não contam como conversão real — use para validar antes de valer.",
+      "behaviour": "Comportamento",
+      "enable": "Enviar conversões",
+      "enableDesc": "Chave geral. Com isso desligado, nada é enviado ao Meta.",
+      "sendLead": "Enviar lead qualificado",
+      "sendLeadDesc": "Dispara quando o card entra no funil. Sinal barato: se errar, o custo é baixo.",
+      "sendPurchase": "Enviar compra",
+      "sendPurchaseDesc": "Dispara quando o negócio é marcado como ganho, com o valor do card. É o sinal que mais pesa na otimização — uma compra falsa faz o Meta perseguir o público errado por semanas. Considere deixar desligado até confiar na precisão da classificação.",
+      "save": "Salvar",
+      "test": "Testar conexão",
+      "testHint": "O teste sempre usa o código de evento de teste, então nunca grava conversão real."
     }
   }
 }

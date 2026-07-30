@@ -19,6 +19,7 @@ import {
   type TransitionPlan,
 } from '@/lib/deals/transition'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { dispatchDealConversions } from '@/lib/meta/dispatch'
 import type { AiConfig } from './types'
 
 // ------------------------------------------------------------
@@ -145,7 +146,17 @@ async function loadCurrentDeal(
   }
 }
 
-/** Apply a plan. Returns a short description for the log, or null. */
+export interface AppliedPlan {
+  /** The deal that was written — needed to attribute a conversion. */
+  dealId: string
+  description: string
+  /** Deal state after the write, for the ad-platform dispatch. */
+  status: DealStatus
+  value: number | null
+  currency: string | null
+}
+
+/** Apply a plan. Returns what was written, or null when nothing changed. */
 export async function applyPlan(
   db: SupabaseClient,
   plan: TransitionPlan,
@@ -156,7 +167,7 @@ export async function applyPlan(
     configOwnerUserId: string
     stages: PipelineStageMap
   },
-): Promise<string | null> {
+): Promise<AppliedPlan | null> {
   if (plan.action === 'none') return null
 
   if (plan.action === 'create') {
@@ -165,30 +176,49 @@ export async function applyPlan(
       .select('default_currency')
       .eq('id', ctx.accountId)
       .maybeSingle()
+    const currency = (account?.default_currency as string | undefined) ?? 'USD'
 
-    const { error } = await db.from('deals').insert({
-      account_id: ctx.accountId,
-      user_id: ctx.configOwnerUserId,
-      pipeline_id: ctx.stages.pipelineId,
-      stage_id: plan.stageId,
-      contact_id: ctx.contactId,
-      conversation_id: ctx.conversationId,
-      title: plan.title,
-      value: plan.value,
-      currency: account?.default_currency ?? 'USD',
-      status: plan.status,
-      notes: 'Card criado automaticamente pela análise de IA da conversa.',
-    })
+    const { data: created, error } = await db
+      .from('deals')
+      .insert({
+        account_id: ctx.accountId,
+        user_id: ctx.configOwnerUserId,
+        pipeline_id: ctx.stages.pipelineId,
+        stage_id: plan.stageId,
+        contact_id: ctx.contactId,
+        conversation_id: ctx.conversationId,
+        title: plan.title,
+        value: plan.value,
+        currency,
+        status: plan.status,
+        notes: 'Card criado automaticamente pela análise de IA da conversa.',
+      })
+      .select('id')
+      .single()
     if (error) throw error
-    return `created "${plan.title}" (${plan.status}, ${plan.value})`
+    return {
+      dealId: created.id,
+      description: `created "${plan.title}" (${plan.status}, ${plan.value})`,
+      status: plan.status,
+      value: plan.value,
+      currency,
+    }
   }
 
-  const { error } = await db
+  const { data: updated, error } = await db
     .from('deals')
     .update({ ...plan.changes, updated_at: new Date().toISOString() })
     .eq('id', plan.dealId)
+    .select('id, status, value, currency')
+    .single()
   if (error) throw error
-  return `updated ${plan.dealId}: ${JSON.stringify(plan.changes)}`
+  return {
+    dealId: plan.dealId,
+    description: `updated ${plan.dealId}: ${JSON.stringify(plan.changes)}`,
+    status: updated.status as DealStatus,
+    value: updated.value as number | null,
+    currency: updated.currency as string | null,
+  }
 }
 
 export interface PipelineRunResult {
@@ -235,7 +265,11 @@ export async function runDealPipelineForConversation(
   }
 
   const systemPrompt = buildDealSignalPrompt({
-    productScope: dealProductScope(),
+    // Per-account first: what the shop sells is the single biggest thing
+    // that differs between customers, and an env var cannot vary by
+    // account. Falls back to the env default for deployments that never
+    // filled it in.
+    productScope: config.dealProductScope?.trim() || dealProductScope(),
     businessContext: config.systemPrompt,
   })
 
@@ -277,14 +311,32 @@ export async function runDealPipelineForConversation(
 
   if (!apply) return { signal, plan, applied: null }
 
-  const applied = await applyPlan(db, plan, {
+  const written = await applyPlan(db, plan, {
     accountId,
     conversationId,
     contactId,
     configOwnerUserId: args.configOwnerUserId,
     stages,
   })
-  return { signal, plan, applied }
+
+  if (written) {
+    // Report the outcome to Meta so ads that click to WhatsApp can
+    // optimise for real sales. Owns its errors — a failing ad-platform
+    // call must never undo a deal write that already succeeded.
+    await dispatchDealConversions(db, {
+      accountId,
+      dealId: written.dealId,
+      contactId,
+      // Any card this pipeline writes is at least a qualified lead: it
+      // is only ever created from a "qualified" signal or better.
+      qualified: true,
+      won: written.status === 'won',
+      value: written.value,
+      currency: written.currency,
+    })
+  }
+
+  return { signal, plan, applied: written?.description ?? null }
 }
 
 /**
@@ -324,7 +376,11 @@ export async function dispatchInboundToDealPipeline(
       return
     }
 
-    const stages = await resolvePipelineStages(db, accountId)
+    const stages = await resolvePipelineStages(db, accountId, {
+      qualified: config.dealStageQualifiedId,
+      negotiating: config.dealStageNegotiatingId,
+      closed: config.dealStageClosedId,
+    })
     if (!stages) return
 
     const { signal, plan, applied } = await runDealPipelineForConversation(db, {
