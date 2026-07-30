@@ -6,7 +6,9 @@ export interface LogAiUsageArgs {
   /** Null for a draft not tied to one thread, or when the row was
    *  deleted between generation and logging. */
   conversationId: string | null
-  mode: 'auto_reply' | 'draft'
+  /** Widened by migration 042 to include the deal-pipeline classifier, so
+   *  its spend shows up next to draft/auto-reply on the same BYO key. */
+  mode: 'auto_reply' | 'draft' | 'deal_pipeline'
   provider: AiProvider
   model: string
   /** Provider usage; a no-op when null (nothing worth recording). */

@@ -1673,6 +1673,8 @@
       "autoReplyDesc": "The bot answers new inbound messages automatically (only when no flow handles them and no agent is assigned). Hands off to a human when it can’t help.",
       "maxAutoReplies": "Max auto-replies per conversation",
       "maxAutoRepliesDesc": "After this many bot replies in one thread, the bot goes quiet.",
+      "dealPipeline": "Move deals automatically",
+      "dealPipelineDesc": "The AI reads the conversation and positions the deal card on the board: created in Lead Qualificado with the model as its title, moved to Negociação with the quoted value, then marked won or lost. This writes sales data — leave it off if you'd rather move cards by hand.",
       "handoffTo": "Hand off to",
       "handoffToDesc": "When the bot can’t help — or hits the reply cap — it pauses and routes the chat here, with a short note on what happened.",
       "handoffQueue": "Unassigned queue (any agent can pick it up)",

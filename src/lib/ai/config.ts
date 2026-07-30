@@ -12,10 +12,11 @@ interface AiConfigRow {
   auto_reply_max_per_conversation: number
   handoff_agent_id: string | null
   embeddings_api_key: string | null
+  deal_pipeline_enabled: boolean | null
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key'
+  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, deal_pipeline_enabled'
 
 /**
  * Load and decrypt the account's AI config for *use* (draft or
@@ -79,6 +80,10 @@ export async function loadAiConfig(
     autoReplyMaxPerConversation: row.auto_reply_max_per_conversation,
     handoffAgentId: row.handoff_agent_id,
     embeddingsApiKey,
+    // Coalesced rather than trusted: the column is NOT NULL DEFAULT false
+    // once migration 042 is applied, but treating a null as "off" keeps a
+    // project that hasn't run it yet from silently enabling board writes.
+    dealPipelineEnabled: row.deal_pipeline_enabled === true,
   }
 }
 

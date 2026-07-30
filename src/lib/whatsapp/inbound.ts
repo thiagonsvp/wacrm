@@ -3,6 +3,7 @@ import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { dispatchInboundToDealPipeline } from '@/lib/ai/deal-pipeline'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 
 /**
@@ -435,6 +436,23 @@ export async function persistInboundMessage(
       conversationId: conversation.id,
       contactId: contact.id,
       configOwnerUserId,
+    })
+  }
+
+  // Position the contact's deal card from what the thread now says.
+  // Runs even when a flow or an automation already answered — who replied
+  // has no bearing on what stage the sale is at — but only when the
+  // customer actually wrote something: a media-only message adds no text
+  // for the classifier to read, so it would spend a provider call to
+  // re-derive the state it already recorded. Owns its try/catch and never
+  // throws (same contract as the auto-reply above).
+  if (inboundText.trim()) {
+    await dispatchInboundToDealPipeline({
+      accountId,
+      conversationId: conversation.id,
+      contactId: contact.id,
+      configOwnerUserId,
+      contactName: contact.name,
     })
   }
 

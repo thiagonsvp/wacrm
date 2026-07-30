@@ -69,6 +69,7 @@ export async function POST(request: Request) {
         apiKey: apiKeyPlain,
         systemPrompt: null,
         isActive: true,
+        dealPipelineEnabled: false,
         autoReplyEnabled: false,
         autoReplyMaxPerConversation: 3,
         handoffAgentId: null,

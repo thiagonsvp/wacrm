@@ -29,6 +29,11 @@ export interface AiConfig {
    *  knowledge base is embedded and semantic retrieval turns on; when
    *  null, retrieval falls back to lexical full-text search. */
   embeddingsApiKey: string | null
+  /** Gates the AI sales-pipeline classifier (migration 042). Independent
+   *  of `autoReplyEnabled`: registering a key so the inbox can draft
+   *  replies must not start writing to the deals board as a side effect,
+   *  since that mutates business records (stage, value, won/lost). */
+  dealPipelineEnabled: boolean
 }
 
 /** A single conversation turn in the shape both providers accept. */

@@ -167,6 +167,15 @@ export const RATE_LIMITS = {
    *  capping a stampede; excess inbounds simply don't get an auto-reply
    *  (they still land in the inbox for a human). */
   aiAutoReplyAccount: { limit: 30, windowMs: 60_000 },
+  /** AI deal-pipeline classification, per account. Its own bucket rather
+   *  than sharing `aiAutoReplyAccount`: the two features run off the same
+   *  BYO key on the same inbound message, and a shared bucket would let a
+   *  burst of classifications starve the customer-facing auto-reply (or
+   *  vice versa). The per-conversation cooldown
+   *  (`ai_deal_analyzed_at`, migration 042) bounds one thread; this bounds
+   *  the account across threads. Excess inbounds simply aren't classified
+   *  — the card just isn't updated until the next message. */
+  aiDealPipelineAccount: { limit: 30, windowMs: 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't

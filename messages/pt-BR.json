@@ -1673,6 +1673,8 @@
       "autoReplyDesc": "O bot responde automaticamente a novas mensagens recebidas (somente quando nenhum fluxo as trata e nenhum agente está atribuído). Transfere para um humano quando não consegue ajudar.",
       "maxAutoReplies": "Máximo de respostas automáticas por conversa",
       "maxAutoRepliesDesc": "Após essa quantidade de respostas do bot em uma conversa, ele fica quieto.",
+      "dealPipeline": "Mover negócios automaticamente",
+      "dealPipelineDesc": "A IA lê a conversa e posiciona o card no funil: cria em Lead Qualificado com o modelo no título, move para Negociação com o valor, e marca como ganho ou perdido. Escreve dados de vendas — mantenha desligado se preferir mover os cards à mão.",
       "handoffTo": "Transferir para",
       "handoffToDesc": "Quando o bot não consegue ajudar — ou atinge o limite de respostas — ele pausa e encaminha a conversa para cá, com uma breve nota sobre o que aconteceu.",
       "handoffQueue": "Fila não atribuída (qualquer agente pode assumir)",
