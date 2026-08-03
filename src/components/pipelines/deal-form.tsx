@@ -216,7 +216,12 @@ export function DealForm({
     setStatusAction(status);
     const { error } = await supabase
       .from("deals")
-      .update({ status })
+      .update({
+        status,
+        ...(status === "won" || status === "lost"
+          ? { expected_close_date: new Date().toISOString().slice(0, 10) }
+          : {}),
+      })
       .eq("id", deal.id);
     setStatusAction(null);
     if (error) {

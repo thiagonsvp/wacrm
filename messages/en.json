@@ -541,7 +541,7 @@
       "linkToConversation": "Link to Conversation",
       "value": "Value",
       "currency": "Currency",
-      "expectedCloseDate": "Expected Close Date",
+      "expectedCloseDate": "Close Date",
       "stage": "Stage",
       "assignedTo": "Assigned To",
       "unassigned": "Unassigned",

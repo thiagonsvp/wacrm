@@ -13,7 +13,7 @@ interface DealCardProps {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  return new Date(dateStr).toLocaleDateString("pt-BR", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -30,6 +30,11 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
+  // Closed deals created before the close-date field was populated use their
+  // last update as a safe historical fallback, so every closed card displays
+  // a date while preserving the explicitly saved close date when available.
+  const displayDate = deal.expected_close_date ||
+    (deal.status === "won" || deal.status === "lost" ? deal.updated_at : null);
 
   return (
     <button
@@ -84,10 +89,10 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         <span className="text-sm font-bold text-primary">
           {formatCurrency(deal.value, deal.currency)}
         </span>
-        {deal.expected_close_date && (
+        {displayDate && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            {formatDate(deal.expected_close_date)}
+            {formatDate(displayDate)}
           </span>
         )}
       </div>
