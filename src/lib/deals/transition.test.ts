@@ -279,3 +279,44 @@ describe('matchStageSlots', () => {
     expect(matchStageSlots([])).toBeNull()
   })
 })
+
+describe('planTransition — reviving a lost deal', () => {
+  // Lost deals now sit in the closed stage (migration 045), so a revival
+  // must be allowed to move backwards. Otherwise the customer returns and
+  // the card stays parked in Finalizado marked open.
+  const lostInClosed = () =>
+    deal({ stagePosition: 3, status: 'lost', title: 'iPhone 15', value: 4000 })
+
+  it('moves a revived deal out of the closed stage into Negociação', () => {
+    const p = plan(signal({ outcome: 'negotiating', price: 4000 }), lostInClosed())
+    expect(p).toEqual({
+      action: 'update',
+      dealId: 'deal-1',
+      changes: { stage_id: 'stage-nego', status: 'open' },
+    })
+  })
+
+  it('moves a revived deal back to Lead Qualificado when that is the signal', () => {
+    const p = plan(signal({ outcome: 'qualified' }), lostInClosed())
+    expect(p).toMatchObject({
+      action: 'update',
+      changes: { stage_id: 'stage-qual', status: 'open' },
+    })
+  })
+
+  it('still refuses to drag an ACTIVE deal backwards', () => {
+    // The invariant the revival exception must not weaken.
+    const p = plan(signal({ outcome: 'qualified' }), deal({ stagePosition: 2 }))
+    expect(p).toMatchObject({ action: 'none' })
+  })
+
+  it('does not move a lost deal that is being closed as won', () => {
+    // Already in the closed stage — there is nowhere to move it to.
+    const p = plan(signal({ outcome: 'won' }), lostInClosed())
+    expect(p).toEqual({
+      action: 'update',
+      dealId: 'deal-1',
+      changes: { status: 'won' },
+    })
+  })
+})

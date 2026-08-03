@@ -52,10 +52,16 @@ export function PipelineBoard({
       const bucket = map.get(deal.stage_id);
       if (bucket) bucket.push(deal);
     }
-    // Keep the newest deals at the top of each column even after realtime
-    // updates or optimistic stage moves change the parent array order.
+    // Lost deals sink to the bottom of the column, then newest first.
+    // Closed-lost cards accumulate in the closed stage and would
+    // otherwise sit between live ones purely because they are recent,
+    // burying the deals that still need attention. Sorting here (rather
+    // than filtering them out) keeps them reachable — a lost deal can be
+    // reopened, and it still belongs to the history of that stage.
     for (const bucket of map.values()) {
       bucket.sort((a, b) => {
+        const lostDiff = Number(a.status === "lost") - Number(b.status === "lost");
+        if (lostDiff) return lostDiff;
         const dateDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         return dateDiff || b.id.localeCompare(a.id);
       });
@@ -114,8 +120,12 @@ export function PipelineBoard({
       <div className="pipeline-scroll flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 lg:snap-none">
         {sortedStages.map((stage) => {
           const stageDeals = dealsByStage.get(stage.id) ?? [];
+          // Lost deals are excluded from the column total: the figure is
+          // read as "what this stage is worth", and money that is not
+          // coming in must not inflate it. Matches how
+          // pipeline-analytics.tsx already treats lost.
           const totalValue = stageDeals.reduce(
-            (s, d) => s + Number(d.value || 0),
+            (s, d) => (d.status === "lost" ? s : s + Number(d.value || 0)),
             0,
           );
           return (

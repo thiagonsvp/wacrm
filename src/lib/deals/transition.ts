@@ -141,10 +141,21 @@ export function planTransition(args: {
   }
 
   const changes: DealChanges = {}
+  // A lost deal now sits in the closed stage (migration 045). Reopening
+  // it therefore HAS to move backwards, or the customer comes back and
+  // their card stays parked in Finalizado marked open — visibly closed,
+  // actually live. Invariant 1 exists to stop a re-stated interest
+  // dragging an active deal backwards; a revival is the one case where
+  // going back is the correct move.
+  const reviving =
+    current.status === 'lost' &&
+    (signal.outcome === 'qualified' || signal.outcome === 'negotiating')
 
-  // Invariant 1: forward-only.
-  if (targetStage && targetStage.position > current.stagePosition) {
-    changes.stage_id = targetStage.id
+  // Invariant 1: forward-only, except when reviving.
+  if (targetStage && (reviving || targetStage.position > current.stagePosition)) {
+    if (targetStage.id !== undefined && targetStage.position !== current.stagePosition) {
+      changes.stage_id = targetStage.id
+    }
   }
 
   if (signal.outcome === 'won') {
