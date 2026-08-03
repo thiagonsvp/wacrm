@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Pipeline, PipelineStage, Deal } from "@/types";
+import type { Pipeline, PipelineStage, Deal, Contact, Tag } from "@/types";
 import { PipelineBoard } from "@/components/pipelines/pipeline-board";
 import { PipelineSettings } from "@/components/pipelines/pipeline-settings";
 import { DealForm } from "@/components/pipelines/deal-form";
@@ -101,10 +101,28 @@ export default function PipelinesPage() {
     async (pipelineId: string) => {
       const { data } = await supabase
         .from("deals")
-        .select("*, contact:contacts(*), assignee:profiles!deals_assigned_to_fkey(*)")
+        .select("*, contact:contacts(*, contact_tags(tags(*))), assignee:profiles!deals_assigned_to_fkey(*)")
         .eq("pipeline_id", pipelineId)
         .order("created_at", { ascending: false });
-      return (data ?? []) as Deal[];
+    // Flatten the embedded join so pipeline cards can use the same Contact
+    // shape as the inbox and contacts views.
+    return (data ?? []).map((deal) => {
+      const contact = deal.contact as (Contact & {
+        contact_tags?: { tags?: Tag | null }[];
+      }) | null;
+      if (!contact) return deal;
+      const rawTags = contact.contact_tags ?? [];
+      const contactFields = Object.fromEntries(
+        Object.entries(contact).filter(([key]) => key !== "contact_tags"),
+      ) as Contact;
+      return {
+        ...deal,
+        contact: {
+          ...contactFields,
+          tags: rawTags.map((join) => join.tags).filter(Boolean),
+        },
+      };
+    }) as Deal[];
     },
     [supabase],
   );

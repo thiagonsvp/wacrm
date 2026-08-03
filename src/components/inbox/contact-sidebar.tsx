@@ -17,6 +17,9 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -42,6 +45,10 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [dealPickerOpen, setDealPickerOpen] = useState(false);
   const [dealTitle, setDealTitle] = useState("");
   const [addingDeal, setAddingDeal] = useState(false);
+  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [editDealTitle, setEditDealTitle] = useState("");
+  const [editDealValue, setEditDealValue] = useState("");
+  const [savingDeal, setSavingDeal] = useState(false);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -105,6 +112,30 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     }
     setDealTitle(""); setDealPickerOpen(false); setAddingDeal(false);
   }, [accountId, contact, dealTitle]);
+
+  const openDealEditor = useCallback((deal: Deal) => {
+    setEditingDeal(deal);
+    setEditDealTitle(deal.title);
+    setEditDealValue(String(deal.value ?? 0));
+  }, []);
+
+  const handleSaveDeal = useCallback(async () => {
+    if (!editingDeal || !editDealTitle.trim()) return;
+    setSavingDeal(true);
+    const supabase = createClient();
+    const value = Number(editDealValue.replace(",", "."));
+    const { data, error } = await supabase
+      .from("deals")
+      .update({ title: editDealTitle.trim(), value: Number.isFinite(value) ? value : 0 })
+      .eq("id", editingDeal.id)
+      .select("*, stage:pipeline_stages(*)")
+      .single();
+    if (!error && data) {
+      setDeals((prev) => prev.map((deal) => deal.id === editingDeal.id ? data as Deal : deal));
+      setEditingDeal(null);
+    }
+    setSavingDeal(false);
+  }, [editDealTitle, editDealValue, editingDeal]);
 
   // Load on contact change. setContactData/setTags run inside async
   // Supabase callbacks, not synchronously in the effect body.
@@ -287,9 +318,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 <p className="px-1 text-xs text-muted-foreground">{tSidebar("noDeals")}</p>
               ) : (
                 deals.map((deal) => (
-                  <div
+                  <button
+                    type="button"
                     key={deal.id}
-                    className="rounded-lg bg-muted px-3 py-2"
+                    onClick={() => openDealEditor(deal)}
+                    className="block w-full rounded-lg bg-muted px-3 py-2 text-left transition-colors hover:bg-muted/80"
                   >
                     <p className="text-sm font-medium text-foreground">
                       {deal.title}
@@ -311,7 +344,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                         </span>
                       )}
                     </div>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
@@ -323,6 +356,28 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               </div>
             )}
           </div>
+
+          <Dialog open={!!editingDeal} onOpenChange={(open) => !open && setEditingDeal(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Editar negócio</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="sidebar-deal-title">Título</Label>
+                  <Input id="sidebar-deal-title" value={editDealTitle} onChange={(event) => setEditDealTitle(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sidebar-deal-value">Valor</Label>
+                  <Input id="sidebar-deal-value" type="number" min="0" step="0.01" value={editDealValue} onChange={(event) => setEditDealValue(event.target.value)} />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingDeal(null)}>Cancelar</Button>
+                <Button onClick={() => void handleSaveDeal()} disabled={savingDeal || !editDealTitle.trim()}>Salvar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Deal, PipelineStage } from "@/types";
+import type { Deal, PipelineStage, Tag } from "@/types";
 import { Calendar, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
@@ -26,10 +26,37 @@ function initials(name?: string, fallback?: string) {
   return source.charAt(0).toUpperCase();
 }
 
+type LeadSource = "facebook" | "instagram" | "google";
+
+function getLeadSource(contact: Deal["contact"]): LeadSource | null {
+  if (contact?.acquisition_source === "Facebook") return "facebook";
+  if (contact?.acquisition_source === "Instagram") return "instagram";
+  const names = ((contact?.tags ?? []) as Tag[]).map((tag) =>
+    tag.name.trim().toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
+  );
+  if (names.some((name) => name.includes("facebook"))) return "facebook";
+  if (names.some((name) => name.includes("instagram"))) return "instagram";
+  if (names.some((name) => name.includes("google") || name.includes("organico"))) return "google";
+  return null;
+}
+
+function LeadSourceIcon({ source }: { source: LeadSource }) {
+  const label = source === "facebook" ? "Facebook" : source === "instagram" ? "Instagram" : "Google / Orgânico";
+  return (
+    <span aria-label={label} title={label} className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+      {source === "facebook" && <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 fill-[#1877F2]"><path d="M14 8h3V4h-3c-3.3 0-5 1.9-5 5v3H6v4h3v8h4v-8h3.5l.5-4H13V9c0-.7.3-1 1-1Z" /></svg>}
+      {source === "instagram" && <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 fill-none stroke-[#E4405F]" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" className="fill-[#E4405F] stroke-none" /></svg>}
+      {source === "google" && <span className="text-[11px] font-bold text-[#4285F4]">G</span>}
+    </span>
+  );
+}
+
 export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
+  const leadSource = getLeadSource(deal.contact);
+  const contactTags = (deal.contact?.tags ?? []) as Tag[];
   // Closed deals created before the close-date field was populated use their
   // last update as a safe historical fallback, so every closed card displays
   // a date while preserving the explicitly saved close date when available.
@@ -78,11 +105,17 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
       </div>
 
       {/* Contact row */}
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
           {initials(deal.contact?.name, deal.contact?.phone)}
         </span>
         <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
+        {leadSource && <LeadSourceIcon source={leadSource} />}
+        {contactTags.map((tag) => (
+          <span key={tag.id} title={tag.name} className="max-w-28 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${tag.color}20`, color: tag.color }}>
+            {tag.name}
+          </span>
+        ))}
       </div>
 
       <div className="mt-2 flex items-center justify-between">
