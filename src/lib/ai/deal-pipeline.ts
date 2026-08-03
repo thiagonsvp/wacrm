@@ -328,6 +328,27 @@ export async function runDealPipelineForConversation(
   // the board.
   const excluded = await excludedTagFor(db, contactId)
   if (excluded) {
+    // Also clear any card the contact already has. Tagging usually
+    // happens AFTER the classifier has already filed someone — the
+    // operator sees a supplier on the board and reaches for the tag — so
+    // "stop creating cards" alone leaves exactly the card they were
+    // trying to get rid of. Self-healing in both directions: remove the
+    // tag and the next message files them again.
+    if (apply) {
+      const { data: removed, error } = await db
+        .from('deals')
+        .delete()
+        .eq('account_id', accountId)
+        .eq('contact_id', contactId)
+        .select('id')
+      if (error) {
+        console.error('[ai deal pipeline] could not clear excluded contact card:', error)
+      } else if (removed?.length) {
+        console.log(
+          `[ai deal pipeline] removed ${removed.length} card(s) for contact tagged "${excluded}"`,
+        )
+      }
+    }
     console.log(
       `[ai deal pipeline] conversation ${conversationId}: skipped — contact is tagged "${excluded}"`,
     )
