@@ -358,9 +358,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           </div>
 
           <Dialog open={!!editingDeal} onOpenChange={(open) => !open && setEditingDeal(null)}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
-                <DialogTitle>Editar negócio</DialogTitle>
+                <DialogTitle>{editingDeal?.title || "Editar negócio"}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="space-y-2">
@@ -371,6 +371,36 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   <Label htmlFor="sidebar-deal-value">Valor</Label>
                   <Input id="sidebar-deal-value" type="number" min="0" step="0.01" value={editDealValue} onChange={(event) => setEditDealValue(event.target.value)} />
                 </div>
+                {editingDeal && (
+                  <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/60 p-3 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Etapa</p>
+                      <p className="mt-1 font-medium text-foreground">{editingDeal.stage?.name || "Não definida"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Status</p>
+                      <p className="mt-1 font-medium capitalize text-foreground">{editingDeal.status || "aberto"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Contato</p>
+                      <p className="mt-1 font-medium text-foreground">{contact?.name || contact?.phone || "Sem contato"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Responsável</p>
+                      <p className="mt-1 font-medium text-foreground">{editingDeal.assignee?.full_name || "Não atribuído"}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-muted-foreground">Data prevista</p>
+                      <p className="mt-1 font-medium text-foreground">{editingDeal.expected_close_date ? format(new Date(editingDeal.expected_close_date), "dd/MM/yyyy") : "Não definida"}</p>
+                    </div>
+                    {editingDeal.notes && (
+                      <div className="col-span-2 border-t border-border pt-3">
+                        <p className="text-muted-foreground">Observações</p>
+                        <p className="mt-1 whitespace-pre-wrap text-foreground">{editingDeal.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditingDeal(null)}>Cancelar</Button>
