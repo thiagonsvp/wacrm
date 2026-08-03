@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import type { Contact, Deal, ContactNote, Tag } from "@/types";
+import type { Contact, Deal, ContactNote, Tag, PipelineStage } from "@/types";
+import { DealForm } from "@/components/pipelines/deal-form";
 import {
   Phone,
   Mail,
@@ -17,9 +18,6 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -46,9 +44,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [dealTitle, setDealTitle] = useState("");
   const [addingDeal, setAddingDeal] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
-  const [editDealTitle, setEditDealTitle] = useState("");
-  const [editDealValue, setEditDealValue] = useState("");
-  const [savingDeal, setSavingDeal] = useState(false);
+  const [dealStages, setDealStages] = useState<PipelineStage[]>([]);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -113,29 +109,12 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     setDealTitle(""); setDealPickerOpen(false); setAddingDeal(false);
   }, [accountId, contact, dealTitle]);
 
-  const openDealEditor = useCallback((deal: Deal) => {
+  const openDealEditor = useCallback(async (deal: Deal) => {
     setEditingDeal(deal);
-    setEditDealTitle(deal.title);
-    setEditDealValue(String(deal.value ?? 0));
-  }, []);
-
-  const handleSaveDeal = useCallback(async () => {
-    if (!editingDeal || !editDealTitle.trim()) return;
-    setSavingDeal(true);
     const supabase = createClient();
-    const value = Number(editDealValue.replace(",", "."));
-    const { data, error } = await supabase
-      .from("deals")
-      .update({ title: editDealTitle.trim(), value: Number.isFinite(value) ? value : 0 })
-      .eq("id", editingDeal.id)
-      .select("*, stage:pipeline_stages(*)")
-      .single();
-    if (!error && data) {
-      setDeals((prev) => prev.map((deal) => deal.id === editingDeal.id ? data as Deal : deal));
-      setEditingDeal(null);
-    }
-    setSavingDeal(false);
-  }, [editDealTitle, editDealValue, editingDeal]);
+    const { data } = await supabase.from("pipeline_stages").select("*").eq("pipeline_id", deal.pipeline_id).order("position");
+    setDealStages((data ?? []) as PipelineStage[]);
+  }, []);
 
   // Load on contact change. setContactData/setTags run inside async
   // Supabase callbacks, not synchronously in the effect body.
@@ -357,57 +336,16 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             )}
           </div>
 
-          <Dialog open={!!editingDeal} onOpenChange={(open) => !open && setEditingDeal(null)}>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{editingDeal?.title || "Editar negócio"}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label htmlFor="sidebar-deal-title">Título</Label>
-                  <Input id="sidebar-deal-title" value={editDealTitle} onChange={(event) => setEditDealTitle(event.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sidebar-deal-value">Valor</Label>
-                  <Input id="sidebar-deal-value" type="number" min="0" step="0.01" value={editDealValue} onChange={(event) => setEditDealValue(event.target.value)} />
-                </div>
-                {editingDeal && (
-                  <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/60 p-3 text-xs">
-                    <div>
-                      <p className="text-muted-foreground">Etapa</p>
-                      <p className="mt-1 font-medium text-foreground">{editingDeal.stage?.name || "Não definida"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Status</p>
-                      <p className="mt-1 font-medium capitalize text-foreground">{editingDeal.status || "aberto"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Contato</p>
-                      <p className="mt-1 font-medium text-foreground">{contact?.name || contact?.phone || "Sem contato"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Responsável</p>
-                      <p className="mt-1 font-medium text-foreground">{editingDeal.assignee?.full_name || "Não atribuído"}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-muted-foreground">Data prevista</p>
-                      <p className="mt-1 font-medium text-foreground">{editingDeal.expected_close_date ? format(new Date(editingDeal.expected_close_date), "dd/MM/yyyy") : "Não definida"}</p>
-                    </div>
-                    {editingDeal.notes && (
-                      <div className="col-span-2 border-t border-border pt-3">
-                        <p className="text-muted-foreground">Observações</p>
-                        <p className="mt-1 whitespace-pre-wrap text-foreground">{editingDeal.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditingDeal(null)}>Cancelar</Button>
-                <Button onClick={() => void handleSaveDeal()} disabled={savingDeal || !editDealTitle.trim()}>Salvar</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          {editingDeal && dealStages.length > 0 && (
+            <DealForm
+              open
+              onOpenChange={(open) => { if (!open) setEditingDeal(null); }}
+              deal={editingDeal}
+              pipelineId={editingDeal.pipeline_id}
+              stages={dealStages}
+              onSaved={() => { setEditingDeal(null); void fetchContactData(); }}
+            />
+          )}
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />
