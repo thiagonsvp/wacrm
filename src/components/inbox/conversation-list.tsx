@@ -491,7 +491,7 @@ function ConversationItem({
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || t("unknown");
   const initials = displayName.charAt(0).toUpperCase();
-  const source = getLeadSource(contact?.tags);
+  const source = getLeadSource(contact?.tags, contact?.acquisition_source);
 
   const handleClick = useCallback(() => {
     onSelect(conversation);
@@ -559,11 +559,23 @@ function ConversationItem({
 
 type LeadSource = "facebook" | "instagram" | "google";
 
-function getLeadSource(tags?: Tag[]): LeadSource | null {
-  const names = new Set((tags ?? []).map((tag) => tag.name.trim().toLocaleLowerCase()));
-  if (names.has("facebook")) return "facebook";
-  if (names.has("instagram")) return "instagram";
-  if (names.has("google") || names.has("orgânico") || names.has("organico")) {
+function getLeadSource(
+  tags?: Tag[],
+  acquisitionSource?: "Facebook" | "Instagram" | null,
+): LeadSource | null {
+  if (acquisitionSource === "Facebook") return "facebook";
+  if (acquisitionSource === "Instagram") return "instagram";
+
+  const names = (tags ?? []).map((tag) =>
+    tag.name
+      .trim()
+      .toLocaleLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, ""),
+  );
+  if (names.some((name) => name.includes("facebook"))) return "facebook";
+  if (names.some((name) => name.includes("instagram"))) return "instagram";
+  if (names.some((name) => name.includes("google") || name.includes("organico"))) {
     return "google";
   }
   return null;
