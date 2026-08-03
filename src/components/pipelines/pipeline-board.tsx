@@ -52,6 +52,14 @@ export function PipelineBoard({
       const bucket = map.get(deal.stage_id);
       if (bucket) bucket.push(deal);
     }
+    // Keep the newest deals at the top of each column even after realtime
+    // updates or optimistic stage moves change the parent array order.
+    for (const bucket of map.values()) {
+      bucket.sort((a, b) => {
+        const dateDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return dateDiff || b.id.localeCompare(a.id);
+      });
+    }
     return map;
   }, [sortedStages, deals]);
 
