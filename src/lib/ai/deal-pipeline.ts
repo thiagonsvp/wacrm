@@ -50,6 +50,69 @@ export function dealPipelineCooldownMs(): number {
   return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_COOLDOWN_MS
 }
 
+const DEFAULT_EXCLUDED_TAGS = ['Fornecedor', 'Outros']
+
+/** Fold accents and case, so "Fornecedor" matches however it was typed. */
+function normalizeTag(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+/**
+ * Tags that keep a contact off the sales board entirely.
+ *
+ * Not every WhatsApp thread is a customer. Suppliers, partners and the
+ * shop's own staff all message the same number, and the classifier reads
+ * those threads exactly as it reads a lead — it saw an internal chat
+ * about an iPhone and recorded a closed sale. Three such cards were
+ * sitting in Finalizado marked "won", inflating reported revenue by
+ * R$12.399.
+ *
+ * Tagging is how the operator already separates these people, so the tag
+ * is the natural signal. Override with `DEAL_PIPELINE_EXCLUDED_TAGS`
+ * (comma-separated); set it empty to disable the exclusion.
+ */
+export function dealPipelineExcludedTags(): string[] {
+  const raw = process.env.DEAL_PIPELINE_EXCLUDED_TAGS
+  const list = raw == null ? DEFAULT_EXCLUDED_TAGS : raw.split(',')
+  return list.map(normalizeTag).filter(Boolean)
+}
+
+/**
+ * The excluded tag this contact carries, or null. Runs before the
+ * provider call, so an excluded contact costs nothing.
+ */
+export async function excludedTagFor(
+  db: SupabaseClient,
+  contactId: string,
+): Promise<string | null> {
+  const excluded = dealPipelineExcludedTags()
+  if (excluded.length === 0) return null
+
+  const { data, error } = await db
+    .from('contact_tags')
+    .select('tags(name)')
+    .eq('contact_id', contactId)
+  if (error) {
+    // Fail open: a tag lookup problem must not stop real leads being
+    // classified. Worst case an excluded contact gets a card, which the
+    // operator can delete — the reverse would silently drop customers.
+    console.error('[ai deal pipeline] tag lookup failed:', error)
+    return null
+  }
+
+  for (const row of (data ?? []) as { tags: { name: string } | { name: string }[] | null }[]) {
+    const tags = Array.isArray(row.tags) ? row.tags : row.tags ? [row.tags] : []
+    for (const t of tags) {
+      if (t?.name && excluded.includes(normalizeTag(t.name))) return t.name
+    }
+  }
+  return null
+}
+
 interface DispatchArgs {
   accountId: string
   conversationId: string
@@ -259,6 +322,17 @@ export async function runDealPipelineForConversation(
 ): Promise<PipelineRunResult> {
   const { config, stages, accountId, conversationId, contactId } = args
   const apply = args.apply !== false
+
+  // Checked here rather than in the dispatcher so the backfill script
+  // honours it too — the two must never disagree about who belongs on
+  // the board.
+  const excluded = await excludedTagFor(db, contactId)
+  if (excluded) {
+    console.log(
+      `[ai deal pipeline] conversation ${conversationId}: skipped — contact is tagged "${excluded}"`,
+    )
+    return { signal: null, plan: null, applied: null }
+  }
 
   const messages = await buildConversationContext(db, conversationId)
   if (!messages.some((m) => m.role === 'user')) {
