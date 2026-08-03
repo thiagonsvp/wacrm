@@ -119,7 +119,14 @@
       "thisWeek": "This week:",
       "lastWeek": "Last week:",
       "noReplies": "No replies recorded yet",
-      "noRepliesHint": "This chart fills in as you reply to customer messages."
+      "noRepliesHint": "This chart fills in as you reply to customer messages.",
+      "day0": "Mon",
+      "day1": "Tue",
+      "day2": "Wed",
+      "day3": "Thu",
+      "day4": "Fri",
+      "day5": "Sat",
+      "day6": "Sun"
     },
     "emptyState": {
       "title": "Not enough data yet"

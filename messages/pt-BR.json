@@ -119,7 +119,14 @@
       "thisWeek": "Esta semana:",
       "lastWeek": "Semana passada:",
       "noReplies": "Nenhuma resposta registrada ainda",
-      "noRepliesHint": "Este gráfico se preenche conforme você responde mensagens de clientes."
+      "noRepliesHint": "Este gráfico se preenche conforme você responde mensagens de clientes.",
+      "day0": "Seg",
+      "day1": "Ter",
+      "day2": "Qua",
+      "day3": "Qui",
+      "day4": "Sex",
+      "day5": "Sáb",
+      "day6": "Dom"
     },
     "emptyState": {
       "title": "Ainda não há dados suficientes"

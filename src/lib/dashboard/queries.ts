@@ -339,7 +339,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     items.push({
       id: `msg-${m.id}`,
       kind: 'message',
-      text: `New message from ${who}`,
+      text: `Nova mensagem de ${who}`,
       at: m.created_at,
       href: `/inbox?c=${m.conversation_id}`,
     })
@@ -349,7 +349,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     items.push({
       id: `contact-${c.id}`,
       kind: 'contact',
-      text: `New contact: ${c.name || c.phone}`,
+      text: `Novo contato: ${c.name || c.phone}`,
       at: c.created_at,
       href: '/contacts',
     })
@@ -366,8 +366,8 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
       id: `deal-${d.id}`,
       kind: 'deal',
       text: stage?.name
-        ? `Deal "${d.title}" in ${stage.name}`
-        : `Deal "${d.title}" updated`,
+        ? `Negócio "${d.title}" em ${stage.name}`
+        : `Negócio "${d.title}" atualizado`,
       at: d.updated_at,
       href: '/pipelines',
     })
@@ -383,11 +383,11 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     const label =
       b.status === 'sent'
         ? `sent to ${b.total_recipients} contacts`
-        : `${b.status} (${b.total_recipients} recipients)`
+        : `${translateBroadcastStatus(b.status)} (${b.total_recipients} destinatários)`
     items.push({
       id: `broadcast-${b.id}`,
       kind: 'broadcast',
-      text: `Broadcast "${b.name}" ${label}`,
+      text: `Transmissão "${b.name}" ${label}`,
       at: b.created_at,
       href: '/broadcasts',
     })
@@ -403,12 +403,12 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   }>) {
     const automation = Array.isArray(l.automation) ? l.automation[0] : l.automation
     const contact = Array.isArray(l.contact) ? l.contact[0] : l.contact
-    const who = contact?.name || contact?.phone || 'a contact'
-    const autoName = automation?.name || 'Automation'
+    const who = contact?.name || contact?.phone || 'um contato'
+    const autoName = automation?.name || 'Automação'
     items.push({
       id: `auto-${l.id}`,
       kind: 'automation',
-      text: `Automation "${autoName}" ${l.status === 'failed' ? 'failed for' : 'triggered for'} ${who}`,
+      text: `Automação "${autoName}" ${l.status === 'failed' ? 'falhou para' : 'acionada para'} ${who}`,
       at: l.created_at,
     })
   }
@@ -416,4 +416,15 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   return items
     .sort((a, b) => (a.at > b.at ? -1 : a.at < b.at ? 1 : 0))
     .slice(0, limit)
+}
+
+function translateBroadcastStatus(status: string): string {
+  const labels: Record<string, string> = {
+    draft: 'rascunho',
+    scheduled: 'agendada',
+    sending: 'enviando',
+    completed: 'concluída',
+    failed: 'falhou',
+  }
+  return labels[status] ?? status
 }
