@@ -21,6 +21,11 @@ export interface ConversationsSeriesPoint {
   outgoing: number
 }
 
+export interface LeadStats {
+  byDay: { day: string; count: number }[]
+  byOrigin: { origin: string; count: number }[]
+}
+
 export interface PipelineStageSlice {
   id: string
   name: string

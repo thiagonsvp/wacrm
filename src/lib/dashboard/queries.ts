@@ -13,6 +13,7 @@ import type {
   MetricsBundle,
   PipelineDonutData,
   PipelineStageSlice,
+  LeadStats,
   ResponseTimeBucket,
   ResponseTimeSummary,
 } from './types'
@@ -416,6 +417,31 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   return items
     .sort((a, b) => (a.at > b.at ? -1 : a.at < b.at ? 1 : 0))
     .slice(0, limit)
+}
+
+export async function loadLeadStats(db: DB, rangeDays = 30): Promise<LeadStats> {
+  const start = daysAgoStart(rangeDays - 1).toISOString()
+  const { data, error } = await db
+    .from('contacts')
+    .select('created_at, acquisition_source, contact_tags(tags(name))')
+    .gte('created_at', start)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+
+  const keys = lastNDayKeys(rangeDays)
+  const days = new Map(keys.map((day) => [day, 0]))
+  const origins = new Map<string, number>()
+  for (const row of (data ?? []) as Array<{ created_at: string; acquisition_source: string | null; contact_tags?: DashboardContactRow['contact_tags'] }>) {
+    if ((row.contact_tags ?? []).some((j) => EXCLUDED_CONTACT_TAGS.has(j.tags?.name?.trim().toLocaleLowerCase() ?? ''))) continue
+    const day = localDayKey(row.created_at)
+    if (days.has(day)) days.set(day, (days.get(day) ?? 0) + 1)
+    const origin = row.acquisition_source || 'Orgânico / não informado'
+    origins.set(origin, (origins.get(origin) ?? 0) + 1)
+  }
+  return {
+    byDay: keys.map((day) => ({ day, count: days.get(day) ?? 0 })),
+    byOrigin: Array.from(origins, ([origin, count]) => ({ origin, count })).sort((a, b) => b.count - a.count),
+  }
 }
 
 function translateBroadcastStatus(status: string): string {
