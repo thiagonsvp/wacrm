@@ -1042,6 +1042,11 @@ export function MessageThread({
   }
 
   const displayName = contact.name || contact.phone;
+  // Hydrated by CONVERSATION_SELECT (`contact_tags(tags(*))`) and
+  // flattened in normalizeConversation, so no extra fetch is needed here.
+  const contactTags = contact.tags ?? [];
+  const headerTags = contactTags.slice(0, 2);
+  const hiddenTagCount = contactTags.length - headerTags.length;
   const messageGroups = groupMessagesByDate(messages);
   const currentStatus = STATUS_OPTIONS.find(
     (s) => s.value === conversation.status
@@ -1088,7 +1093,40 @@ export function MessageThread({
           </div>
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
-            <p className="truncate text-xs text-muted-foreground">{contact.phone}</p>
+            {/* Second line: the tags are what an agent needs at a glance
+                on a phone — where the lead came from, whether they are a
+                supplier — so they take the slot, and the phone number
+                steps aside until there is room for both. Capped at two
+                so a heavily-tagged contact cannot push the header into
+                a second row. */}
+            <div className="flex min-w-0 items-center gap-1.5">
+              {headerTags.map((tag) => (
+                <span
+                  key={tag.id}
+                  title={tag.name}
+                  className="max-w-24 shrink-0 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                  style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {hiddenTagCount > 0 && (
+                <span
+                  title={contactTags.map((tag) => tag.name).join(", ")}
+                  className="shrink-0 text-[10px] font-medium text-muted-foreground"
+                >
+                  +{hiddenTagCount}
+                </span>
+              )}
+              <p
+                className={cn(
+                  "truncate text-xs text-muted-foreground",
+                  contactTags.length > 0 && "hidden sm:block",
+                )}
+              >
+                {contact.phone}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -1132,10 +1170,10 @@ export function MessageThread({
               type="button"
               onClick={onOpenContactSheet}
               aria-label={t("showContactPanel")}
-              title={t("showContact")}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
             >
-              <Info className="h-4 w-4" />
+              <Info className="h-3.5 w-3.5" />
+              {t("contactInfo")}
             </button>
           )}
 

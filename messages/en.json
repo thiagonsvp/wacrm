@@ -192,7 +192,8 @@
       "saleSuccess": "Sale registered",
       "saleError": "Failed to register sale",
       "noPipelineError": "No pipeline found — create one in Pipelines first",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "contactInfo": "Info"
     },
     "sessionTimer": {
       "expired": "Expired",

@@ -192,7 +192,8 @@
       "saleSuccess": "Venda registrada",
       "saleError": "Falha ao registrar a venda",
       "noPipelineError": "Nenhum pipeline encontrado — crie um em Pipelines primeiro",
-      "saving": "Salvando..."
+      "saving": "Salvando...",
+      "contactInfo": "Informação"
     },
     "sessionTimer": {
       "expired": "Expirada",
