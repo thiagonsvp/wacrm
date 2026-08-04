@@ -213,7 +213,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           {photoOpen && contact.avatar_url && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPhotoOpen(false)}>
               <button type="button" onClick={() => setPhotoOpen(false)} className="absolute right-5 top-5 text-2xl text-white" aria-label="Fechar foto">×</button>
-              <img src={contact.avatar_url} alt={displayName} className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" onClick={(event) => event.stopPropagation()} />
+              <div className="flex h-[85vh] w-[min(90vw,800px)] items-center justify-center">
+                <img src={contact.avatar_url} alt={displayName} className="h-full w-full rounded-lg object-contain" onClick={(event) => event.stopPropagation()} />
+              </div>
             </div>
           )}
 
