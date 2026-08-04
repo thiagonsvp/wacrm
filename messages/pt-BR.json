@@ -134,7 +134,8 @@
   },
   "Inbox": {
     "page": {
-      "whatsappNotConnected": "O WhatsApp® não está conectado. Vá até Configurações para conectar sua conta."
+      "whatsappNotConnected": "O WhatsApp® não está conectado. Vá até Configurações para conectar sua conta.",
+      "backToConversation": "Voltar para a conversa"
     },
     "conversationList": {
       "searchPlaceholder": "Buscar conversas...",
@@ -524,7 +525,10 @@
     },
     "board": {
       "dropDealHere": "Solte um negócio aqui",
-      "addDeal": "Adicionar negócio"
+      "addDeal": "Adicionar negócio",
+      "lostCount": "{count} perdido(s)",
+      "showLost": "Ver {count} perdido(s)",
+      "hideLost": "Ocultar perdidos"
     },
     "card": {
       "noContact": "Sem contato",

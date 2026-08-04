@@ -14,7 +14,7 @@ import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
-import { WifiOff } from "lucide-react";
+import { ArrowLeft, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
@@ -58,6 +58,10 @@ export default function InboxPage() {
    * below reconciles to the stored value right after mount instead.
    */
   const [contactPanelOpen, setContactPanelOpen] = useState(true);
+  // Mobile-only, and deliberately NOT persisted: the sheet covers the
+  // conversation, so it must start closed on every visit rather than
+  // inheriting the desktop panel's remembered "open".
+  const [mobileContactOpen, setMobileContactOpen] = useState(false);
   useEffect(() => {
     try {
       const stored = localStorage.getItem(CONTACT_PANEL_STORAGE_KEY);
@@ -612,19 +616,48 @@ export default function InboxPage() {
             onRefresh={handleManualRefresh}
             contactPanelOpen={contactPanelOpen}
             onToggleContactPanel={handleToggleContactPanel}
+            onOpenContactSheet={() => setMobileContactOpen(true)}
           />
         </div>
 
         {/* Right panel: Contact sidebar — desktop only, and only when the
             agent hasn't collapsed it via the thread-header toggle (#258).
-            On mobile it's always hidden (the `lg:block` below), so the
-            toggle — which is itself desktop-only — never affects it. */}
+            On mobile it's always hidden (the `lg:block` below); the phone
+            reaches the same panel through the sheet below instead. */}
         {contactPanelOpen && (
           <div className="hidden lg:block">
             <ContactSidebar contact={activeContact} />
           </div>
         )}
       </div>
+
+      {/* Mobile sheet. There is no room for a permanent side panel on a
+          phone, but everything that identifies a lead — which ad brought
+          them, the campaign, their tags, their deals — lives only in this
+          panel, so leaving it desktop-only made that data unreachable on
+          the device most of it is read from. Covers the thread rather
+          than squeezing beside it, matching how the conversation list and
+          the thread already swap on mobile. */}
+      {mobileContactOpen && activeContact && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden">
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+            <button
+              type="button"
+              onClick={() => setMobileContactOpen(false)}
+              aria-label={t("backToConversation")}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <span className="truncate text-sm font-semibold text-foreground">
+              {activeContact.name || activeContact.phone}
+            </span>
+          </div>
+          <div className="min-h-0 flex-1">
+            <ContactSidebar contact={activeContact} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

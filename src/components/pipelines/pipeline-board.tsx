@@ -17,7 +17,7 @@ import {
 import type { Deal, PipelineStage } from "@/types";
 import { DealCard } from "./deal-card";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
@@ -221,6 +221,13 @@ function StageColumn({
 }) {
   const t = useTranslations("Pipelines.board");
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
+  const [showLost, setShowLost] = useState(false);
+  // Already sorted lost-last by the parent, so a single split preserves
+  // the ordering within each group.
+  const lostDeals = deals.filter((d) => d.status === "lost");
+  const activeDeals = deals.filter((d) => d.status !== "lost");
+  const lostCount = lostDeals.length;
+  const activeCount = activeDeals.length;
 
   return (
     // On mobile each column is `w-[85vw]` (with a reasonable min/max)
@@ -235,16 +242,25 @@ function StageColumn({
         className="-mx-4 -mt-4 h-[3px] rounded-t-xl"
         style={{ backgroundColor: stage.color }}
       />
-      <div className="flex items-center justify-between pt-3">
+      <div className="flex items-center justify-between gap-2 pt-3">
         <h3 className="truncate text-sm font-semibold text-foreground">
           {stage.name}
         </h3>
+        {/* Count the cards the total actually covers. Showing every card
+            here next to a total that skips the lost ones reads as a
+            mismatch — most visibly in the closed stage, where a handful
+            of won deals sit under a pile of lost ones. */}
         <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-          {deals.length}
+          {activeCount}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {formatCurrency(totalValue, currency)}
+      <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <span>{formatCurrency(totalValue, currency)}</span>
+        {lostCount > 0 && (
+          <span className="text-[11px] text-red-400/80">
+            {t("lostCount", { count: lostCount })}
+          </span>
+        )}
       </p>
 
       <div
@@ -260,7 +276,7 @@ function StageColumn({
             {t("dropDealHere")}
           </div>
         ) : (
-          deals.map((deal) => (
+          activeDeals.map((deal) => (
             <DraggableDealCard
               key={deal.id}
               deal={deal}
@@ -268,6 +284,36 @@ function StageColumn({
               onEdit={onEditDeal}
             />
           ))
+        )}
+
+        {/* Lost deals fold away. They pile up in the closed stage — a
+            handful of won cards under dozens of lost ones — and on a
+            phone that means scrolling past every dead lead to reach the
+            sales. Collapsed rather than hidden: a lost deal can be
+            revived, and it is still part of this stage's history. */}
+        {lostCount > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowLost((v) => !v)}
+              aria-expanded={showLost}
+              className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-border py-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ChevronDown
+                className={`h-3 w-3 transition-transform ${showLost ? "rotate-180" : ""}`}
+              />
+              {showLost ? t("hideLost") : t("showLost", { count: lostCount })}
+            </button>
+            {showLost &&
+              lostDeals.map((deal) => (
+                <DraggableDealCard
+                  key={deal.id}
+                  deal={deal}
+                  stage={stage}
+                  onEdit={onEditDeal}
+                />
+              ))}
+          </>
         )}
       </div>
 

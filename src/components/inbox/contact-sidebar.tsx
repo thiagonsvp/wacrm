@@ -164,7 +164,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
   if (!contact) {
     return (
-      <div className="flex h-full w-70 items-center justify-center border-l border-border bg-card">
+      <div className="flex h-full w-full items-center justify-center border-border bg-card lg:w-70 lg:border-l">
         <p className="text-sm text-muted-foreground">{tThread("selectConversation")}</p>
       </div>
     );
@@ -173,8 +173,10 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const displayName = contact.name || contact.phone;
   const initials = displayName.charAt(0).toUpperCase();
 
+  // Fills the width when opened as a mobile sheet; a fixed rail on
+  // desktop. The left border only makes sense beside the thread.
   return (
-    <div className="flex h-full w-70 flex-col border-l border-border bg-card">
+    <div className="flex h-full w-full flex-col border-border bg-card lg:w-70 lg:border-l">
       <ScrollArea className="flex-1">
         <div className="p-4">
           {/* Contact Info */}

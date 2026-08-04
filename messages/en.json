@@ -134,7 +134,8 @@
   },
   "Inbox": {
     "page": {
-      "whatsappNotConnected": "WhatsApp® is not connected. Go to Settings to connect your account."
+      "whatsappNotConnected": "WhatsApp® is not connected. Go to Settings to connect your account.",
+      "backToConversation": "Back to the conversation"
     },
     "conversationList": {
       "searchPlaceholder": "Search conversations...",
@@ -524,7 +525,10 @@
     },
     "board": {
       "dropDealHere": "Drop a deal here",
-      "addDeal": "Add Deal"
+      "addDeal": "Add Deal",
+      "lostCount": "{count} lost",
+      "showLost": "Show {count} lost",
+      "hideLost": "Hide lost"
     },
     "card": {
       "noContact": "No contact",

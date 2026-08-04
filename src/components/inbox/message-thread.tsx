@@ -30,6 +30,7 @@ import {
   PanelRightClose,
   Target,
   DollarSign,
+  Info,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -119,6 +120,9 @@ interface MessageThreadProps {
    */
   contactPanelOpen?: boolean;
   onToggleContactPanel?: () => void;
+  /** Opens the contact panel as a full sheet on mobile, where it cannot
+   *  sit beside the thread. Separate from the desktop toggle. */
+  onOpenContactSheet?: () => void;
 }
 
 function formatDateSeparator(dateStr: string, t: ReturnType<typeof useTranslations>): string {
@@ -184,6 +188,7 @@ export function MessageThread({
   onRefresh,
   contactPanelOpen,
   onToggleContactPanel,
+  onOpenContactSheet,
 }: MessageThreadProps) {
   const t = useTranslations("Inbox.messageThread");
   const tQuote = useTranslations("Inbox.replyQuote");
@@ -1112,6 +1117,25 @@ export function MessageThread({
               ) : (
                 <PanelRightOpen className="h-4 w-4" />
               )}
+            </button>
+          )}
+
+          {/* Mobile counterpart. The panel has no room to sit beside the
+              thread on a phone, so it opens as a full sheet instead —
+              and it has to be reachable, because the lead's source,
+              campaign, tags and deals live nowhere else. Separate from
+              the desktop toggle above because that one persists an
+              "open" preference that defaults to true, which on mobile
+              would cover the conversation on arrival. */}
+          {onOpenContactSheet && (
+            <button
+              type="button"
+              onClick={onOpenContactSheet}
+              aria-label={t("showContactPanel")}
+              title={t("showContact")}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+            >
+              <Info className="h-4 w-4" />
             </button>
           )}
 
