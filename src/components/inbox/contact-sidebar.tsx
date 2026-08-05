@@ -16,6 +16,7 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -210,6 +211,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 Campanha: {contact.acquisition_campaign}
               </p>
             )}
+            {contact.acquisition_ad_text && (
+              <p className="mt-1 max-w-full text-[10px] text-muted-foreground">{contact.acquisition_ad_text}</p>
+            )}
           </div>
 
           {photoOpen && contact.avatar_url && (
@@ -227,6 +231,17 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 Source ID: <span className="font-mono">{contact.acquisition_source_id}</span>
               </div>
+            )}
+            {contact.acquisition_url && (
+              <a href={contact.acquisition_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-primary hover:underline">
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span className="truncate">Abrir anúncio/campanha</span>
+              </a>
+            )}
+            {contact.acquisition_ad_image_url && (
+              <a href={contact.acquisition_url || contact.acquisition_ad_image_url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-border">
+                <img src={contact.acquisition_ad_image_url} alt="Criativo do anúncio" className="max-h-48 w-full object-cover" />
+              </a>
             )}
             <button
               onClick={handleCopyPhone}

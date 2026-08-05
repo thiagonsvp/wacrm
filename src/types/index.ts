@@ -113,6 +113,7 @@ export interface Contact {
   acquisition_source_id?: string | null;
   acquisition_campaign?: string | null;
   acquisition_ad_text?: string | null;
+  acquisition_ad_image_url?: string | null;
   acquisition_url?: string | null;
   created_at: string;
   updated_at: string;

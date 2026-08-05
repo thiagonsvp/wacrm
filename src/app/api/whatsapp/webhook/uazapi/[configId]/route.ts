@@ -124,6 +124,8 @@ interface UazapiMessage {
         title?: string
         body?: string
         ctwaClid?: string
+        thumbnailUrl?: string
+        thumbnail_url?: string
       }
     }
   }
@@ -196,6 +198,7 @@ function extractAcquisition(msg: UazapiMessage) {
     // ad that produced it. It only ever appears on the FIRST message
     // after the click, so if it is not stored now it is gone for good.
     ctwaClid: ad.ctwaClid || null,
+    adImageUrl: ad.thumbnailUrl || ad.thumbnail_url || null,
   }
 }
 

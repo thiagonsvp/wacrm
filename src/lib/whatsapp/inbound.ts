@@ -30,6 +30,7 @@ export interface AcquisitionData {
   sourceId?: string | null
   campaign?: string | null
   adText?: string | null
+  adImageUrl?: string | null
   url?: string | null
   avatarUrl?: string | null
   /** Click-to-WhatsApp click id, required to attribute a later
@@ -48,7 +49,7 @@ export async function findOrCreateContact(
   const existingContact = await findExistingContact(db, accountId, phone)
 
   if (existingContact) {
-    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.adText || acquisition?.url) {
+    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url) {
       await db
         .from('contacts')
         .update({
@@ -57,6 +58,7 @@ export async function findOrCreateContact(
           ...(acquisition?.sourceId ? { acquisition_source_id: acquisition.sourceId } : {}),
           ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
           ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
+          ...(acquisition?.adImageUrl ? { acquisition_ad_image_url: acquisition.adImageUrl } : {}),
           ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
           ...(acquisition?.ctwaClid
             ? { acquisition_ctwa_clid: acquisition.ctwaClid }
@@ -80,6 +82,7 @@ export async function findOrCreateContact(
       ...(acquisition?.sourceId ? { acquisition_source_id: acquisition.sourceId } : {}),
       ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
       ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
+      ...(acquisition?.adImageUrl ? { acquisition_ad_image_url: acquisition.adImageUrl } : {}),
       ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
       ...(acquisition?.ctwaClid
         ? { acquisition_ctwa_clid: acquisition.ctwaClid }

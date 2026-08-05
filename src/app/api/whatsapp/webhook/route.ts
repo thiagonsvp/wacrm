@@ -69,6 +69,7 @@ interface WhatsAppMessage {
     platform?: string
     headline?: string
     body?: string
+    image_url?: string
   }
 }
 
@@ -544,6 +545,7 @@ async function processMessage(
       sourceId: message.referral.source_id,
       campaign: message.referral.headline,
       adText: message.referral.body,
+      adImageUrl: message.referral.image_url,
       url: message.referral.source_url,
     } : undefined
   )
