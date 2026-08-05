@@ -1789,5 +1789,11 @@
       "test": "Test connection",
       "testHint": "The test always uses the test event code, so it can never write a real conversion."
     }
+  },
+  "Layout": {
+    "companySwitcher": {
+      "label": "Switch company",
+      "switchFailed": "Could not switch company."
+    }
   }
 }

@@ -1789,5 +1789,11 @@
       "test": "Testar conexão",
       "testHint": "O teste sempre usa o código de evento de teste, então nunca grava conversão real."
     }
+  },
+  "Layout": {
+    "companySwitcher": {
+      "label": "Trocar de empresa",
+      "switchFailed": "Não foi possível trocar de empresa."
+    }
   }
 }
