@@ -101,7 +101,9 @@ interface UazapiMessage {
   text?: string
   type?: string
   messageType?: string
-  fromMe?: boolean
+  fromMe?: boolean | string
+  from_me?: boolean | string
+  isFromMe?: boolean | string
   isGroup?: boolean
   chatid?: string
   sender?: string
@@ -130,7 +132,7 @@ interface UazapiMessage {
 interface UazapiWebhookPayload {
   EventType?: string
   message?: UazapiMessage
-  chat?: { wa_contactName?: string; lead_name?: string; name?: string; image?: string; imagePreview?: string }
+  chat?: { wa_contactName?: string; lead_name?: string; name?: string; image?: string; imagePreview?: string; chatid?: string; wa_chatid?: string; phone?: string; wa_phone?: string }
   instanceName?: string
 }
 
@@ -231,9 +233,14 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   // IS the chat partner. For an agent-device (fromMe) message the
   // sender is the agent's own number, so no such fallback applies —
   // skip rather than risk misattributing to the wrong contact.
-  const rawJid = msg.chatid?.endsWith('@lid') && msg.sender_pn && !msg.fromMe
+  const fromMe = [msg.fromMe, msg.from_me, msg.isFromMe].some(
+    value => value === true || value === 'true' || value === '1',
+  )
+  const chat = body.chat
+  const chatIdentity = msg.chatid || chat?.chatid || chat?.wa_chatid || chat?.phone || chat?.wa_phone
+  const rawJid = chatIdentity?.endsWith('@lid') && msg.sender_pn && !fromMe
     ? msg.sender_pn
-    : msg.chatid
+    : chatIdentity
   if (!rawJid || rawJid.endsWith('@lid')) return
 
   const phone = normalizePhone(rawJid.replace(/@.*/, ''))
@@ -247,7 +254,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   const db = supabaseAdmin()
   const mediaUrl = await resolveMediaUrl(config, contentType, externalMessageId)
 
-  if (msg.fromMe) {
+  if (fromMe) {
     // Sent from the agent's own linked phone, not through the CRM
     // (UAZAPI's `excludeMessages: wasSentByApi` keeps CRM-originated
     // sends from ever reaching this webhook). The chat id identifies the
