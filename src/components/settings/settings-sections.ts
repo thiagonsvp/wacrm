@@ -1,4 +1,5 @@
 import {
+  Building2,
   Coins,
   FileText,
   ListChecks,
@@ -34,6 +35,7 @@ export const SETTINGS_SECTIONS = [
   'quick-replies',
   'fields',
   'deals',
+  'company',
   'members',
   'meta-ads',
   'api',
@@ -62,6 +64,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace' },
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
+  company: { id: 'company', label: 'Company', icon: Building2, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
   'meta-ads': {
     id: 'meta-ads',

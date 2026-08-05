@@ -19,6 +19,7 @@ import { QuickRepliesManager } from '@/components/settings/quick-replies-manager
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
+import { CompanyPanel } from '@/components/settings/company-panel';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import {
   resolveSection,
@@ -66,6 +67,7 @@ export default function SettingsPage() {
     'quick-replies': <QuickRepliesManager />,
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
+    company: <CompanyPanel />,
     members: <MembersTab />,
     'meta-ads': <MetaAdsConfig />,
     api: <ApiKeysSettings />,

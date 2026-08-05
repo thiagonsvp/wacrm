@@ -1525,6 +1525,7 @@
       "quick-replies": "Respostas rápidas",
       "fields": "Campos e tags",
       "deals": "Negócios e moeda",
+      "company": "Empresa",
       "members": "Membros da equipe",
       "api": "Chaves de API",
       "setup": "Configuração inicial",
@@ -1789,6 +1790,26 @@
       "save": "Salvar",
       "test": "Testar conexão",
       "testHint": "O teste sempre usa o código de evento de teste, então nunca grava conversão real."
+    },
+    "company": {
+      "title": "Empresa",
+      "description": "Os dados da empresa dona deste workspace e as pessoas que trabalham nela.",
+      "nameLabel": "Nome da empresa",
+      "namePlaceholder": "Ex.: Natividade Celulares LTDA",
+      "nameHint": "É este nome que aparece no seletor de empresas e identifica o workspace. Por padrão o sistema usa o nome de quem se cadastrou — troque para o nome real do negócio.",
+      "nameRequired": "Informe o nome da empresa.",
+      "save": "Salvar",
+      "saved": "Nome da empresa atualizado.",
+      "saveFailed": "Não foi possível salvar.",
+      "createTitle": "Cadastrar outra empresa",
+      "createDesc": "Cria um workspace novo e vazio, com seu próprio WhatsApp, funil, tags e contatos. Nada é compartilhado com esta empresa.",
+      "createButton": "Nova empresa",
+      "createConfirm": "Cadastrar",
+      "cancel": "Cancelar",
+      "created": "Empresa \"{name}\" cadastrada. Use o seletor no rodapé do menu para entrar nela.",
+      "createFailed": "Não foi possível cadastrar a empresa.",
+      "usersTitle": "Usuários desta empresa",
+      "usersDesc": "Quem tem acesso a {company}. Convide pelo e-mail; cada pessoa entra com o próprio login e enxerga apenas esta empresa."
     }
   },
   "Layout": {

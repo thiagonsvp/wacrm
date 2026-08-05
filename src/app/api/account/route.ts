@@ -101,3 +101,54 @@ export async function PATCH(request: Request) {
     return toErrorResponse(err);
   }
 }
+
+/**
+ * POST — register a new company. Super admin only.
+ *
+ * Until this existed, an `accounts` row could only appear as a side
+ * effect of a signup, named after the person who signed up. That is why
+ * the company list read as a list of people. Creation is gated in the
+ * database (`create_company` checks `is_super_admin`), not here — this
+ * route only surfaces the error.
+ */
+export async function POST(request: Request) {
+  try {
+    const ctx = await getCurrentAccount();
+
+    const limit = checkRateLimit(
+      `admin:create-company:${ctx.userId}`,
+      RATE_LIMITS.adminAction,
+    );
+    if (!limit.success) return rateLimitResponse(limit);
+
+    const body = (await request.json().catch(() => null)) as
+      | { name?: unknown }
+      | null;
+    const raw = body?.name;
+    if (typeof raw !== "string" || raw.trim().length === 0) {
+      return NextResponse.json(
+        { error: "'name' must be a non-empty string" },
+        { status: 400 },
+      );
+    }
+
+    const { data, error } = await ctx.supabase.rpc("create_company", {
+      p_name: raw.trim(),
+    });
+
+    if (error) {
+      // 42501 is the RPC refusing a non-super-admin; anything else is a
+      // real failure worth a 500 and a log line.
+      const forbidden = error.code === "42501";
+      if (!forbidden) console.error("[account POST] create_company failed:", error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: forbidden ? 403 : 500 },
+      );
+    }
+
+    return NextResponse.json({ id: data }, { status: 201 });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+}

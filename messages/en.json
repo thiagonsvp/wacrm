@@ -1525,6 +1525,7 @@
       "quick-replies": "Quick replies",
       "fields": "Fields & tags",
       "deals": "Deals & currency",
+      "company": "Company",
       "members": "Team members",
       "api": "API keys",
       "setup": "Setup guide",
@@ -1789,6 +1790,26 @@
       "save": "Save",
       "test": "Test connection",
       "testHint": "The test always uses the test event code, so it can never write a real conversion."
+    },
+    "company": {
+      "title": "Company",
+      "description": "The company this workspace belongs to, and the people who work in it.",
+      "nameLabel": "Company name",
+      "namePlaceholder": "e.g. Natividade Phones Ltd",
+      "nameHint": "This is the name shown in the company picker and identifying the workspace. By default the system uses the name of whoever signed up — change it to the real business name.",
+      "nameRequired": "Enter the company name.",
+      "save": "Save",
+      "saved": "Company name updated.",
+      "saveFailed": "Could not save.",
+      "createTitle": "Register another company",
+      "createDesc": "Creates a new, empty workspace with its own WhatsApp, pipeline, tags and contacts. Nothing is shared with this one.",
+      "createButton": "New company",
+      "createConfirm": "Create",
+      "cancel": "Cancel",
+      "created": "Company \"{name}\" created. Use the picker at the bottom of the menu to enter it.",
+      "createFailed": "Could not create the company.",
+      "usersTitle": "Users of this company",
+      "usersDesc": "Who has access to {company}. Invite by email; each person signs in with their own login and sees only this company."
     }
   },
   "Layout": {
