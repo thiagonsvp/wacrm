@@ -1,7 +1,6 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
-import { findExistingContact } from '@/lib/contacts/dedupe'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia } from '@/lib/whatsapp/providers/uazapi'
 import {
@@ -251,12 +250,21 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   if (msg.fromMe) {
     // Sent from the agent's own linked phone, not through the CRM
     // (UAZAPI's `excludeMessages: wasSentByApi` keeps CRM-originated
-    // sends from ever reaching this webhook). Only sync onto an
-    // EXISTING lead's conversation — never fabricate a new contact
-    // from the agent's personal chats.
-    const existingContact = await findExistingContact(db, config.account_id, phone)
-    if (!existingContact) return
-    const convResult = await findOrCreateConversation(db, config.account_id, config.user_id, existingContact.id)
+    // sends from ever reaching this webhook). The chat id identifies the
+    // lead, so bootstrap the contact/conversation when the agent starts
+    // the conversation from WhatsApp. Previously this returned early for
+    // new leads, dropping the initial messages from the CRM entirely.
+    const contactName = body.chat?.wa_contactName || body.chat?.lead_name || phone
+    const contactOutcome = await findOrCreateContact(
+      db,
+      config.account_id,
+      config.user_id,
+      phone,
+      contactName,
+      { avatarUrl: body.chat?.image || body.chat?.imagePreview || null },
+    )
+    if (!contactOutcome) return
+    const convResult = await findOrCreateConversation(db, config.account_id, config.user_id, contactOutcome.contact.id)
     if (!convResult) return
     await persistAgentDeviceMessage({
       db,
