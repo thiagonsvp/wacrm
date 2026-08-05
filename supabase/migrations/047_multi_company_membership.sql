@@ -83,9 +83,24 @@ ALTER TABLE public.profiles
 -- ------------------------------------------------------------
 -- 3. The one function every RLS policy funnels through.
 --
--- Membership now comes from `account_members`, not from the profile's
--- current selection — otherwise switching company would be the same
--- thing as being denied the one you switched away from.
+-- Access is scoped to the ONE company currently selected. The two
+-- concerns are deliberately separate:
+--
+--   account_members     -> which companies you may ENTER
+--                          (switch_account / list_my_accounts)
+--   profiles.account_id -> the company you are in RIGHT NOW, and the
+--                          only one any query can reach
+--
+-- Granting access to every company a user belongs to, all at once, was
+-- tried first and is wrong here: many client queries omit an explicit
+-- account filter and lean on RLS to scope them
+-- (`from('tags').select('*')` in contact-form.tsx, among others). Under
+-- that model a user in two companies saw both sets interleaved — the
+-- exact cross-company bleed this table exists to prevent.
+--
+-- Scoping to the selection preserves the pre-migration property (one
+-- company at a time, every query behaving as it does for a plain member)
+-- while still letting an operator reach them all by switching.
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.is_account_member(
   target_account_id uuid,
@@ -98,26 +113,30 @@ SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1
-    FROM account_members m
-    WHERE m.user_id = auth.uid()
-      AND m.account_id = target_account_id
-      AND CASE m.role
-            WHEN 'owner'  THEN 4
-            WHEN 'admin'  THEN 3
-            WHEN 'agent'  THEN 2
-            WHEN 'viewer' THEN 1
-          END
-        >=
-          CASE min_role
-            WHEN 'owner'  THEN 4
-            WHEN 'admin'  THEN 3
-            WHEN 'agent'  THEN 2
-            WHEN 'viewer' THEN 1
-          END
-  )
-  OR EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.user_id = auth.uid() AND p.is_super_admin
+    FROM profiles p
+    LEFT JOIN account_members m
+      ON m.user_id = p.user_id AND m.account_id = p.account_id
+    WHERE p.user_id = auth.uid()
+      AND p.account_id = target_account_id
+      AND (
+        p.is_super_admin
+        OR (
+          m.user_id IS NOT NULL
+          AND CASE m.role
+                WHEN 'owner'  THEN 4
+                WHEN 'admin'  THEN 3
+                WHEN 'agent'  THEN 2
+                WHEN 'viewer' THEN 1
+              END
+            >=
+              CASE min_role
+                WHEN 'owner'  THEN 4
+                WHEN 'admin'  THEN 3
+                WHEN 'agent'  THEN 2
+                WHEN 'viewer' THEN 1
+              END
+        )
+      )
   );
 $$;
 
