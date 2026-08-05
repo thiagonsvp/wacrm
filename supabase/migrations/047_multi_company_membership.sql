@@ -1,5 +1,5 @@
 -- ============================================================
--- 046_multi_company_membership.sql — one login, many companies
+-- 047_multi_company_membership.sql — one login, many companies
 --
 -- The CRM was already multi-tenant: `accounts` are companies, all 16
 -- domain tables carry `account_id`, `whatsapp_config` is UNIQUE per
