@@ -36,7 +36,6 @@ import {
 } from '@/lib/whatsapp/interactive';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
-import { sendText as evolutionSendText, sendMedia as evolutionSendMedia } from '@/lib/whatsapp/providers/evolution-api';
 import { sendText as uazapiSendText, sendMedia as uazapiSendMedia } from '@/lib/whatsapp/providers/uazapi';
 import {
   sanitizePhoneForMeta,
@@ -264,22 +263,20 @@ export async function sendMessageToConversation(
     );
   }
 
-  const isEvolution = config.provider === 'evolution';
   const isUazapi = config.provider === 'uazapi';
-  const isMeta = !isEvolution && !isUazapi;
+  const isMeta = !isUazapi;
 
   // Meta-only capabilities — fail clearly instead of attempting a send
-  // neither unofficial provider has an equivalent for.
+  // UAZAPI doesn't have an equivalent for.
   if (!isMeta && (messageType === 'template' || messageType === 'interactive')) {
     throw new SendMessageError(
       'unsupported_by_provider',
-      `Recurso não suportado pelo provedor ${isEvolution ? 'Evolution API' : 'UAZAPI'}`,
+      'Recurso não suportado por UAZAPI',
       400
     );
   }
 
   const accessToken = isMeta ? decrypt(config.access_token) : '';
-  const evolutionApiKey = isEvolution ? decrypt(config.evolution_api_key) : '';
   const uazapiToken = isUazapi ? decrypt(config.uazapi_token) : '';
 
   // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
@@ -348,29 +345,6 @@ export async function sendMessageToConversation(
   }
 
   const attempt = async (phone: string): Promise<string> => {
-    if (isEvolution) {
-      if (isMediaKind) {
-        const result = await evolutionSendMedia({
-          baseUrl: config.evolution_base_url,
-          apiKey: evolutionApiKey,
-          instanceName: config.evolution_instance_name,
-          number: phone,
-          mediatype: messageType as 'image' | 'video' | 'document' | 'audio',
-          media: mediaUrl!,
-          caption: contentText || undefined,
-          fileName: filename || undefined,
-        });
-        return result.messageId;
-      }
-      const result = await evolutionSendText({
-        baseUrl: config.evolution_base_url,
-        apiKey: evolutionApiKey,
-        instanceName: config.evolution_instance_name,
-        number: phone,
-        text: contentText!,
-      });
-      return result.messageId;
-    }
     if (isUazapi) {
       if (isMediaKind) {
         const result = await uazapiSendMedia({

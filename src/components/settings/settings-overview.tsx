@@ -123,7 +123,7 @@ export function SettingsOverview({
       const [row, health] = await Promise.allSettled([
         supabase
           .from('whatsapp_config')
-          .select('provider, phone_number_id, evolution_instance_name, uazapi_instance_name')
+          .select('provider, phone_number_id, uazapi_instance_name')
           .eq('account_id', acctId)
           .maybeSingle(),
         fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) => r.json()),
@@ -131,9 +131,7 @@ export function SettingsOverview({
       if (cancelled) return;
       const configRow = row.status === 'fulfilled' ? row.value.data : null;
       const configured = !!configRow && (
-        configRow.provider === 'evolution'
-          ? !!configRow.evolution_instance_name
-          : configRow.provider === 'uazapi'
+        configRow.provider === 'uazapi'
           ? !!configRow.uazapi_instance_name
           : !!configRow.phone_number_id
       );

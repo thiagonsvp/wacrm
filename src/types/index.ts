@@ -275,10 +275,10 @@ export interface MessageReaction {
 export interface WhatsAppConfig {
   id: string;
   user_id: string;
-  /** Nullable for provider='evolution' rows — Evolution has no Meta phone_number_id. */
+  /** Nullable for provider='uazapi' rows — UAZAPI has no Meta phone_number_id. */
   phone_number_id: string | null;
   waba_id?: string;
-  /** Nullable for provider='evolution' rows — they use evolution_api_key instead. */
+  /** Nullable for provider='uazapi' rows — they use uazapi_token instead. */
   access_token: string | null;
   verify_token?: string;
   status: 'connected' | 'disconnected';
@@ -293,11 +293,8 @@ export interface WhatsAppConfig {
   subscribed_apps_at?: string;
   /** Last error from /register; cleared on success. */
   last_registration_error?: string;
-  /** Which WhatsApp backend this row uses. Defaults to 'meta' (migration 036, 037). */
-  provider?: 'meta' | 'evolution' | 'uazapi';
-  evolution_base_url?: string | null;
-  evolution_instance_name?: string | null;
-  evolution_api_key?: string | null;
+  /** Which WhatsApp backend this row uses. Defaults to 'meta' (migration 036-046). */
+  provider?: 'meta' | 'uazapi';
   uazapi_base_url?: string | null;
   uazapi_instance_name?: string | null;
   uazapi_token?: string | null;
