@@ -11,7 +11,7 @@
  */
 
 /** App-wide fallback when no account/deal currency is available. */
-export const DEFAULT_CURRENCY = "USD";
+export const DEFAULT_CURRENCY = "BRL";
 
 export interface CurrencyOption {
   /** ISO-4217 code, e.g. "USD". Stored verbatim in the DB. */
@@ -28,6 +28,8 @@ export interface CurrencyOption {
  * list to offer more — nothing else needs to change.
  */
 export const CURRENCIES: CurrencyOption[] = [
+  { code: "BRL", label: "Brazilian Real", symbol: "R$" },
+/*
   { code: "USD", label: "US Dollar", symbol: "$" },
   { code: "EUR", label: "Euro", symbol: "€" },
   { code: "GBP", label: "British Pound", symbol: "£" },
@@ -42,6 +44,7 @@ export const CURRENCIES: CurrencyOption[] = [
   { code: "NGN", label: "Nigerian Naira", symbol: "₦" },
   { code: "SGD", label: "Singapore Dollar", symbol: "S$" },
   { code: "MXN", label: "Mexican Peso", symbol: "$" },
+*/
 ];
 
 /**
