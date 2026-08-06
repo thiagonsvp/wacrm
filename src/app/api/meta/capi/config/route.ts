@@ -188,7 +188,10 @@ export async function PUT(request: Request) {
         // attributes it to nothing, which is exactly what a credential
         // check should do.
         ctwaClid: 'setup-connectivity-check',
-        phone: null,
+        // Generic dataset events (used by UAZAPI) need at least one customer
+        // identifier. This is a synthetic number and is sent only hashed;
+        // the test_event_code keeps the event out of real attribution.
+        phone: '5511999999999',
         value: null,
         currency: null,
       },
