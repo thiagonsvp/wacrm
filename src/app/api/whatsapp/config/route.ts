@@ -235,14 +235,17 @@ export async function POST(request: Request) {
       uazapi_base_url,
       uazapi_instance_name,
       uazapi_token,
+      replace_existing,
     } = body
 
     if (provider === 'uazapi') {
-      return saveUazapiConfig(supabase, accountId, user.id, {
-        uazapi_base_url,
-        uazapi_instance_name,
-        uazapi_token,
-      })
+      return saveUazapiConfig(
+        supabase,
+        accountId,
+        user.id,
+        { uazapi_base_url, uazapi_instance_name, uazapi_token },
+        replace_existing === true,
+      )
     }
 
     if (!access_token || !phone_number_id) {
@@ -505,7 +508,8 @@ async function saveUazapiConfig(
     uazapi_base_url?: string
     uazapi_instance_name?: string
     uazapi_token?: string
-  }
+  },
+  replaceExisting = false
 ) {
   const { uazapi_base_url, uazapi_instance_name, uazapi_token } = fields
 
@@ -514,6 +518,86 @@ async function saveUazapiConfig(
       { error: 'uazapi_base_url, uazapi_instance_name and uazapi_token are required' },
       { status: 400 }
     )
+  }
+
+  // ------------------------------------------------------------------
+  // Guard the two ways a save can silently destroy a working connection.
+  //
+  // Both actually happened on 2026-08-06: an admin who was still switched
+  // into company A pasted company B's instance credentials. The row was
+  // overwritten without a word, and from then on inbound media for A was
+  // fetched with B's token — UAZAPI answered "Message not found" and 60
+  // attachments were stored with a null media_url. Text kept working, so
+  // nothing looked broken until someone opened a conversation.
+  //
+  // The token is per-instance, so UAZAPI itself is the authority on which
+  // instance these credentials belong to. Ask it, then refuse the two
+  // dangerous cases rather than trusting the submitted instance name.
+  // ------------------------------------------------------------------
+  let resolvedInstance: string | null = null
+  try {
+    const status = await getInstanceStatus({ baseUrl: uazapi_base_url, token: uazapi_token })
+    resolvedInstance = status.instanceName ?? null
+  } catch {
+    // On a first save the pasted value is the server's admin/master token
+    // and no instance exists yet — /instance/status legitimately fails.
+    // Never block that path; the checks below are simply skipped.
+  }
+
+  if (resolvedInstance) {
+    // (1) Another account already owns this instance. Two accounts bound
+    //     to one instance means whichever one loses the race gets another
+    //     company's messages — the same class of bug as issue #136 on the
+    //     Meta side, which this route already guards against.
+    const { data: claimed } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('account_id, accounts(name)')
+      .eq('uazapi_instance_name', resolvedInstance)
+      .neq('account_id', accountId)
+      .maybeSingle()
+
+    if (claimed) {
+      const owner = (claimed as { accounts?: { name?: string } }).accounts?.name
+      return NextResponse.json(
+        {
+          error:
+            `A instância "${resolvedInstance}" já está vinculada` +
+            (owner ? ` à empresa "${owner}"` : ' a outra empresa') +
+            '. Cada número de WhatsApp só pode pertencer a uma empresa. ' +
+            'Troque de empresa no seletor antes de configurar.',
+        },
+        { status: 409 }
+      )
+    }
+
+    // (2) This account is already connected to a DIFFERENT instance.
+    //     Silently replacing it is how the 2026-08-06 incident happened,
+    //     so require the caller to say so explicitly.
+    const { data: current } = await supabase
+      .from('whatsapp_config')
+      .select('uazapi_instance_name, status')
+      .eq('account_id', accountId)
+      .maybeSingle()
+
+    if (
+      current?.uazapi_instance_name &&
+      current.uazapi_instance_name !== resolvedInstance &&
+      current.status === 'connected' &&
+      !replaceExisting
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            `Esta empresa já está conectada à instância "${current.uazapi_instance_name}". ` +
+            `Salvar agora a trocaria por "${resolvedInstance}" e os anexos das conversas ` +
+            'antigas deixariam de abrir. Confirme a substituição para continuar.',
+          requires_confirmation: true,
+          current_instance: current.uazapi_instance_name,
+          new_instance: resolvedInstance,
+        },
+        { status: 409 }
+      )
+    }
   }
 
   let encryptedToken: string
@@ -540,7 +624,10 @@ async function saveUazapiConfig(
   const baseRow = {
     provider: 'uazapi',
     uazapi_base_url,
-    uazapi_instance_name,
+    // Prefer the name UAZAPI resolved from the token over the one the
+    // form submitted: the token decides which instance we can actually
+    // talk to, so storing anything else makes the row lie about itself.
+    uazapi_instance_name: resolvedInstance ?? uazapi_instance_name,
     uazapi_token: encryptedToken,
     phone_number_id: null,
     waba_id: null,

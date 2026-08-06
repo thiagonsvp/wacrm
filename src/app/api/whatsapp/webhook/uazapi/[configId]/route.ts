@@ -80,6 +80,8 @@ export async function POST(
     return NextResponse.json({ status: 'ignored' }, { status: 200 })
   }
 
+  warnOnInstanceMismatch(body as UazapiWebhookPayload & { token?: string }, config)
+
   after(async () => {
     try {
       await processUazapiWebhook(body as UazapiWebhookPayload, config)
@@ -136,6 +138,8 @@ interface UazapiWebhookPayload {
   message?: UazapiMessage
   chat?: { wa_contactName?: string; lead_name?: string; name?: string; image?: string; imagePreview?: string; chatid?: string; wa_chatid?: string; phone?: string; wa_phone?: string }
   instanceName?: string
+  /** The sending instance's own token — used to detect a config mismatch. */
+  token?: string
 }
 
 const MEDIA_TYPE_MAP: Record<string, string> = {
@@ -203,6 +207,36 @@ function extractAcquisition(msg: UazapiMessage) {
 }
 
 /**
+ * Warn when the instance that sent this event is not the instance our
+ * stored credentials belong to.
+ *
+ * UAZAPI includes the sending instance's own token in every webhook body,
+ * which makes this a free integrity check. It exists because on
+ * 2026-08-06 an admin saved company B's credentials while still switched
+ * into company A: text kept flowing (the webhook needs no auth), but every
+ * media download authenticated as B and came back "Message not found",
+ * silently storing 60 attachments with a null media_url. Nothing surfaced
+ * the mismatch until someone opened a conversation days later.
+ */
+function warnOnInstanceMismatch(
+  body: UazapiWebhookPayload & { token?: string; instanceName?: string },
+  config: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+): void {
+  if (!body?.token) return
+  try {
+    if (decrypt(config.uazapi_token) === body.token) return
+  } catch {
+    return // token undecryptable — a different problem, reported elsewhere
+  }
+  console.error(
+    '[uazapi-webhook] CONFIG MISMATCH: event came from instance ' +
+      `"${body.instanceName ?? 'unknown'}" but account ${config.account_id} has ` +
+      `"${config.uazapi_instance_name}" stored. Media downloads WILL fail ` +
+      '("Message not found") until the correct token is saved for this company.',
+  )
+}
+
+/**
  * Resolve the plaintext, publicly-fetchable URL for a media message.
  * Best-effort — the message still gets persisted (with a null
  * mediaUrl) if this fails, rather than dropping it.
@@ -218,7 +252,15 @@ async function resolveMediaUrl(
     const result = await downloadMedia({ baseUrl: config.uazapi_base_url, token, messageId })
     return result.fileUrl
   } catch (err) {
-    console.error('[uazapi-webhook] media download failed:', err instanceof Error ? err.message : err)
+    const message = err instanceof Error ? err.message : String(err)
+    // "Message not found" almost always means the stored token belongs to
+    // a different instance than the one that received the message, not
+    // that the media is gone — name it so the next reader isn't hunting
+    // through UAZAPI internals.
+    const hint = /not found/i.test(message)
+      ? ` — instance "${config.uazapi_instance_name}" does not know message ${messageId}; the stored token likely belongs to another instance`
+      : ''
+    console.error(`[uazapi-webhook] media download failed: ${message}${hint}`)
     return null
   }
 }

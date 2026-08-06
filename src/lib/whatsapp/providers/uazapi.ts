@@ -103,6 +103,13 @@ export interface UazapiStatusResult {
   loggedIn?: boolean
   jid?: string
   status?: string
+  /** Instance this token actually belongs to — the token is per-instance,
+   *  so this is the authoritative answer to "whose credentials are these?"
+   *  regardless of what the caller *says* it is saving. */
+  instanceName?: string
+  /** The WhatsApp number behind the instance. */
+  owner?: string
+  profileName?: string
 }
 
 export async function getInstanceStatus(args: UazapiInstanceArgs): Promise<UazapiStatusResult> {
@@ -119,6 +126,9 @@ export async function getInstanceStatus(args: UazapiInstanceArgs): Promise<Uazap
     loggedIn: data?.status?.loggedIn,
     jid: data?.status?.jid,
     status: data?.instance?.status,
+    instanceName: data?.instance?.name || undefined,
+    owner: data?.instance?.owner || undefined,
+    profileName: data?.instance?.profileName || undefined,
   }
 }
 
