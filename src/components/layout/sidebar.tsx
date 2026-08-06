@@ -195,7 +195,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 alt=""
                 fill
                 sizes="32px"
-                className="object-cover"
+                className="object-contain p-0.5"
               />
             </div>
             <span className="text-sm font-semibold text-foreground">
