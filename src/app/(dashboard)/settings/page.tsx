@@ -10,6 +10,7 @@ import { SettingsRail } from '@/components/settings/settings-rail';
 import { SettingsOverview } from '@/components/settings/settings-overview';
 import { SetupGuide } from '@/components/settings/setup-guide';
 import { MetaAdsConfig } from '@/components/settings/meta-ads-config';
+import { MetaMessagingConfig } from '@/components/settings/meta-messaging-config';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
@@ -69,6 +70,7 @@ export default function SettingsPage() {
     deals: <DealsSettings />,
     company: <CompanyPanel />,
     members: <MembersTab />,
+    direct: <MetaMessagingConfig />,
     'meta-ads': <MetaAdsConfig />,
     api: <ApiKeysSettings />,
   };

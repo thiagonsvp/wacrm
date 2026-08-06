@@ -4,6 +4,7 @@ import {
   FileText,
   ListChecks,
   Megaphone,
+  MessageCircle,
   KeyRound,
   LayoutGrid,
   Palette,
@@ -37,6 +38,7 @@ export const SETTINGS_SECTIONS = [
   'deals',
   'company',
   'members',
+  'direct',
   'meta-ads',
   'api',
 ] as const;
@@ -66,6 +68,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   company: { id: 'company', label: 'Company', icon: Building2, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
+  direct: { id: 'direct', label: 'Instagram & Messenger', icon: MessageCircle, group: 'workspace' },
   'meta-ads': {
     id: 'meta-ads',
     label: 'Meta Ads',
