@@ -93,10 +93,15 @@ export function buildEventPayload(
   config: MetaCapiConfig,
 ): Record<string, unknown> {
   const userData: Record<string, unknown> = {
-    // Meta's own click token — never hashed.
-    ctwa_clid: event.ctwaClid,
   }
-  if (config.wabaId) userData.whatsapp_business_account_id = config.wabaId
+  // The Business Messaging contract is only valid for the official
+  // WhatsApp Cloud API. UAZAPI has no WABA id, so use a generic dataset
+  // event and do not send WhatsApp-only fields.
+  const isBusinessMessaging = Boolean(config.wabaId)
+  if (isBusinessMessaging) {
+    userData.ctwa_clid = event.ctwaClid
+    userData.whatsapp_business_account_id = config.wabaId
+  }
   if (event.phone) {
     userData.ph = hashIdentifier(normalizePhoneForHash(event.phone))
   }
@@ -105,10 +110,10 @@ export function buildEventPayload(
     event_name: event.eventName,
     event_time: Math.floor(event.eventTime.getTime() / 1000),
     event_id: event.eventId,
-    action_source: 'business_messaging',
-    messaging_channel: 'whatsapp',
+    action_source: isBusinessMessaging ? 'business_messaging' : 'other',
     user_data: userData,
   }
+  if (isBusinessMessaging) payload.messaging_channel = 'whatsapp'
 
   // Only attach custom_data when there is a real amount. Sending
   // value: 0 would teach Meta that these conversions are worthless.
@@ -137,7 +142,7 @@ export async function sendMetaCapiEvent(
   event: MetaCapiEvent,
   config: MetaCapiConfig,
 ): Promise<MetaCapiResult> {
-  if (!event.ctwaClid) {
+  if (config.wabaId && !event.ctwaClid) {
     return { ok: false, error: 'missing ctwa_clid — event would not be attributable' }
   }
   if (!isWithinEventWindow(event.eventTime)) {

@@ -74,6 +74,13 @@ describe('buildEventPayload', () => {
     expect('whatsapp_business_account_id' in ud).toBe(false)
   })
 
+  it('uses the generic contract for UAZAPI without WhatsApp-only fields', () => {
+    const p = buildEventPayload(event(), { ...CONFIG, wabaId: null })
+    expect(p.action_source).toBe('other')
+    expect(p.messaging_channel).toBeUndefined()
+    expect((p.user_data as Record<string, unknown>).ctwa_clid).toBeUndefined()
+  })
+
   it('attaches value and currency when there is a real amount', () => {
     const p = buildEventPayload(event({ value: 4499, currency: 'brl' }), CONFIG)
     expect(p.custom_data).toEqual({ currency: 'BRL', value: 4499 })
@@ -178,11 +185,25 @@ describe('sendMetaCapiEvent', () => {
     expect(body.test_event_code).toBe('TEST123')
   })
 
-  it('refuses to send without a ctwa_clid instead of sending an orphan', async () => {
+  it('refuses official WhatsApp events without a ctwa_clid', async () => {
     const res = await sendMetaCapiEvent(event({ ctwaClid: '' }), CONFIG)
     expect(res.ok).toBe(false)
     expect(res.error).toContain('ctwa_clid')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('sends a generic event for UAZAPI without a ctwa_clid', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ events_received: 1 }), { status: 200 }),
+    )
+    const res = await sendMetaCapiEvent(event({ ctwaClid: '' }), {
+      ...CONFIG,
+      wabaId: null,
+    })
+    expect(res.ok).toBe(true)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body.data[0].action_source).toBe('other')
+    expect(body.data[0].user_data.ctwa_clid).toBeUndefined()
   })
 
   it('refuses a stale event without spending a request', async () => {
