@@ -191,7 +191,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="relative h-8 w-8 overflow-hidden rounded-lg">
               <Image
-                src="/favicon.png"
+                src="/Natividade%202.png"
                 alt=""
                 fill
                 sizes="32px"
