@@ -186,10 +186,27 @@ export async function sendMetaCapiEvent(
     }
 
     if (!res.ok) {
-      const metaError = (parsed?.error ?? null) as { message?: string } | null
+      const metaError = (parsed?.error ?? null) as {
+        message?: string
+        type?: string
+        code?: number
+        error_subcode?: number
+        error_user_title?: string
+        error_user_msg?: string
+      } | null
+      const details = [
+        metaError?.error_user_title,
+        metaError?.error_user_msg,
+        metaError?.type,
+        metaError?.code != null ? `code=${metaError.code}` : null,
+        metaError?.error_subcode != null ? `subcode=${metaError.error_subcode}` : null,
+      ].filter(Boolean)
       return {
         ok: false,
-        error: metaError?.message ?? `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        error:
+          [metaError?.message ?? `HTTP ${res.status}: ${text.slice(0, 200)}`, ...details]
+            .join(' — ')
+            .slice(0, 1000),
         // 4xx is our payload's fault and will fail identically on retry;
         // 429/5xx is Meta's side and may clear.
         retryable: res.status === 429 || res.status >= 500,
