@@ -141,6 +141,18 @@ export async function dispatchDealConversions(
     for (const eventName of wanted) {
       if (sent.has(eventName)) continue
 
+      // A won deal whose price is not recorded yet cannot be reported —
+      // Meta rejects a Purchase with no value/currency. Skip without
+      // writing a ledger row: this is a "not ready" state, not a failure,
+      // and recording it every pass would bury the real errors. The sweep
+      // in /api/meta/capi/backfill picks it up once the amount lands.
+      if (eventName === 'Purchase' && !(args.value != null && args.value > 0)) {
+        console.warn(
+          `[meta capi] Purchase for deal ${args.dealId} deferred — no amount recorded yet`,
+        )
+        continue
+      }
+
       const eventId = `${args.dealId}:${eventName}`
       const result = await sendMetaCapiEvent(
         {

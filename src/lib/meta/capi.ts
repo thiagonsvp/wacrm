@@ -145,6 +145,22 @@ export async function sendMetaCapiEvent(
   if (config.wabaId && !event.ctwaClid) {
     return { ok: false, error: 'missing ctwa_clid — event would not be attributable' }
   }
+  // Meta requires value AND currency on a Purchase. We deliberately omit
+  // `custom_data` for a zero/absent value (see buildEventPayload), which
+  // for a Purchase means the currency disappears with it and Meta answers
+  // "Moeda ausente para o evento de compra" (code 100, subcode 2804010).
+  //
+  // That is not a payload bug to work around by sending 0 — it is a deal
+  // whose price has not been recorded yet, which happens when the AI reads
+  // a purchase signal before the amount is agreed. Refuse now and let the
+  // caller retry: the ledger only suppresses events already marked 'sent'.
+  if (event.eventName === 'Purchase' && !(event.value != null && event.value > 0)) {
+    return {
+      ok: false,
+      error: 'Purchase needs a positive value and currency — deal has no amount yet',
+      retryable: true,
+    }
+  }
   if (!isWithinEventWindow(event.eventTime)) {
     return {
       ok: false,
