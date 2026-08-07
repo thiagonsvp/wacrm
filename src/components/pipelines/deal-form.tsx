@@ -228,6 +228,24 @@ export function DealForm({
       toast.error(t("toastFailedStatus"));
       return;
     }
+
+    // Tell the server, so a sale closed by hand still reaches Meta. The
+    // status change above is what matters to the user and has already
+    // succeeded — a failure to report must never surface as a failure to
+    // save, so this is deliberately awaited only for its side effect and
+    // its errors are swallowed. The server keeps the real ledger.
+    if (status === "won") {
+      try {
+        await fetch("/api/meta/capi/deal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deal_id: deal.id }),
+        });
+      } catch {
+        // Offline or blocked — /api/meta/capi/backfill picks it up later.
+      }
+    }
+
     toast.success(
       status === "won" ? t("toastMarkedWon") : status === "lost" ? t("toastMarkedLost") : t("toastReopened"),
     );
