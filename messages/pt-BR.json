@@ -1779,6 +1779,8 @@
       "tokenHint": "Na mesma tela do conjunto, aba Configurações, seção API de Conversões, botão Gerar token de acesso. Guardado criptografado e nunca exibido de volta.",
       "wabaLabel": "ID da conta do WhatsApp Business",
       "wabaHint": "Configurações do Negócio › Contas › Contas do WhatsApp. O Meta exige esse campo para o canal WhatsApp. Provedores não oficiais (uazapi, Evolution) não fornecem esse dado, por isso precisa ser copiado à mão.",
+      "pageLabel": "ID da Página do Facebook",
+      "pageHint": "Configurações do Negócio › Contas › Páginas — o número em \"Identificação\". Serve como alternativa ao ID do WhatsApp Business: sem um dos dois, o Meta aceita os eventos mas não os atribui à campanha, e o relatório fica zerado. Importante: a Página precisa estar conectada ao conjunto de dados (na própria tela de Páginas, botão Conectar ativos), senão o envio é recusado.",
       "testCodeLabel": "Código de evento de teste (opcional)",
       "testCodeHint": "Gerenciador de Eventos › Eventos de teste. Enquanto preenchido, os eventos aparecem só nessa aba e não contam como conversão real — use para validar antes de valer.",
       "behaviour": "Comportamento",

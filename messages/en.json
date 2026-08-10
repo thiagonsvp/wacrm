@@ -1779,6 +1779,8 @@
       "tokenHint": "On that same data set, Settings tab, Conversions API section, Generate access token. Stored encrypted and never shown again.",
       "wabaLabel": "WhatsApp Business Account ID",
       "wabaHint": "Business Settings › Accounts › WhatsApp Accounts. Meta requires this for the WhatsApp channel. Unofficial providers (uazapi, Evolution) never expose it, so it has to be copied by hand.",
+      "pageLabel": "Facebook Page ID",
+      "pageHint": "Business Settings › Accounts › Pages — the number under the page name. Meta accepts this INSTEAD of a WhatsApp Business Account ID; with neither, events are accepted but attributed to nothing and the campaign reports zero. The Page must be connected to the dataset (Pages screen, Connect assets) or the send is rejected.",
       "testCodeLabel": "Test event code (optional)",
       "testCodeHint": "Events Manager › Test Events. While this is filled in, events appear only on that tab and do not count as real conversions — use it to verify before going live.",
       "behaviour": "Behaviour",

@@ -55,6 +55,7 @@ export function MetaAdsConfig() {
 
   const [datasetId, setDatasetId] = useState('');
   const [wabaId, setWabaId] = useState('');
+  const [pageId, setPageId] = useState('');
   const [testEventCode, setTestEventCode] = useState('');
   const [token, setToken] = useState('');
   const [hasStoredToken, setHasStoredToken] = useState(false);
@@ -79,6 +80,7 @@ export function MetaAdsConfig() {
         setConfigured(true);
         setDatasetId(data.dataset_id ?? '');
         setWabaId(data.waba_id ?? '');
+        setPageId(data.page_id ?? '');
         setTestEventCode(data.test_event_code ?? '');
         setIsActive(!!data.is_active);
         setSendLead(data.send_qualified_lead !== false);
@@ -109,6 +111,7 @@ export function MetaAdsConfig() {
         body: JSON.stringify({
           dataset_id: datasetId.trim(),
           waba_id: wabaId.trim(),
+          page_id: pageId.trim(),
           test_event_code: testEventCode.trim(),
           // Only send the token when it was actually retyped, so a save
           // that just flips a switch never overwrites a good token with
@@ -224,6 +227,17 @@ export function MetaAdsConfig() {
             value={wabaId}
             onChange={(e) => setWabaId(e.target.value)}
             placeholder="1029384756..."
+            inputMode="numeric"
+            disabled={disabled}
+          />
+        </Guided>
+
+        <Guided id="meta-page" label={t('pageLabel')} hint={t('pageHint')}>
+          <Input
+            id="meta-page"
+            value={pageId}
+            onChange={(e) => setPageId(e.target.value)}
+            placeholder="129285426937638"
             inputMode="numeric"
             disabled={disabled}
           />

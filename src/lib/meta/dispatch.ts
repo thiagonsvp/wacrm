@@ -19,6 +19,7 @@ interface MetaCapiRow {
   dataset_id: string
   access_token: string
   waba_id: string | null
+  page_id: string | null
   test_event_code: string | null
   is_active: boolean
   send_qualified_lead: boolean
@@ -43,7 +44,7 @@ export async function loadMetaCapiConfig(
   const { data, error } = await db
     .from('meta_capi_configs')
     .select(
-      'dataset_id, access_token, waba_id, test_event_code, is_active, send_qualified_lead, send_purchase',
+      'dataset_id, access_token, waba_id, page_id, test_event_code, is_active, send_qualified_lead, send_purchase',
     )
     .eq('account_id', accountId)
     .maybeSingle()
@@ -80,6 +81,7 @@ export async function loadMetaCapiConfig(
     datasetId: row.dataset_id,
     accessToken,
     wabaId: row.waba_id,
+    pageId: row.page_id,
     testEventCode: row.test_event_code,
     sendQualifiedLead: row.send_qualified_lead,
     sendPurchase: row.send_purchase,

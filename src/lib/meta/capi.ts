@@ -35,8 +35,16 @@ export interface MetaCapiConfig {
   datasetId: string
   /** Decrypted token. */
   accessToken: string
-  /** WhatsApp Business Account id — required by Meta for this channel. */
+  /** WhatsApp Business Account id — only exists on the official Cloud API. */
   wabaId: string | null
+  /**
+   * Facebook Page id running the ads. Meta accepts EITHER this or a WABA
+   * id as the business identifier for `business_messaging`, which is what
+   * lets UAZAPI accounts report attributable conversions at all.
+   * The Page must be connected to the dataset in Events Manager, or Meta
+   * rejects with subcode 2804065.
+   */
+  pageId?: string | null
   /** When set, events land in Events Manager's Test Events tab instead
    *  of counting as real conversions. */
   testEventCode: string | null
@@ -94,13 +102,18 @@ export function buildEventPayload(
 ): Record<string, unknown> {
   const userData: Record<string, unknown> = {
   }
-  // The Business Messaging contract is only valid for the official
-  // WhatsApp Cloud API. UAZAPI has no WABA id, so use a generic dataset
-  // event and do not send WhatsApp-only fields.
-  const isBusinessMessaging = Boolean(config.wabaId)
+  // Meta needs an identifier for the business before it will accept the
+  // attributable `business_messaging` contract — EITHER a WABA id (official
+  // Cloud API only) or the Page id running the ads (subcode 2804116).
+  // Without one we fall back to a generic dataset event, which Meta accepts
+  // and attributes to nothing: the campaign shows zero conversions.
+  const isBusinessMessaging = Boolean(config.wabaId || config.pageId)
   if (isBusinessMessaging) {
     userData.ctwa_clid = event.ctwaClid
-    userData.whatsapp_business_account_id = config.wabaId
+    // Send whichever identifier we actually have. Prefer the WABA id: on
+    // the official API it is the more specific of the two.
+    if (config.wabaId) userData.whatsapp_business_account_id = config.wabaId
+    else userData.page_id = config.pageId
   }
   if (event.phone) {
     userData.ph = hashIdentifier(normalizePhoneForHash(event.phone))
@@ -142,7 +155,7 @@ export async function sendMetaCapiEvent(
   event: MetaCapiEvent,
   config: MetaCapiConfig,
 ): Promise<MetaCapiResult> {
-  if (config.wabaId && !event.ctwaClid) {
+  if ((config.wabaId || config.pageId) && !event.ctwaClid) {
     return { ok: false, error: 'missing ctwa_clid — event would not be attributable' }
   }
   // Meta requires value AND currency on a Purchase. We deliberately omit

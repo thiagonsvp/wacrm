@@ -25,7 +25,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('meta_capi_configs')
       .select(
-        'dataset_id, waba_id, test_event_code, is_active, send_qualified_lead, send_purchase, access_token',
+        'dataset_id, waba_id, page_id, test_event_code, is_active, send_qualified_lead, send_purchase, access_token',
       )
       .eq('account_id', accountId)
       .maybeSingle()
@@ -73,6 +73,10 @@ export async function POST(request: Request) {
     }
 
     const wabaId = typeof body.waba_id === 'string' ? body.waba_id.trim() : ''
+    const pageId = typeof body.page_id === 'string' ? body.page_id.trim() : ''
+    if (pageId && !/^\d+$/.test(pageId)) {
+      return bad('page_id should be only digits — copy it from your Page settings.')
+    }
     const testEventCode =
       typeof body.test_event_code === 'string' ? body.test_event_code.trim() : ''
     const rawToken = typeof body.access_token === 'string' ? body.access_token.trim() : ''
@@ -101,6 +105,7 @@ export async function POST(request: Request) {
     const payload: Record<string, unknown> = {
       dataset_id: datasetId,
       waba_id: wabaId || null,
+      page_id: pageId || null,
       test_event_code: testEventCode || null,
       is_active: body.is_active === true,
       send_qualified_lead: body.send_qualified_lead !== false,
@@ -159,7 +164,7 @@ export async function PUT(request: Request) {
 
     const { data, error } = await supabase
       .from('meta_capi_configs')
-      .select('dataset_id, access_token, waba_id, test_event_code')
+      .select('dataset_id, access_token, waba_id, page_id, test_event_code')
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -199,6 +204,7 @@ export async function PUT(request: Request) {
         datasetId: data.dataset_id,
         accessToken,
         wabaId: data.waba_id,
+        pageId: data.page_id,
         testEventCode: effectiveTestCode,
       },
     )
