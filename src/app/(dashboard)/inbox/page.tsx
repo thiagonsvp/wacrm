@@ -555,7 +555,11 @@ export default function InboxPage() {
   const hasActiveConv = !!activeConversation;
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
+    // 100dvh, not 100vh: on a phone 100vh is the viewport with the browser
+    // chrome HIDDEN, so with the address bar showing the last row of the
+    // column — the composer — sits below the fold and reads as if it were
+    // overlapping the conversation. dvh tracks the visible area instead.
+    <div className="-m-4 flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden sm:-m-6">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (

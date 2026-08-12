@@ -25,6 +25,7 @@ import {
   UserPlus,
   Check,
   ArrowLeft,
+  MoreVertical,
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
@@ -39,6 +40,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -46,6 +50,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -1088,9 +1098,18 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
-            {displayName.charAt(0).toUpperCase()}
-          </div>
+          {contact?.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={contact.avatar_url}
+              alt=""
+              className="h-9 w-9 flex-shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+          )}
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
             {/* Second line: the tags are what an agent needs at a glance
@@ -1099,7 +1118,7 @@ export function MessageThread({
                 steps aside until there is room for both. Capped at two
                 so a heavily-tagged contact cannot push the header into
                 a second row. */}
-            <div className="flex min-w-0 items-center gap-1.5">
+            <div className="hidden min-w-0 items-center gap-1.5 lg:flex">
               {headerTags.map((tag) => (
                 <span
                   key={tag.id}
@@ -1130,7 +1149,94 @@ export function MessageThread({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* One button on a phone. Six controls did not fit beside the
+            name, so they wrapped and pushed the composer off-screen. The
+            overflow menu holds every one of them — nothing was dropped,
+            it just stopped competing with the conversation for space. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={t("contactInfo")}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+          >
+            <MoreVertical className="h-5 w-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 border-border bg-popover">
+            {onOpenContactSheet && (
+              <DropdownMenuItem onClick={onOpenContactSheet}>
+                <Info className="mr-2 h-4 w-4" />
+                {t("contactInfo")}
+              </DropdownMenuItem>
+            )}
+            {onRefresh && (
+              <DropdownMenuItem onClick={handleRefreshClick} disabled={isRefreshing}>
+                <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+                {t("refresh")}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => void handleQualifyLead()}
+              disabled={!contact?.id || qualifying}
+            >
+              <Target className="mr-2 h-4 w-4" />
+              {t("qualifyLead")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setSaleOpen(true)}
+              disabled={!contact?.id}
+            >
+              <DollarSign className="mr-2 h-4 w-4" />
+              {t("registerSale")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="border-border bg-popover">
+                {STATUS_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt.value}
+                    onClick={() => handleStatusChange(opt.value)}
+                    className={cn("text-sm", opt.color)}
+                  >
+                    {t(`status${opt.label}`)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <UserPlus className="mr-2 h-4 w-4" />
+                {assignLabel}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="border-border bg-popover">
+                {profiles.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+                    {t("noTeammates")}
+                  </DropdownMenuItem>
+                ) : (
+                  profiles.map((p) => (
+                    <DropdownMenuItem
+                      key={p.id}
+                      onClick={() => handleAssignChange(p.user_id)}
+                      className={cn(
+                        "text-sm",
+                        p.user_id === assignedAgentId
+                          ? "text-primary"
+                          : "text-popover-foreground",
+                      )}
+                    >
+                      {p.full_name || p.email || t("teammate")}
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="hidden items-center gap-2 lg:flex">
           {/* Contact-panel toggle — desktop only. The contact sidebar
               eats a chunk of horizontal width that crowds the thread on
               smaller laptops; this lets agents reclaim it when they just
@@ -1213,51 +1319,19 @@ export function MessageThread({
             <span className="hidden sm:inline">{t("qualifyLead")}</span>
           </button>
 
-          <Popover open={saleOpen} onOpenChange={setSaleOpen}>
-            <PopoverTrigger
-              disabled={!contact?.id}
-              title={t("registerSale")}
-              className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <DollarSign className="h-3 w-3" />
-              <span className="hidden sm:inline">{t("registerSale")}</span>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="border-border bg-popover">
-              <div className="grid gap-3">
-                <div className="grid gap-1.5">
-                  <Label className="text-xs text-muted-foreground">
-                    {t("saleProduct")}
-                  </Label>
-                  <Input
-                    value={saleProduct}
-                    onChange={(e) => setSaleProduct(e.target.value)}
-                    placeholder={t("saleProductPlaceholder")}
-                    className="h-8 border-border bg-muted text-sm text-foreground"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-xs text-muted-foreground">
-                    {t("saleValue")}
-                  </Label>
-                  <Input
-                    value={saleValue}
-                    onChange={(e) => setSaleValue(e.target.value)}
-                    placeholder="0.00"
-                    inputMode="decimal"
-                    className="h-8 border-border bg-muted text-sm text-foreground"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => void handleRegisterSale()}
-                  disabled={saleSaving}
-                  className="h-8 bg-primary text-xs text-primary-foreground hover:bg-primary/90"
-                >
-                  {saleSaving ? t("saving") : t("saleConfirm")}
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+          {/* A dialog rather than a popover: the mobile overflow menu opens
+              the same form, and a popover cannot anchor to a trigger that
+              is display:none on that breakpoint. */}
+          <button
+            type="button"
+            onClick={() => setSaleOpen(true)}
+            disabled={!contact?.id}
+            title={t("registerSale")}
+            className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <DollarSign className="h-3 w-3" />
+            <span className="hidden sm:inline">{t("registerSale")}</span>
+          </button>
 
           {/* Status dropdown */}
           <DropdownMenu>
@@ -1350,6 +1424,50 @@ export function MessageThread({
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Register-sale form. Lives outside the header so it is reachable
+          from both the desktop strip and the mobile overflow menu. */}
+      <Dialog open={saleOpen} onOpenChange={setSaleOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("registerSale")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">
+                {t("saleProduct")}
+              </Label>
+              <Input
+                value={saleProduct}
+                onChange={(e) => setSaleProduct(e.target.value)}
+                placeholder={t("saleProductPlaceholder")}
+                className="border-border bg-muted text-sm text-foreground"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">
+                {t("saleValue")}
+              </Label>
+              <Input
+                value={saleValue}
+                onChange={(e) => setSaleValue(e.target.value)}
+                placeholder="0.00"
+                inputMode="decimal"
+                className="border-border bg-muted text-sm text-foreground"
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={() => void handleRegisterSale()}
+              disabled={saleSaving}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {saleSaving ? t("saving") : t("saleConfirm")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">

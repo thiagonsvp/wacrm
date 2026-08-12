@@ -10,7 +10,7 @@ import {
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X } from "lucide-react";
+import { Search, ChevronDown, Tag as TagIcon, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -503,6 +503,10 @@ function ConversationItem({
       })
     : "";
 
+  const allTags = contact?.tags ?? [];
+  const rowTags = allTags.slice(0, 2);
+  const extraTagCount = allTags.length - rowTags.length;
+
   return (
     <button
       onClick={handleClick}
@@ -533,6 +537,35 @@ function ConversationItem({
           {source && <LeadSourceIcon source={source} />}
           <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
         </div>
+        {/* Tags. An agent scanning the list wants to know where the lead
+            came from and what kind of contact it is before opening the
+            conversation — that is the whole reason to look at the list
+            rather than the thread. Capped at two so a heavily tagged
+            contact cannot push the row to a third line. */}
+        {rowTags.length > 0 && (
+          <div className="mt-1 flex items-center gap-1 overflow-hidden">
+            {rowTags.map((tag) => (
+              <span
+                key={tag.id}
+                title={tag.name}
+                className="inline-flex max-w-28 shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+              >
+                <TagIcon className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{tag.name}</span>
+              </span>
+            ))}
+            {extraTagCount > 0 && (
+              <span
+                title={allTags.map((tag) => tag.name).join(", ")}
+                className="shrink-0 text-[10px] font-medium text-muted-foreground"
+              >
+                +{extraTagCount}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p className="truncate text-xs text-muted-foreground">
             {conversation.last_message_text || t("noMessagesYet")}
