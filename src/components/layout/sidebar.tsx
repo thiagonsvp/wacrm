@@ -21,6 +21,7 @@ import {
   Shield,
   User,
   UserCog,
+  UsersRound,
   Users,
   Workflow,
   X,
@@ -28,6 +29,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import type { AccountRole } from "@/lib/auth/roles";
+import { canAccessModule, type Module } from "@/lib/auth/modules";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -50,6 +52,13 @@ const ROLE_CHIP: Record<
     // Primary-tinted: significant but not as scarce as owner.
     className:
       "border-primary/40 bg-primary/10 text-primary",
+  },
+  manager: {
+    icon: UsersRound,
+    labelKey: "roleManager",
+    // Teal: reads as a step above agent without competing with admin.
+    className:
+      "border-teal-500/40 bg-teal-500/10 text-teal-300",
   },
   agent: {
     icon: UserCog,
@@ -88,22 +97,25 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** Which module gates this row. The server re-checks it; this only
+   *  decides whether to draw the door. */
+  module: Module;
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
-  { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
-  { href: "/notifications", labelKey: "notifications", icon: Bell },
-  { href: "/contacts", labelKey: "contacts", icon: Users },
-  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
-  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
-  { href: "/automations", labelKey: "automations", icon: Zap },
-  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
-  { href: "/agents", labelKey: "aiAgents", icon: Bot },
+  { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard, module: "dashboard" },
+  { href: "/inbox", labelKey: "inbox", icon: MessageSquare, module: "inbox" },
+  { href: "/notifications", labelKey: "notifications", icon: Bell, module: "notifications" },
+  { href: "/contacts", labelKey: "contacts", icon: Users, module: "contacts" },
+  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch, module: "pipelines" },
+  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio, module: "broadcasts" },
+  { href: "/automations", labelKey: "automations", icon: Zap, module: "automations" },
+  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, module: "flows" },
+  { href: "/agents", labelKey: "aiAgents", icon: Bot, module: "agents" },
 ];
 
-const bottomNavItems = [
-  { href: "/settings", labelKey: "settings", icon: Settings },
+const bottomNavItems: { href: string; labelKey: string; icon: typeof Settings; module: Module }[] = [
+  { href: "/settings", labelKey: "settings", icon: Settings, module: "settings" },
 ];
 
 interface SidebarProps {
@@ -118,6 +130,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+
+  // Do not show people doors they cannot open. Access itself is enforced
+  // server-side by requireModule(); this is purely about what to draw.
+  // While the role is still loading, show only what every role can open,
+  // so a restricted profile never sees a privileged item flash and vanish.
+  const visibleNav = navItems.filter((item) =>
+    canAccessModule(accountRole ?? "viewer", item.module),
+  );
+  const visibleBottomNav = bottomNavItems.filter((item) =>
+    canAccessModule(accountRole ?? "viewer", item.module),
+  );
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
   // Only surface the account-name strip when it actually carries
@@ -215,7 +238,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {visibleNav.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -278,7 +301,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <div className="my-4 border-t border-border" />
 
           <ul className="flex flex-col gap-1">
-            {bottomNavItems.map((item) => {
+            {visibleBottomNav.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
                 <li key={item.href}>

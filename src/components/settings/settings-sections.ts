@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  ShieldCheck,
   Building2,
   Coins,
   FileText,
@@ -39,6 +40,7 @@ export const SETTINGS_SECTIONS = [
   'deals',
   'company',
   'members',
+  'permissions',
   'direct',
   'meta-ads',
   'meta-approvals',
@@ -70,6 +72,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   company: { id: 'company', label: 'Company', icon: Building2, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
+  permissions: { id: 'permissions', label: 'Perfis e permissoes', icon: ShieldCheck, group: 'workspace' },
   direct: { id: 'direct', label: 'Instagram & Messenger', icon: MessageCircle, group: 'workspace' },
   'meta-ads': {
     id: 'meta-ads',

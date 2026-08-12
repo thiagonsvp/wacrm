@@ -16,16 +16,19 @@ import {
 describe("roleRank", () => {
   it("orders owner > admin > agent > viewer", () => {
     expect(roleRank("owner")).toBeGreaterThan(roleRank("admin"));
-    expect(roleRank("admin")).toBeGreaterThan(roleRank("agent"));
+    expect(roleRank("admin")).toBeGreaterThan(roleRank("manager"));
+    expect(roleRank("manager")).toBeGreaterThan(roleRank("agent"));
     expect(roleRank("agent")).toBeGreaterThan(roleRank("viewer"));
   });
 
   it("matches the SQL helper's numeric mapping", () => {
-    // Keep these in lockstep with `is_account_member`'s CASE expression
-    // in supabase/migrations/017_account_sharing.sql — any change here
-    // means the SQL helper needs the same change.
-    expect(roleRank("owner")).toBe(4);
-    expect(roleRank("admin")).toBe(3);
+    // Keep these in lockstep with `is_account_member`'s CASE expression —
+    // originally migration 017, re-ranked in 053 when 'manager' was added
+    // between agent and admin. Any change here means the SQL needs it too,
+    // or RLS and the UI will disagree about who may do what.
+    expect(roleRank("owner")).toBe(5);
+    expect(roleRank("admin")).toBe(4);
+    expect(roleRank("manager")).toBe(3);
     expect(roleRank("agent")).toBe(2);
     expect(roleRank("viewer")).toBe(1);
   });

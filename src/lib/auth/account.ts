@@ -30,6 +30,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
 import { hasMinRole, isAccountRole, type AccountRole } from "./roles";
+import { canAccessModule, type Module } from "./modules";
 
 // ------------------------------------------------------------
 // Errors
@@ -184,6 +185,30 @@ export async function requireRole(min: AccountRole): Promise<AccountContext> {
   if (!hasMinRole(ctx.role, min)) {
     throw new ForbiddenError(
       `This action requires the '${min}' role or higher`,
+    );
+  }
+  return ctx;
+}
+
+/**
+ * Require access to a module, not just a role rank.
+ *
+ * Call sites read as the product does ("this is the Broadcasts API")
+ * rather than as a privilege puzzle ("this needs at least manager"), so
+ * when the matrix in `modules.ts` changes, every route follows without
+ * being edited. That matters because the alternative — a hand-written
+ * `requireRole('manager')` in each route — drifts from the nav the moment
+ * someone updates one and not the other, and the drift is invisible until
+ * a user hits a 403 on a menu item they can see.
+ *
+ * This is the real gate. `canAccessModule` in the sidebar only decides
+ * what to draw; a hidden route is still reachable by typing its URL.
+ */
+export async function requireModule(module: Module): Promise<AccountContext> {
+  const ctx = await getCurrentAccount();
+  if (!canAccessModule(ctx.role, module)) {
+    throw new ForbiddenError(
+      `Your profile does not have access to the '${module}' module`,
     );
   }
   return ctx;

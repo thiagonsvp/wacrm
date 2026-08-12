@@ -3,6 +3,7 @@ import {
   Shield,
   UserCog,
   UserIcon,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -33,6 +34,13 @@ export const ROLE_META: Record<
     label: 'admin',
     variant: 'admin',
     className: 'border-primary/40 bg-primary/10 text-primary',
+  },
+  manager: {
+    icon: UsersRound,
+    label: 'manager',
+    variant: 'muted',
+    // Teal: clearly above agent, clearly below the primary-tinted admin.
+    className: 'border-teal-500/40 bg-teal-500/10 text-teal-600 dark:text-teal-300',
   },
   agent: {
     icon: UserCog,
