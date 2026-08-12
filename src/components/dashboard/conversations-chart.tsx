@@ -329,9 +329,8 @@ function longDayLabel(key: string): string {
 }
 
 /**
- * Round `max` up to a "nice" number so Y-axis ticks feel natural
- * (1, 2, 5, 10, 20, 50, …). Keeps the chart readable even when the
- * series is small (max=3 becomes ceil=4, not 3).
+ * Round `max` up to a "nice" number so Y-axis ticks feel natural while
+ * keeping the chart scaled to the actual data (290 becomes 300, not 500).
  */
 function niceCeil(max: number): number {
   if (max <= 0) return 4
@@ -340,6 +339,8 @@ function niceCeil(max: number): number {
   let nice: number
   if (normalised <= 1) nice = 1
   else if (normalised <= 2) nice = 2
+  else if (normalised <= 2.5) nice = 2.5
+  else if (normalised <= 3) nice = 3
   else if (normalised <= 5) nice = 5
   else nice = 10
   return nice * pow
