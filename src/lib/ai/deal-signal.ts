@@ -91,7 +91,8 @@ export function buildDealSignalPrompt(args: {
       `- "none": the conversation is not about buying one of the devices above — support, repairs, spare parts, accessories only (cases, chargers, cables), wrong number, a greeting with nothing else — or you cannot tell.\n` +
       '- "qualified": the customer is genuinely shopping for one of those devices — they named a model, asked availability, or asked the price — but no price has been quoted yet.\n' +
       '- "negotiating": the business has quoted a price AND the customer engaged with it (asked about payment, instalments, trade-in, delivery, discount, or kept talking about buying). A quote the customer never answered is still "qualified".\n' +
-      '- "won": the purchase is confirmed. Signals: delivery is being scheduled, a courier/motoboy is being sent, the customer asked for the payment link, said they already paid, or agreed to close.\n' +
+      '- "won": the purchase is CONFIRMED BY A CONCRETE ACT, not by agreement in principle. Only these count, and only from the CUSTOMER: they asked for the payment link or the PIX key, said they already paid or sent the receipt, gave a delivery address, or accepted a specific delivery/pickup time. The business scheduling a courier at the customer\'s request also counts.\n' +
+      '  A bare acknowledgement is NOT a purchase. "ok", "certo", "entendi", "obrigado", "legal", "vou ver", "isso", a thumbs-up, or silence after the business pitches a closing offer all mean the customer merely READ the message — they stay "negotiating". Sellers routinely send closing pitches ("fechando hoje você leva brindes"); the customer answering "ok" to one has not bought anything.\n' +
       '- "lost": the customer was negotiating and dropped out. Signals: said the price is too high, rejected the trade-in valuation of their old device, said they will not buy, or chose another seller.',
 
     'Rules for `price` — report the FULL selling price of the device the customer is buying, as quoted by the business. Three amounts are easy to confuse; only the first is ever correct:\n' +
@@ -99,6 +100,7 @@ export function buildDealSignalPrompt(args: {
       '- NEVER the trade-in valuation of the customer\'s current device. "seu 12 vale 1200, o 15 sai 4200" -> report 4200, never 1200.\n' +
       '- NEVER the top-up amount in an upgrade. These conversations frequently show a block like "Seu aparelho: 17 PRO 256GB / Aparelho novo: 17 PRO MAX 256GB / Diferença a pagar: 1899". Report the full price of the NEW device, never the "diferença a pagar". If the new device\'s full price is not stated anywhere in the conversation, report null — do NOT fall back to the difference.\n' +
       '- If the business quoted several devices, report the price of the one the customer is pursuing.\n' +
+      '- `model` and `price` must come from the SAME quoted line. Businesses commonly send a table of capacities ("14 Pro Max 128gb R$ 3.849 / 256gb R$ 3.999 / 1TB R$ 4.199"). If the customer has not yet chosen one, report the family in `model` WITHOUT inventing a capacity, and null in `price`. Never pair a capacity from one line with the price from another.\n' +
       '- Strip currency symbols and thousands separators. "R$ 4.199,00" is 4199. Never invent a price that was not stated.',
 
     'Be conservative. If the conversation is ambiguous, or you would be guessing about the model, the price, or the outcome, answer "none" for `outcome` and null for anything you did not actually read. A wrong classification writes bad data into the business\'s sales records.',
