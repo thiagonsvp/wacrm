@@ -22,7 +22,11 @@ export interface ConversationsSeriesPoint {
 }
 
 export interface LeadStats {
-  byDay: { day: string; count: number }[]
+  byDay: {
+    day: string
+    count: number
+    byOrigin: Record<string, number>
+  }[]
   byOrigin: { origin: string; count: number }[]
 }
 

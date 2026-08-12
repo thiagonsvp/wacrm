@@ -5,6 +5,13 @@ import { Skeleton } from './skeleton'
 
 export function LeadStats({ data, loading }: { data: LeadStats | null; loading: boolean }) {
   const max = Math.max(...(data?.byDay.map((x) => x.count) ?? [1]), 1)
+  const originColors: Record<string, string> = {
+    Facebook: '#1877f2',
+    Instagram: '#e1306c',
+    Google: '#fbbc04',
+    'Orgânico / não informado': '#64748b',
+  }
+  const origins = ['Facebook', 'Instagram', 'Google', 'Orgânico / não informado']
   return <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
     <section className="rounded-xl border border-border bg-card p-5 lg:col-span-3">
       <h2 className="text-sm font-semibold text-foreground">Leads por dia</h2>
@@ -14,9 +21,12 @@ export function LeadStats({ data, loading }: { data: LeadStats | null; loading: 
           const barHeight = Math.max((item.count / max) * 100, item.count ? 6 : 2)
           return <div key={item.day} className="group relative h-full flex-1" title={`${item.day}: ${item.count}`}>
           <span className="absolute left-1/2 z-10 -translate-x-1/2 -translate-y-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-foreground" style={{ bottom: `${barHeight}%` }}>{item.count}</span>
-          <div className="absolute inset-x-0 bottom-0 rounded-t bg-primary/80 transition-colors group-hover:bg-primary" style={{ height: `${barHeight}%` }} />
+          <div className="absolute inset-x-0 bottom-0 overflow-hidden rounded-t transition-opacity group-hover:opacity-80" style={{ height: `${barHeight}%` }}>
+            {origins.map((origin) => item.byOrigin[origin] ? <div key={origin} style={{ height: `${(item.byOrigin[origin] / item.count) * 100}%`, backgroundColor: originColors[origin] }} /> : null)}
+          </div>
         </div>})}
       </div>}
+      {!loading && data && <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">{origins.map((origin) => <span key={origin} className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: originColors[origin] }} />{origin}</span>)}</div>}
     </section>
     <section className="rounded-xl border border-border bg-card p-5 lg:col-span-2">
       <h2 className="text-sm font-semibold text-foreground">Leads por origem</h2>

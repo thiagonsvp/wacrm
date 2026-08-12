@@ -429,17 +429,27 @@ export async function loadLeadStats(db: DB, rangeDays = 30): Promise<LeadStats> 
   if (error) throw error
 
   const keys = lastNDayKeys(rangeDays)
-  const days = new Map(keys.map((day) => [day, 0]))
+  const days = new Map(keys.map((day) => [day, new Map<string, number>()]))
   const origins = new Map<string, number>()
   for (const row of (data ?? []) as Array<{ created_at: string; acquisition_source: string | null; contact_tags?: DashboardContactRow['contact_tags'] }>) {
     if ((row.contact_tags ?? []).some((j) => EXCLUDED_CONTACT_TAGS.has(j.tags?.name?.trim().toLocaleLowerCase() ?? ''))) continue
     const day = localDayKey(row.created_at)
-    if (days.has(day)) days.set(day, (days.get(day) ?? 0) + 1)
-    const origin = row.acquisition_source || 'Orgânico / não informado'
+    const rawOrigin = row.acquisition_source?.trim()
+    const origin = rawOrigin
+      ? rawOrigin.toLocaleLowerCase() === 'facebook' ? 'Facebook'
+        : rawOrigin.toLocaleLowerCase() === 'instagram' ? 'Instagram'
+          : rawOrigin.toLocaleLowerCase() === 'google' ? 'Google'
+            : rawOrigin
+      : 'Orgânico / não informado'
+    const dayOrigins = days.get(day)
+    if (dayOrigins) dayOrigins.set(origin, (dayOrigins.get(origin) ?? 0) + 1)
     origins.set(origin, (origins.get(origin) ?? 0) + 1)
   }
   return {
-    byDay: keys.map((day) => ({ day, count: days.get(day) ?? 0 })),
+    byDay: keys.map((day) => {
+      const byOrigin = Object.fromEntries(days.get(day) ?? [])
+      return { day, count: Object.values(byOrigin).reduce((sum, count) => sum + count, 0), byOrigin }
+    }),
     byOrigin: Array.from(origins, ([origin, count]) => ({ origin, count })).sort((a, b) => b.count - a.count),
   }
 }
