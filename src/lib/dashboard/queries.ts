@@ -123,10 +123,57 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
 
 // --- 2. Conversations over time ---------------------------------------
 
+/**
+ * Daily message volume, counted in the database.
+ *
+ * This used to fetch every message row and tally them here. PostgREST
+ * caps a response at 1000 rows, so once traffic passed ~1000 messages in
+ * the window the chart silently showed only the OLDEST couple of days and
+ * drew flat zero after that — it read as "the CRM stopped recording"
+ * while over a thousand messages a day were flowing through.
+ *
+ * A row cap truncates without erroring, which is why nothing surfaced it.
+ * Aggregating server-side returns one row per day and removes the cliff
+ * entirely.
+ */
 export async function loadConversationsSeries(
   db: DB,
   rangeDays: number,
 ): Promise<ConversationsSeriesPoint[]> {
+  const timeZone =
+    Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+
+  const rpc = await db.rpc('dashboard_message_series', {
+    p_days: rangeDays,
+    p_tz: timeZone,
+  })
+
+  if (!rpc.error) {
+    const rows = (rpc.data ?? []) as {
+      day: string
+      incoming: number
+      outgoing: number
+    }[]
+    return rows.map((r) => ({
+      day: r.day,
+      incoming: Number(r.incoming),
+      outgoing: Number(r.outgoing),
+    }))
+  }
+
+  // 42883 = function missing, i.e. migration 052 not applied on this
+  // deployment. Fall back to the old client-side tally rather than
+  // leaving the dashboard blank — it under-reports past 1000 rows, which
+  // is still better than an error where a chart should be.
+  if (rpc.error.code !== '42883' && !/does not exist/i.test(rpc.error.message)) {
+    throw rpc.error
+  }
+  console.warn(
+    '[dashboard] dashboard_message_series is missing — apply ' +
+      'supabase/migrations/052_dashboard_message_series.sql. Falling back ' +
+      'to the client tally, which truncates above 1000 messages.',
+  )
+
   const start = daysAgoStart(rangeDays - 1).toISOString()
   const { data, error } = await db
     .from('messages')
