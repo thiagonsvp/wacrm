@@ -20,6 +20,7 @@ interface MetaCapiRow {
   access_token: string
   waba_id: string | null
   page_id: string | null
+  require_purchase_approval: boolean | null
   test_event_code: string | null
   is_active: boolean
   send_qualified_lead: boolean
@@ -29,6 +30,8 @@ interface MetaCapiRow {
 export interface LoadedMetaCapiConfig extends MetaCapiConfig {
   sendQualifiedLead: boolean
   sendPurchase: boolean
+  /** Hold Purchase events for a human instead of sending them. */
+  requirePurchaseApproval: boolean
 }
 
 /**
@@ -44,7 +47,8 @@ export async function loadMetaCapiConfig(
   const { data, error } = await db
     .from('meta_capi_configs')
     .select(
-      'dataset_id, access_token, waba_id, page_id, test_event_code, is_active, send_qualified_lead, send_purchase',
+      'dataset_id, access_token, waba_id, page_id, require_purchase_approval, ' +
+      'test_event_code, is_active, send_qualified_lead, send_purchase',
     )
     .eq('account_id', accountId)
     .maybeSingle()
@@ -85,6 +89,9 @@ export async function loadMetaCapiConfig(
     testEventCode: row.test_event_code,
     sendQualifiedLead: row.send_qualified_lead,
     sendPurchase: row.send_purchase,
+    // Default ON when the column predates migration 051: an operator who
+    // has not opted in should under-report, never over-report.
+    requirePurchaseApproval: row.require_purchase_approval !== false,
   }
 }
 
@@ -133,15 +140,17 @@ export async function dispatchDealConversions(
     const ctwaClid = contact?.acquisition_ctwa_clid as string | null | undefined
     if (!ctwaClid) return // organic lead — nothing to attribute to an ad
 
+    // 'sent' is final and 'rejected' is a human's no — both stop a resend.
+    // 'pending' means it is already waiting in the approval queue.
     const { data: already } = await db
       .from('meta_capi_events')
-      .select('event_name')
+      .select('event_name, status')
       .eq('deal_id', args.dealId)
-      .eq('status', 'sent')
-    const sent = new Set((already ?? []).map((r) => r.event_name as string))
+      .in('status', ['sent', 'pending', 'rejected'])
+    const settled = new Set((already ?? []).map((r) => r.event_name as string))
 
     for (const eventName of wanted) {
-      if (sent.has(eventName)) continue
+      if (settled.has(eventName)) continue
 
       // A won deal whose price is not recorded yet cannot be reported —
       // Meta rejects a Purchase with no value/currency. Skip without
@@ -156,6 +165,31 @@ export async function dispatchDealConversions(
       }
 
       const eventId = `${args.dealId}:${eventName}`
+
+      // Money waits for a human. A conversion cannot be recalled, and the
+      // AI has been wrong about "won" — a bare "Ok" after a closing pitch
+      // once produced a R$7.400 sale that never happened. Queue it and let
+      // someone who knows the customer decide. QualifiedLead is never held:
+      // it carries no amount and runs often enough that a queue would just
+      // get rubber-stamped.
+      if (eventName === 'Purchase' && config.requirePurchaseApproval) {
+        const { error: queueErr } = await db.from('meta_capi_events').insert({
+          account_id: args.accountId,
+          deal_id: args.dealId,
+          contact_id: args.contactId,
+          event_name: eventName,
+          event_id: eventId,
+          value: args.value,
+          currency: args.currency,
+          status: 'pending',
+        })
+        if (queueErr && queueErr.code !== '23505') {
+          console.error('[meta capi] could not queue Purchase for review:', queueErr)
+        }
+        console.log(`[meta capi] Purchase for deal ${args.dealId}: awaiting approval`)
+        continue
+      }
+
       const result = await sendMetaCapiEvent(
         {
           eventName,

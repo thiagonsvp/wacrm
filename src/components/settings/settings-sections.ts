@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   Building2,
   Coins,
   FileText,
@@ -40,6 +41,7 @@ export const SETTINGS_SECTIONS = [
   'members',
   'direct',
   'meta-ads',
+  'meta-approvals',
   'api',
 ] as const;
 
@@ -73,6 +75,12 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
     id: 'meta-ads',
     label: 'Meta Ads',
     icon: Megaphone,
+    group: 'workspace',
+  },
+  'meta-approvals': {
+    id: 'meta-approvals',
+    label: 'Aprovar conversoes',
+    icon: BadgeCheck,
     group: 'workspace',
   },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },

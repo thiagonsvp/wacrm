@@ -10,6 +10,7 @@ import { SettingsRail } from '@/components/settings/settings-rail';
 import { SettingsOverview } from '@/components/settings/settings-overview';
 import { SetupGuide } from '@/components/settings/setup-guide';
 import { MetaAdsConfig } from '@/components/settings/meta-ads-config';
+import { MetaApprovals } from '@/components/settings/meta-approvals';
 import { MetaMessagingConfig } from '@/components/settings/meta-messaging-config';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
@@ -72,6 +73,7 @@ export default function SettingsPage() {
     members: <MembersTab />,
     direct: <MetaMessagingConfig />,
     'meta-ads': <MetaAdsConfig />,
+    'meta-approvals': <MetaApprovals />,
     api: <ApiKeysSettings />,
   };
 
