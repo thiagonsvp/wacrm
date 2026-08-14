@@ -23,6 +23,7 @@ const OUTCOMES: readonly DealOutcome[] = [
   'negotiating',
   'won',
   'lost',
+  'disqualified',
   'none',
 ]
 
@@ -42,6 +43,9 @@ const OUTCOME_ALIASES: Record<string, DealOutcome> = {
   negociacao: 'negotiating',
   'negociação': 'negotiating',
   qualificado: 'qualified',
+  desqualificado: 'disqualified',
+  disqualify: 'disqualified',
+  unqualified: 'disqualified',
   ganho: 'won',
   ganha: 'won',
   vendido: 'won',
@@ -82,7 +86,7 @@ export function buildDealSignalPrompt(args: {
 
     'Respond with a single JSON object and nothing else — no prose, no explanation, no markdown code fences. Schema:\n' +
       '{\n' +
-      '  "outcome": "qualified" | "negotiating" | "won" | "lost" | "none",\n' +
+      '  "outcome": "qualified" | "negotiating" | "won" | "lost" | "disqualified" | "none",\n' +
       '  "model": string | null,   // the specific device the customer wants, e.g. "iPhone 15 Pro Max 256GB"; null if not stated\n' +
       '  "price": number | null    // full selling price of that device, digits only; null if not stated\n' +
       '}',
@@ -93,7 +97,14 @@ export function buildDealSignalPrompt(args: {
       '- "negotiating": the business has quoted a price AND the customer engaged with it (asked about payment, instalments, trade-in, delivery, discount, or kept talking about buying). A quote the customer never answered is still "qualified".\n' +
       '- "won": the purchase is CONFIRMED BY A CONCRETE ACT, not by agreement in principle. Only these count, and only from the CUSTOMER: they asked for the payment link or the PIX key, said they already paid or sent the receipt, gave a delivery address, or accepted a specific delivery/pickup time. The business scheduling a courier at the customer\'s request also counts.\n' +
       '  A bare acknowledgement is NOT a purchase. "ok", "certo", "entendi", "obrigado", "legal", "vou ver", "isso", a thumbs-up, or silence after the business pitches a closing offer all mean the customer merely READ the message — they stay "negotiating". Sellers routinely send closing pitches ("fechando hoje você leva brindes"); the customer answering "ok" to one has not bought anything.\n' +
-      '- "lost": the customer was negotiating and dropped out. Signals: said the price is too high, rejected the trade-in valuation of their old device, said they will not buy, or chose another seller.',
+      '- "lost": the customer was negotiating and dropped out. Signals: said the price is too high, rejected the trade-in valuation of their old device, said they will not buy, or chose another seller.\n' +
+      '- "disqualified": the customer wants to pay by a method this business does not accept, so no amount of negotiating can close them. The ONLY trigger is INSTALMENTS by boleto or carnê — "parcelar no boleto", "tem carnê?", "boleto parcelado", "crediário", "carnê próprio", "parcelo no boleto sem cartão". This outranks every other rule: report it even when the conversation otherwise reads as qualified, negotiating or lost.\n' +
+      '  The deciding word is SPLIT, not "boleto". Judge what the customer wants to do with the amount:\n' +
+      '    "parcelar no boleto" / "boleto em 10x" / "carnê" / "crediário"  -> "disqualified" (split)\n' +
+      '    "boleto à vista" / "pago por boleto" / "boleto único"           -> NOT disqualified (one payment; classify normally)\n' +
+      '    "aceita boleto?" answered and dropped                           -> NOT disqualified (just asking)\n' +
+      '    PIX, cash, card instalments of any length                       -> NOT disqualified\n' +
+      '  A boleto paid in full is an ordinary sale for this business. Only splitting the amount across boletos or a carnê disqualifies.',
 
     'Rules for `price` — report the FULL selling price of the device the customer is buying, as quoted by the business. Three amounts are easy to confuse; only the first is ever correct:\n' +
       '- CORRECT: the device\'s own price. "o 15 sai 4200" -> 4200.\n' +

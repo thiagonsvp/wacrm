@@ -421,7 +421,11 @@ export async function runDealPipelineForConversation(
     stages,
   })
 
-  if (written) {
+  // A disqualified lead is the opposite of a conversion. Reporting one as
+  // QualifiedLead would teach Meta to spend the budget finding more
+  // people who want to pay by carne — the exact customer this business
+  // cannot serve. Nothing about it goes to the ad platform.
+  if (written && signal.outcome !== 'disqualified') {
     // Report the outcome to Meta so ads that click to WhatsApp can
     // optimise for real sales. Owns its errors — a failing ad-platform
     // call must never undo a deal write that already succeeded.

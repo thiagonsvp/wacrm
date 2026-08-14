@@ -27,6 +27,13 @@ export interface PipelineStageMap {
   negotiating: StageRef
   /** Terminal stage for a closed-won deal. */
   closed: StageRef
+  /**
+   * Where a lead the business cannot serve goes — today, someone who
+   * wants instalments by boleto or carne. OPTIONAL: a board without such
+   * a column is perfectly valid, and the classifier then treats the
+   * outcome as "none" rather than inventing a home for the card.
+   */
+  disqualified?: StageRef
 }
 
 export interface StageRow {
@@ -52,6 +59,7 @@ const SLOT_NAMES = {
   qualified: ['lead qualificado', 'qualificado', 'lead qualified', 'qualified'],
   negotiating: ['negociacao', 'em negociacao', 'negotiation', 'negotiating'],
   closed: ['finalizado', 'fechado', 'concluido', 'ganho', 'closed', 'won'],
+  disqualified: ['desqualificado', 'descartado', 'disqualified', 'unqualified'],
 } as const
 
 /**
@@ -81,7 +89,11 @@ export function matchStageSlots(
   const closed = pick('closed')
   if (!qualified || !negotiating || !closed) return null
 
-  return { qualified, negotiating, closed }
+  // Optional on purpose — its absence must not fail the whole match and
+  // switch the account's classification off.
+  const disqualified = pick('disqualified') ?? undefined
+
+  return { qualified, negotiating, closed, disqualified }
 }
 
 /** Stage ids chosen explicitly in Settings, when the operator set them. */
@@ -89,6 +101,7 @@ export interface ConfiguredStageIds {
   qualified?: string | null
   negotiating?: string | null
   closed?: string | null
+  disqualified?: string | null
 }
 
 /**
@@ -104,7 +117,7 @@ export function mapConfiguredStages(
   configured: ConfiguredStageIds,
   stages: StageRow[],
 ): PipelineStageMap | null {
-  const { qualified, negotiating, closed } = configured
+  const { qualified, negotiating, closed, disqualified } = configured
   if (!qualified || !negotiating || !closed) return null
 
   const byId = new Map(stages.map((s) => [s.id, s]))
@@ -117,11 +130,35 @@ export function mapConfiguredStages(
   if (!q.pipeline_id) return null
   if (q.pipeline_id !== n.pipeline_id || q.pipeline_id !== c.pipeline_id) return null
 
+  // The disqualified column has no field in Settings yet, so an account
+  // that pinned the other three by id would otherwise get `undefined`
+  // here and the rule would quietly never fire. Fall back to matching it
+  // by name on the SAME board — silent no-op is the failure mode this
+  // codebase keeps paying for.
+  let d = disqualified ? byId.get(disqualified) : undefined
+  if (!d) {
+    const onBoard = stages.filter((st) => st.pipeline_id === q.pipeline_id)
+    const byName = new Map<string, StageRow>()
+    for (const st of onBoard) {
+      const key = normalize(st.name)
+      if (!byName.has(key)) byName.set(key, st)
+    }
+    for (const candidate of SLOT_NAMES.disqualified) {
+      const hit = byName.get(candidate)
+      if (hit) {
+        d = hit
+        break
+      }
+    }
+  }
+  const sameBoard = d && d.pipeline_id === q.pipeline_id
+
   return {
     pipelineId: q.pipeline_id,
     qualified: { id: q.id, position: q.position },
     negotiating: { id: n.id, position: n.position },
     closed: { id: c.id, position: c.position },
+    disqualified: sameBoard && d ? { id: d.id, position: d.position } : undefined,
   }
 }
 

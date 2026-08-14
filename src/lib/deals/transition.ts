@@ -25,7 +25,13 @@ import type { PipelineStageMap } from './stage-map'
 //      board.
 // ------------------------------------------------------------
 
-export type DealOutcome = 'qualified' | 'negotiating' | 'won' | 'lost' | 'none'
+export type DealOutcome =
+  | 'qualified'
+  | 'negotiating'
+  | 'won'
+  | 'lost'
+  | 'disqualified'
+  | 'none'
 export type DealStatus = 'open' | 'won' | 'lost'
 
 /** What the classifier read out of the conversation. */
@@ -98,6 +104,39 @@ export function planTransition(args: {
   // Invariant 2: a recorded sale is final.
   if (current?.status === 'won') {
     return { action: 'none', reason: 'deal already won (terminal)' }
+  }
+
+  // A disqualified lead is not a lost sale — it is a customer this
+  // business cannot serve at all (today: instalments by boleto/carne). It
+  // gets its own column and keeps status 'open', because marking it lost
+  // would send it to the closed stage instead (migration 045) and count
+  // it among deals that were negotiated and fell through.
+  if (signal.outcome === 'disqualified') {
+    if (!stages.disqualified) {
+      // Boards without the column are valid; do nothing rather than pick
+      // a home for the card.
+      return { action: 'none', reason: 'board has no disqualified stage' }
+    }
+    if (!current) {
+      return {
+        action: 'create',
+        stageId: stages.disqualified.id,
+        title: signal.model?.trim() || fallbackTitle,
+        value: signal.price ?? 0,
+        status: 'open',
+      }
+    }
+    if (current.stagePosition === stages.disqualified.position) {
+      return { action: 'none', reason: 'already disqualified' }
+    }
+    // The one move that is allowed to go backwards on the board: the
+    // reason to disqualify usually surfaces mid-negotiation, well after
+    // the card left the first column.
+    return {
+      action: 'update',
+      dealId: current.id,
+      changes: { stage_id: stages.disqualified.id },
+    }
   }
 
   const targetStage =
