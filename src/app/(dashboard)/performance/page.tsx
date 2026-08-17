@@ -16,6 +16,17 @@ const text = (v: unknown) => String(v || '-').trim()
 const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 })
 const integer = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })
 
+function responseRows(value: unknown): Row[] {
+  if (Array.isArray(value)) return value as Row[]
+  if (!value || typeof value !== 'object') return []
+  const object = value as Record<string, unknown>
+  for (const key of ['data', 'rows', 'results', 'result', 'records']) {
+    const found = responseRows(object[key])
+    if (found.length) return found
+  }
+  return []
+}
+
 function aggregate(rows: Row[], key: string): Aggregate[] {
   const map = new Map<string, Aggregate>()
   for (const row of rows) {
@@ -34,7 +45,7 @@ export default function PerformancePage() {
   const [source, setSource] = useState('meta'); const [from, setFrom] = useState(iso(prior)); const [to, setTo] = useState(iso(today)); const [rows, setRows] = useState<Row[]>([]); const [leads, setLeads] = useState<CRMLead[]>([]); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
   const load = useCallback(async () => { setLoading(true); setError(''); try { const db = createClient(); const end = new Date(`${to}T23:59:59.999`).toISOString(); const ads = await fetch(`/api/windsor/performance?source=${source}&from=${from}&to=${to}`, { cache: 'no-store' }); const d = await ads.json(); if (!ads.ok) throw new Error(d.error || 'Não foi possível carregar os dados do Windsor.ai.'); setRows(Array.isArray(d) ? d : d.data || d.rows || []); const crm = await db.from('contacts').select('created_at, acquisition_source, acquisition_campaign, acquisition_ad_text, acquisition_ad_image_url').gte('created_at', `${from}T00:00:00.000Z`).lte('created_at', end); if (crm.error) { console.warn('[performance] CRM leads unavailable:', crm.error.message); setLeads([]) } else { setLeads((crm.data || []) as CRMLead[]) } } catch (e) { setRows([]); setLeads([]); setError(e instanceof Error ? e.message : 'Não foi possível carregar os dados.') } finally { setLoading(false) } }, [source, from, to])
   useEffect(() => { void load() }, [load])
-  const visibleRows = useMemo(() => rows.filter(r => { const date = text(r.date); return !date || date.slice(0, 10) >= from && date.slice(0, 10) <= to }), [rows, from, to])
+  const visibleRows = useMemo(() => { const dated = rows.filter(r => { const value = text(r.date); const match = value.match(/\d{4}-\d{2}-\d{2}/); return !match || (match[0] >= from && match[0] <= to) }); return dated.length ? dated : rows }, [rows, from, to])
   const totals = useMemo(() => visibleRows.reduce<{ spend: number; impressions: number; reach: number; clicks: number; conversions: number }>((a, r) => ({ spend: a.spend + n(r.spend), impressions: a.impressions + n(r.impressions), reach: a.reach + n(r.reach), clicks: a.clicks + n(r.clicks), conversions: a.conversions + n(r.conversions || r.purchases || r.leads) }), { spend: 0, impressions: 0, reach: 0, clicks: 0, conversions: 0 }), [visibleRows])
   const ctr = totals.impressions ? totals.clicks / totals.impressions * 100 : 0; const cpc = totals.clicks ? totals.spend / totals.clicks : 0; const cpm = totals.impressions ? totals.spend / totals.impressions * 1000 : 0
   const campaigns = useMemo(() => { const result = aggregate(visibleRows, 'campaign'); for (const lead of leads) { const match = result.find(c => c.name.toLowerCase() === text(lead.acquisition_campaign).toLowerCase()); if (match) match.leads += 1 }; return result }, [visibleRows, leads]); const creatives = useMemo(() => aggregate(visibleRows, 'ad_name'), [visibleRows]); const daily = useMemo(() => { const map = new Map<string, { name: string; spend: number; clicks: number; impressions: number; leads: number }>(); for (const row of visibleRows) { const key = text(row.date); const item = map.get(key) || { name: key, spend: 0, clicks: 0, impressions: 0, leads: 0 }; item.spend += n(row.spend); item.clicks += n(row.clicks); item.impressions += n(row.impressions); map.set(key, item) }; for (const lead of leads) { const key = lead.created_at.slice(0, 10); const item = map.get(key) || { name: key, spend: 0, clicks: 0, impressions: 0, leads: 0 }; item.leads += 1; map.set(key, item) }; return [...map.values()].sort((a, b) => a.name.localeCompare(b.name)) }, [visibleRows, leads])
@@ -43,3 +54,4 @@ export default function PerformancePage() {
 }
 function Metric({ label, value, icon: Icon }: { label: string; value: string; icon?: typeof Wallet }) { return <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground">{Icon && <Icon className="h-4 w-4" />}{label}</div><p className="mt-2 text-2xl font-semibold">{value}</p></Card> }
 function Ranking({ title, rows, showImage }: { title: string; rows: Aggregate[]; showImage?: boolean }) { return <Card className="overflow-hidden"><div className="border-b p-5"><h2 className="text-sm font-semibold">{title}</h2><p className="mt-1 text-xs text-muted-foreground">Ordenados por investimento</p></div><div className="overflow-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs text-muted-foreground"><th className="p-3">{showImage ? 'Criativo' : 'Campanha'}</th><th className="p-3 text-right">Investimento</th><th className="p-3 text-right">Leads CRM</th><th className="p-3 text-right">Cliques</th><th className="p-3 text-right">CTR</th><th className="p-3 text-right">CPC</th></tr></thead><tbody>{rows.slice(0, 10).map(r => <tr key={r.name} className="border-b last:border-0"><td className="max-w-56 p-3"><div className="flex items-center gap-2">{showImage && r.image && <img src={r.image} alt="" className="h-8 w-8 rounded object-cover" />}{r.name}</div></td><td className="p-3 text-right">{money(r.spend)}</td><td className="p-3 text-right">{integer(r.leads)}</td><td className="p-3 text-right">{integer(r.clicks)}</td><td className="p-3 text-right">{r.ctr.toFixed(2)}%</td><td className="p-3 text-right">{money(r.cpc)}</td></tr>)}</tbody></table>{rows.length === 0 && <p className="p-5 text-sm text-muted-foreground">Nenhum dado no período selecionado.</p>}</div></Card>}
+
