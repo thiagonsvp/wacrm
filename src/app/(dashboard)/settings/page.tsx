@@ -10,6 +10,7 @@ import { SettingsRail } from '@/components/settings/settings-rail';
 import { SettingsOverview } from '@/components/settings/settings-overview';
 import { SetupGuide } from '@/components/settings/setup-guide';
 import { MetaAdsConfig } from '@/components/settings/meta-ads-config';
+import { WindsorConfig } from '@/components/settings/windsor-config';
 import { MetaApprovals } from '@/components/settings/meta-approvals';
 import { PermissionsMatrix } from '@/components/settings/permissions-matrix';
 import { MetaMessagingConfig } from '@/components/settings/meta-messaging-config';
@@ -74,6 +75,7 @@ export default function SettingsPage() {
     members: <MembersTab />,
     direct: <MetaMessagingConfig />,
     'meta-ads': <MetaAdsConfig />,
+    windsor: <WindsorConfig />,
     'meta-approvals': <MetaApprovals />,
     permissions: <PermissionsMatrix />,
     api: <ApiKeysSettings />,

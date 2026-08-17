@@ -23,6 +23,7 @@ const COLUMNS: { role: AccountRole; label: string }[] = [
 
 const MODULE_LABELS: Record<Module, string> = {
   dashboard: "Painel",
+  performance: "Performance de anúncios",
   inbox: "Caixa de entrada",
   notifications: "Notificações",
   contacts: "Contatos",

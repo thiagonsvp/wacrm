@@ -21,6 +21,7 @@ import { type AccountRole, roleRank } from "./roles";
 /** Every gated area of the product. Mirrors the sidebar and settings rail. */
 export const MODULES = [
   "dashboard",
+  "performance",
   "inbox",
   "notifications",
   "contacts",
@@ -47,6 +48,7 @@ export type Module = (typeof MODULES)[number];
 const MODULE_FLOOR: Record<Module, AccountRole> = {
   // --- Everyone who works the floor ---
   dashboard: "viewer",
+  performance: "viewer",
   inbox: "viewer",
   notifications: "viewer",
   contacts: "viewer",

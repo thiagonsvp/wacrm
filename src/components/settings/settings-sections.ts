@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  BarChart3,
   ShieldCheck,
   Building2,
   Coins,
@@ -43,6 +44,7 @@ export const SETTINGS_SECTIONS = [
   'permissions',
   'direct',
   'meta-ads',
+  'windsor',
   'meta-approvals',
   'api',
 ] as const;
@@ -80,6 +82,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
     icon: Megaphone,
     group: 'workspace',
   },
+  windsor: { id: 'windsor', label: 'Relatórios de performance', icon: BarChart3, group: 'workspace' },
   'meta-approvals': {
     id: 'meta-approvals',
     label: 'Aprovar conversoes',
