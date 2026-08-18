@@ -255,6 +255,9 @@ export async function applyPlan(
         value: plan.value,
         currency,
         status: plan.status,
+        ...(plan.status === 'won'
+          ? { expected_close_date: new Date().toISOString().slice(0, 10) }
+          : {}),
         notes: 'Card criado automaticamente pela análise de IA da conversa.',
       })
       .select('id')
@@ -271,7 +274,13 @@ export async function applyPlan(
 
   const { data: updated, error } = await db
     .from('deals')
-    .update({ ...plan.changes, updated_at: new Date().toISOString() })
+    .update({
+      ...plan.changes,
+      ...(plan.changes.status === 'won'
+        ? { expected_close_date: new Date().toISOString().slice(0, 10) }
+        : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', plan.dealId)
     .select('id, status, value, currency')
     .single()

@@ -72,12 +72,12 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thisMonth = (d: Deal) => {
-      const ts = d.updated_at ?? d.created_at;
+    const thisMonth = (d: Deal, useCloseDate = false) => {
+      const ts = useCloseDate ? d.expected_close_date : (d.updated_at ?? d.created_at);
       return ts ? new Date(ts) >= monthStart : false;
     };
     const wonThisMonth = deals.filter(
-      (d) => d.status === "won" && thisMonth(d),
+      (d) => d.status === "won" && thisMonth(d, true),
     ).length;
     const lostThisMonth = deals.filter(
       (d) => d.status === "lost" && thisMonth(d),

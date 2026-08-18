@@ -156,6 +156,10 @@ export function DealForm({
       toast.error(t("toastRequired"));
       return;
     }
+    if (deal?.status === "won" && !expectedCloseDate) {
+      toast.error("A data de fechamento é obrigatória para uma venda ganha.");
+      return;
+    }
     setSaving(true);
 
     const payload = {
@@ -213,14 +217,16 @@ export function DealForm({
 
   async function handleStatusChange(status: DealStatus) {
     if (!deal) return;
+    if (status === "won" && !expectedCloseDate) {
+      toast.error("Informe a data de fechamento antes de marcar a venda como ganha.");
+      return;
+    }
     setStatusAction(status);
     const { error } = await supabase
       .from("deals")
       .update({
         status,
-        ...(status === "won" || status === "lost"
-          ? { expected_close_date: new Date().toISOString().slice(0, 10) }
-          : {}),
+        ...(status === "won" ? { expected_close_date: expectedCloseDate } : {}),
       })
       .eq("id", deal.id);
     setStatusAction(null);
@@ -349,11 +355,14 @@ export function DealForm({
             </div>
 
             <div className="grid gap-2">
-              <Label className="text-muted-foreground">{t("expectedCloseDate")}</Label>
+              <Label className="text-muted-foreground">
+                {t("expectedCloseDate")}{deal?.status === "won" ? " *" : ""}
+              </Label>
               <Input
                 type="date"
                 value={expectedCloseDate}
                 onChange={(e) => setExpectedCloseDate(e.target.value)}
+                required={deal?.status === "won"}
                 className="border-border bg-muted text-foreground"
               />
             </div>
@@ -408,7 +417,7 @@ export function DealForm({
                   <Button
                     type="button"
                     onClick={() => handleStatusChange("won")}
-                    disabled={!!statusAction || deal.status === "won"}
+                    disabled={!!statusAction || deal.status === "won" || !expectedCloseDate}
                     className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                   >
                     {statusAction === "won" ? (

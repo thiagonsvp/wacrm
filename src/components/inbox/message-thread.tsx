@@ -989,6 +989,7 @@ export function MessageThread({
         value: parsedValue,
         stage_id: stage.id,
         status: "won" as const,
+        expected_close_date: new Date().toISOString().slice(0, 10),
       };
 
       if (existingDeal) {
