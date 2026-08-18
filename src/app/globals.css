@@ -48,6 +48,19 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-soft-2: var(--primary-soft-2);
+  /* Data-viz slots (see the VIZ block below) exposed as utilities so a
+   * chart can wear `text-viz-good` / `bg-viz-funnel-3` instead of an
+   * inline style. */
+  --color-viz-funnel-1: var(--viz-funnel-1);
+  --color-viz-funnel-2: var(--viz-funnel-2);
+  --color-viz-funnel-3: var(--viz-funnel-3);
+  --color-viz-funnel-4: var(--viz-funnel-4);
+  --color-viz-cat-1: var(--viz-cat-1);
+  --color-viz-cat-2: var(--viz-cat-2);
+  --color-viz-cat-3: var(--viz-cat-3);
+  --color-viz-good: var(--viz-good);
+  --color-viz-warning: var(--viz-warning);
+  --color-viz-critical: var(--viz-critical);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -143,6 +156,68 @@ html[data-mode="light"] {
   --sidebar-accent: oklch(0.96 0.004 260);
   --sidebar-accent-foreground: oklch(0.25 0.01 260);
   --sidebar-border: oklch(0.922 0.004 260);
+}
+
+/* ============================================================
+ * VIZ — chart colors. A THIRD dimension, deliberately outside the
+ * accent system.
+ *
+ * Charts must not follow --primary. An accent is a branding choice
+ * the operator flips at will; a palette is a legibility contract
+ * that has to survive color-vision deficiency and both surfaces.
+ * Repainting a funnel because someone picked "rose" would silently
+ * destroy that. So these slots are fixed hexes, validated per mode
+ * against the real surfaces this app renders on (card
+ * oklch(0.18 0.01 260) ≈ #0f1216 dark, #ffffff light).
+ *
+ *   --viz-funnel-1..4  ORDINAL ramp — one hue, monotone lightness.
+ *      The funnel is ordered (lead → qualificado → negociação →
+ *      venda), so the reader must see the order in the color;
+ *      four categorical hues would say "four unrelated things".
+ *      The ramp's anchor flips per mode: the step nearest the
+ *      surface is the lightest on white and the darkest on the
+ *      dark card, so slot 4 always reads as the deepest stage.
+ *      Validated: monotone L, every adjacent ΔL ≥ 0.06, near-surface
+ *      end 2.11:1 light / 2.32:1 dark.
+ *
+ *   --viz-cat-1..3  NOMINAL slots (origin: Instagram / Facebook /
+ *      não informado). Fixed order — the order IS the CVD-safety
+ *      mechanism, so never cycle or reassign it by rank. Validated
+ *      all-pairs in both modes: worst CVD ΔE 9.2 light / 9.4 dark,
+ *      worst normal-vision ΔE 24.0 / 20.9. --viz-cat-3 sits at
+ *      2.82:1 on white, below the 3:1 mark floor — every chart that
+ *      uses it ships visible direct labels as the relief channel.
+ *
+ *   --viz-good / warning / critical  STATUS, reserved meaning, never
+ *      "series 4", always paired with an icon or a word so the state
+ *      never rides on hue alone.
+ * ============================================================ */
+
+:root,
+html[data-mode="dark"] {
+  --viz-funnel-1: #184f95;
+  --viz-funnel-2: #2a78d6;
+  --viz-funnel-3: #5598e7;
+  --viz-funnel-4: #86b6ef;
+  --viz-cat-1: #3987e5;
+  --viz-cat-2: #d95926;
+  --viz-cat-3: #199e70;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-critical: #d03b3b;
+}
+
+html[data-mode="light"] {
+  --viz-funnel-1: #86b6ef;
+  --viz-funnel-2: #5598e7;
+  --viz-funnel-3: #2a78d6;
+  --viz-funnel-4: #184f95;
+  --viz-cat-1: #2a78d6;
+  --viz-cat-2: #eb6834;
+  --viz-cat-3: #1baf7a;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-critical: #d03b3b;
 }
 
 /* ---- ACCENT: primary color ---- */
