@@ -334,8 +334,21 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                         <span
                           className="rounded-full px-1.5 py-0.5 text-[10px]"
                           style={{
-                            backgroundColor: `${deal.stage.color}20`,
-                            color: deal.stage.color,
+                            // A terminal stage name alone is ambiguous: the
+                            // deal's outcome is the source of truth. Make a
+                            // lost close visibly distinct from a won close.
+                            backgroundColor:
+                              deal.status === "lost"
+                                ? "#ef444420"
+                                : deal.status === "won"
+                                  ? "#22c55e20"
+                                  : `${deal.stage.color}20`,
+                            color:
+                              deal.status === "lost"
+                                ? "#ef4444"
+                                : deal.status === "won"
+                                  ? "#22c55e"
+                                  : deal.stage.color,
                           }}
                         >
                           {deal.stage.name}
