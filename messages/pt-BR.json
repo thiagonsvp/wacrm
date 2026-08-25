@@ -17,6 +17,7 @@
   "Sidebar": {
     "title": "Natividade CRM",
     "dashboard": "Painel",
+    "performance": "Performance de anúncios",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
     "contacts": "Contatos",
@@ -1530,6 +1531,9 @@
       "deals": "Negócios e moeda",
       "company": "Empresa",
       "members": "Membros da equipe",
+      "permissions": "Perfis e permissões",
+      "windsor": "Configurações Dashboard",
+      "meta-approvals": "Conversões Meta",
       "api": "Chaves de API",
       "setup": "Configuração inicial",
       "direct": "Instagram & Messenger",
