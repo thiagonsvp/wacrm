@@ -4,7 +4,6 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,8 +41,6 @@ function LoginPageInner() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const supabase = createClient();
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -57,19 +54,26 @@ function LoginPageInner() {
           15_000,
         );
       });
-      const { error } = await Promise.race([
-        supabase.auth.signInWithPassword({ email, password }),
+      const response = await Promise.race([
+        fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }),
         timeout,
       ]);
 
-      if (error) {
-        setError(error.message);
+      const body = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(body.error ?? t("loginUnavailable"));
         return;
       }
 
-      // A navegação completa faz o middleware ler os cookies recém-
-      // gravados pelo Supabase. Em navegação interna, a requisição do
-      // dashboard pode chegar antes da sincronização e voltar ao login.
+      // The route response has already committed the Supabase cookies,
+      // so the middleware sees the session on this full navigation.
       window.location.assign(
         inviteToken
           ? `/join/${encodeURIComponent(inviteToken)}`
