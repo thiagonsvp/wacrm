@@ -858,7 +858,7 @@ export function planStamp(
 - [ ] **Step 4: Rode e confirme que passam**
 
 Run: `npm test -- src/lib/whatsapp/uazapi-ownership.test.ts`
-Expected: PASS, 18 testes.
+Expected: PASS, 20 testes.
 
 - [ ] **Step 5: Commit**
 
@@ -893,6 +893,14 @@ Crie `src/lib/whatsapp/uazapi-admin.test.ts`:
 ```ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UazapiInstance } from './providers/uazapi'
+
+// `@/lib/auth/account` importa `@/lib/supabase/server`, que lê
+// next/headers no carregamento do módulo. Sem este mock o arquivo de
+// teste nem chega a executar — é o mesmo tratamento que
+// src/lib/auth/account.test.ts:65 já faz.
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn(),
+}))
 
 const listInstances = vi.fn()
 const stampAdminFields = vi.fn()
@@ -1876,9 +1884,10 @@ export interface BindRow {
 /**
  * Monta a linha do vínculo.
  *
- * `encryptToken` é injetado em vez de importado para que o teste rode
- * sem `ENCRYPTION_KEY` no ambiente — `encryption.ts` lê a chave no topo
- * do módulo e estoura sem ela. A rota passa `encrypt`.
+ * `encryptToken` é injetado em vez de importado para que o teste possa
+ * afirmar QUE o token foi cifrado sem depender do formato do
+ * ciphertext: com um fake determinístico a asserção é exata. A rota
+ * passa `encrypt`.
  */
 export function buildBindRow(args: {
   baseUrl: string
@@ -3369,12 +3378,24 @@ E acrescente o import no topo:
 import { UazapiInstances } from './uazapi-instances';
 ```
 
-- [ ] **Step 7: Verifique tipos e lint**
+- [ ] **Step 7: Remova o estado UAZAPI que ficou órfão**
+
+Na mesma edição, remova de `whatsapp-config.tsx` tudo que só existia para o formulário que acabou de sair — deixar isso para a Task 12 quebraria o lint entre as duas tasks:
+
+- estados: `uazapiBaseUrl`, `uazapiToken`, `uazapiInstanceName`, `uazapiTokenEdited`, `uazapiSaving`, `uazapiConnecting`, `uazapiQr`, `uazapiPaircode`, `uazapiConnected`
+- ref: `uazapiPollRef`
+- funções: `stopUazapiPolling`, `startUazapiPolling`, `handleSaveUazapi`, `handleUazapiConnect`
+- o `useEffect` que faz cleanup do polling (`useEffect(() => stopUazapiPolling, [])`)
+- as atribuições a esses estados dentro de `fetchConfig`
+
+Mantenha o estado `provider` e o seletor Meta/UAZAPI — o painel é renderizado a partir dele.
+
+- [ ] **Step 8: Verifique tipos e lint**
 
 Run: `npm run typecheck && npm run lint`
-Expected: sem erros. Erros de "declarado mas não usado" para o estado UAZAPI antigo (`uazapiBaseUrl`, `uazapiToken`, `handleSaveUazapi`, …) são esperados — a Task 12 os remove.
+Expected: sem erros, e sem avisos de variável declarada e não usada.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/components/settings/uazapi-instances.tsx src/components/settings/whatsapp-config.tsx messages/pt-BR.json messages/en.json
@@ -3388,10 +3409,9 @@ git commit -m "feat(uazapi): instance panel UI"
 **Files:**
 - Delete: `src/app/api/whatsapp/uazapi/connect/route.ts`
 - Delete: `src/app/api/whatsapp/uazapi/status/route.ts`
-- Modify: `src/components/settings/whatsapp-config.tsx`
 
 **Interfaces:**
-- Consumes: Task 11 (o painel já substituiu a UI).
+- Consumes: Task 11 (o painel substituiu a UI e já removeu o estado órfão do componente).
 - Produces: nada. É a limpeza que fecha o trabalho.
 
 - [ ] **Step 1: Confirme que ninguém mais chama as rotas antigas**
@@ -3405,11 +3425,10 @@ Expected: apenas os dois arquivos de rota. Se aparecer outro chamador, atualize-
 rm -r src/app/api/whatsapp/uazapi/connect src/app/api/whatsapp/uazapi/status
 ```
 
-- [ ] **Step 3: Remova o estado UAZAPI órfão do componente**
+- [ ] **Step 3: Confirme que o componente já não referencia nada removido**
 
-Em `src/components/settings/whatsapp-config.tsx`, remova: os estados `uazapiBaseUrl`, `uazapiToken`, `uazapiInstanceName`, `uazapiTokenEdited`, `uazapiSaving`, `uazapiConnecting`, `uazapiQr`, `uazapiPaircode`, `uazapiConnected`, o `uazapiPollRef`; as funções `stopUazapiPolling`, `startUazapiPolling`, `handleSaveUazapi`, `handleUazapiConnect`; o `useEffect` de cleanup do polling; e as atribuições a esses estados dentro de `fetchConfig`.
-
-Mantenha o `provider` state e o seletor Meta/UAZAPI.
+Run: `grep -n "uazapiPollRef\|handleSaveUazapi\|handleUazapiConnect\|uazapiQr" src/components/settings/whatsapp-config.tsx`
+Expected: nenhuma saída — a Task 11 já limpou. Se aparecer algo, remova antes de seguir.
 
 - [ ] **Step 4: Verifique que nada quebrou**
 
@@ -3444,8 +3463,8 @@ Expected: `false`.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add -A src/app/api/whatsapp/uazapi src/components/settings/whatsapp-config.tsx
-git commit -m "refactor(uazapi): drop the manual credential form and its routes"
+git add -A src/app/api/whatsapp/uazapi
+git commit -m "refactor(uazapi): drop the legacy connect and status routes"
 ```
 
 ---
