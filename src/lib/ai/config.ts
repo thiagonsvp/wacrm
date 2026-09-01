@@ -14,13 +14,14 @@ interface AiConfigRow {
   embeddings_api_key: string | null
   deal_pipeline_enabled: boolean | null
   deal_product_scope: string | null
+  deal_pipeline_instructions: string | null
   deal_stage_qualified_id: string | null
   deal_stage_negotiating_id: string | null
   deal_stage_closed_id: string | null
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, deal_pipeline_enabled, deal_product_scope, deal_stage_qualified_id, deal_stage_negotiating_id, deal_stage_closed_id'
+  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, deal_pipeline_enabled, deal_product_scope, deal_pipeline_instructions, deal_stage_qualified_id, deal_stage_negotiating_id, deal_stage_closed_id'
 
 /**
  * Columns added to `ai_configs` after the table's original migration —
@@ -39,6 +40,7 @@ const CONFIG_COLUMNS =
 const OPTIONAL_COLUMNS = [
   'deal_pipeline_enabled',
   'deal_product_scope',
+  'deal_pipeline_instructions',
   'deal_stage_qualified_id',
   'deal_stage_negotiating_id',
   'deal_stage_closed_id',
@@ -202,6 +204,7 @@ export async function loadAiConfig(
     // project that hasn't run it yet from silently enabling board writes.
     dealPipelineEnabled: row.deal_pipeline_enabled === true,
     dealProductScope: row.deal_product_scope ?? null,
+    dealPipelineInstructions: row.deal_pipeline_instructions ?? null,
     dealStageQualifiedId: row.deal_stage_qualified_id ?? null,
     dealStageNegotiatingId: row.deal_stage_negotiating_id ?? null,
     dealStageClosedId: row.deal_stage_closed_id ?? null,

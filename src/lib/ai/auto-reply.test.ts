@@ -87,6 +87,7 @@ function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
     embeddingsApiKey: null,
     dealPipelineEnabled: false,
     dealProductScope: null,
+    dealPipelineInstructions: null,
     dealStageQualifiedId: null,
     dealStageNegotiatingId: null,
     dealStageClosedId: null,

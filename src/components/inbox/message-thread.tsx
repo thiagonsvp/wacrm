@@ -163,8 +163,8 @@ function groupMessagesByDate(messages: Message[]) {
 // (SPEC_DEFAULT_STAGES). Kept as separate constants here (not imported)
 // because that file isn't a shared module — duplicating two string
 // literals is simpler than carving out a shared constants file for it.
-const QUALIFIED_STAGE_NAME = "Qualified";
-const WON_STAGE_NAME = "Won";
+const QUALIFIED_STAGE_NAME = "Lead Qualificado";
+const WON_STAGE_NAME = "Finalizado";
 
 const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string }[] = [
   { label: "Open", value: "open", color: "text-primary" },

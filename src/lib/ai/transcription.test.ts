@@ -19,6 +19,7 @@ function config(provider: 'openai' | 'anthropic' = 'openai'): AiConfig {
     embeddingsApiKey: null,
     dealPipelineEnabled: false,
     dealProductScope: null,
+    dealPipelineInstructions: null,
     dealStageQualifiedId: null,
     dealStageNegotiatingId: null,
     dealStageClosedId: null,

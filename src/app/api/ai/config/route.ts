@@ -37,7 +37,7 @@ export async function GET() {
     const { data, error } = await selectAiConfigRow(
       supabase,
       accountId,
-      'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, deal_pipeline_enabled, deal_product_scope',
+      'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, deal_pipeline_enabled, deal_product_scope, deal_pipeline_instructions',
     )
 
     if (error) {
@@ -102,6 +102,11 @@ export async function POST(request: Request) {
     const dealProductScope =
       typeof body.deal_product_scope === 'string' && body.deal_product_scope.trim()
         ? body.deal_product_scope.trim().slice(0, 300)
+        : null
+    const dealPipelineInstructions =
+      typeof body.deal_pipeline_instructions === 'string' &&
+      body.deal_pipeline_instructions.trim()
+        ? body.deal_pipeline_instructions.trim().slice(0, 4000)
         : null
 
     let maxPer = Number(body.auto_reply_max_per_conversation)
@@ -210,6 +215,7 @@ export async function POST(request: Request) {
       auto_reply_max_per_conversation: maxPer,
       deal_pipeline_enabled: dealPipelineEnabled,
       deal_product_scope: dealProductScope,
+      deal_pipeline_instructions: dealPipelineInstructions,
     }
     // Only touch the handoff target when the form actually sent the field,
     // so a partial save (e.g. flipping a toggle) doesn't wipe it.

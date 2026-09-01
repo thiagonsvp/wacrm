@@ -53,24 +53,21 @@ describe('renderTranscript', () => {
   })
 })
 
-describe('buildDealSignalPrompt — product scoping', () => {
-  it('covers the whole Apple line by default', () => {
+describe('buildDealSignalPrompt — commercial scoping', () => {
+  it('uses a generic default when the account has no scope yet', () => {
     const prompt = buildDealSignalPrompt({
       productScope: dealProductScope(),
       businessContext: null,
     })
-    expect(prompt).toContain('iPhone')
-    expect(prompt).toContain('iPad')
-    expect(prompt).toContain('Mac')
+    expect(prompt).toContain('products and services described')
   })
 
-  it('still excludes accessories and support from the funnel', () => {
+  it('keeps ambiguous conversations out of the funnel', () => {
     const prompt = buildDealSignalPrompt({
       productScope: dealProductScope(),
       businessContext: null,
     })
-    expect(prompt).toContain('accessories only')
-    expect(prompt).toContain('repairs')
+    expect(prompt).toContain('conversation is ambiguous')
   })
 
   it('is overridable for a shop selling something else', () => {

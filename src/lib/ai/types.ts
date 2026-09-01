@@ -39,6 +39,8 @@ export interface AiConfig {
    *  database rather than in DEAL_PRODUCT_SCOPE. Null falls back to the
    *  env var, then to the built-in default. */
   dealProductScope: string | null
+  /** Per-account instructions defining what counts as each sales outcome. */
+  dealPipelineInstructions: string | null
   /** Stage ids chosen in Settings. Null falls back to matching stage
    *  names, which cannot work for a board in another language. */
   dealStageQualifiedId: string | null

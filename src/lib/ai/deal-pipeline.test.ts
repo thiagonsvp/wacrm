@@ -129,6 +129,7 @@ const CONFIG: AiConfig = {
   embeddingsApiKey: null,
   dealPipelineEnabled: true,
   dealProductScope: null,
+  dealPipelineInstructions: null,
   dealStageQualifiedId: null,
   dealStageNegotiatingId: null,
   dealStageClosedId: null,
@@ -211,5 +212,19 @@ describe('runDealPipelineForConversation — won is terminal', () => {
     const res = await runDealPipelineForConversation(db, RUN_ARGS)
     expect(h.generateReply).toHaveBeenCalledTimes(1)
     expect(res.plan?.action).toBe('create')
+  })
+
+  it('passes the account automation instructions to the classifier', async () => {
+    const db = fakeDb({ contact_tags: [], deals: [] })
+    await runDealPipelineForConversation(db, {
+      ...RUN_ARGS,
+      config: {
+        ...CONFIG,
+        dealPipelineInstructions: 'Só marque ganho após assinatura do contrato.',
+      },
+    })
+    expect(h.generateReply.mock.calls[0][0].systemPrompt).toContain(
+      'Só marque ganho após assinatura do contrato.',
+    )
   })
 })

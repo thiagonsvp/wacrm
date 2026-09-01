@@ -139,12 +139,14 @@ describe('parseDealSignal — field hardening', () => {
 
 describe('buildDealSignalPrompt', () => {
   const prompt = buildDealSignalPrompt({
-    productScope: 'Apple device (iPhone, iPad, Mac, Apple Watch)',
+    productScope: 'consultoria financeira para pequenas empresas',
     businessContext: 'Loja TNS, Rio de Janeiro.',
+    automationInstructions:
+      'Qualifique pedidos de diagnóstico; marque ganho após contrato assinado.',
   })
 
   it('states the product scope and the JSON-only contract', () => {
-    expect(prompt).toContain('iPhone, iPad, Mac, Apple Watch')
+    expect(prompt).toContain('consultoria financeira para pequenas empresas')
     expect(prompt).toContain('single JSON object and nothing else')
   })
 
@@ -154,16 +156,9 @@ describe('buildDealSignalPrompt', () => {
     }
   })
 
-  it('separates all three amounts these conversations contain', () => {
-    // Observed live: the classifier reported R$1.899 for an iPhone 17 Pro
-    // Max because that was the upgrade top-up, not the device's price.
-    expect(prompt).toContain('NEVER the trade-in valuation')
-    expect(prompt).toContain('NEVER the top-up amount in an upgrade')
-    expect(prompt).toContain('Diferença a pagar')
-  })
-
-  it('prefers a null price over falling back to the top-up amount', () => {
-    expect(prompt).toContain('report null — do NOT fall back to the difference')
+  it('includes the business-specific automation instructions', () => {
+    expect(prompt).toContain('Qualifique pedidos de diagnóstico')
+    expect(prompt).toContain('Pipeline automation instructions')
   })
 
   it('carries the account business context as reference, not instructions', () => {

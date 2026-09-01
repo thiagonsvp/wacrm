@@ -10,7 +10,6 @@ import {
   buildDealSignalPrompt,
   dealProductScope,
   parseDealSignal,
-  rejectUpgradeTopUp,
   renderTranscript,
 } from './deal-signal'
 import { resolvePipelineStages, type PipelineStageMap } from '@/lib/deals/stage-map'
@@ -440,12 +439,11 @@ export async function runDealPipelineForConversation(
   const transcript = renderTranscript(messages)
 
   const systemPrompt = buildDealSignalPrompt({
-    // Per-account first: what the shop sells is the single biggest thing
-    // that differs between customers, and an env var cannot vary by
-    // account. Falls back to the env default for deployments that never
-    // filled it in.
+    // Per-account first: business scope and sale criteria vary by
+    // customer, while an environment variable cannot vary by account.
     productScope: config.dealProductScope?.trim() || dealProductScope(),
     businessContext: config.systemPrompt,
+    automationInstructions: config.dealPipelineInstructions,
   })
 
   // Single flattened document, not chat turns — see renderTranscript.
@@ -468,10 +466,7 @@ export async function runDealPipelineForConversation(
   })
 
   const parsed: DealSignal | null = parseDealSignal(text)
-  // Cross-check the price against the thread before it can reach the
-  // board: an upgrade top-up read as the device price understates the
-  // deal and would be reported to Meta as revenue.
-  const signal = parsed ? rejectUpgradeTopUp(parsed, transcript) : null
+  const signal = parsed
   if (!signal) {
     console.warn(
       `[ai deal pipeline] unusable model output for conversation ${conversationId}:`,
