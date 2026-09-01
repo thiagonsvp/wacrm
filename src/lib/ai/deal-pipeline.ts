@@ -164,7 +164,6 @@ export async function hasUnreadSignal(
     .select('content_text')
     .eq('conversation_id', conversationId)
     .eq('sender_type', 'customer')
-    .eq('content_type', 'text')
     .order('created_at', { ascending: false })
     .limit(aiContextMessageLimit())
   const analyzedAt = (conv as { ai_deal_analyzed_at: string | null }).ai_deal_analyzed_at

@@ -5,6 +5,7 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia } from '@/lib/whatsapp/providers/uazapi'
 import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text'
 import { transcribeInboundAudio } from '@/lib/ai/transcription'
+import { extractInboundPdfText } from '@/lib/ai/pdf'
 import {
   findOrCreateContact,
   findOrCreateConversation,
@@ -358,6 +359,27 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
 
   if (contentType === 'audio' && !contentText) {
     contentText = await transcribeInboundAudio(db, config.account_id, mediaUrl)
+  }
+
+  if (contentType === 'document' && mediaUrl) {
+    try {
+      const response = await fetch(mediaUrl, { signal: AbortSignal.timeout(20_000) })
+      const declaredLength = Number(response.headers.get('content-length'))
+      if (
+        response.ok &&
+        (!Number.isFinite(declaredLength) || declaredLength <= 16 * 1024 * 1024)
+      ) {
+        const extracted = await extractInboundPdfText(
+          db,
+          config.account_id,
+          Buffer.from(await response.arrayBuffer()),
+          contentText,
+        )
+        if (extracted) contentText = [contentText, extracted].filter(Boolean).join('\n\n')
+      }
+    } catch (error) {
+      console.warn('[uazapi-webhook] PDF extraction failed:', error)
+    }
   }
 
   const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone

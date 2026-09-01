@@ -6,6 +6,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text'
 import { transcribeInboundAudioBytes } from '@/lib/ai/transcription'
+import { extractInboundPdfText } from '@/lib/ai/pdf'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -598,6 +599,29 @@ async function processMessage(
   const { contentText: parsedContentText, mediaUrl, mediaType, interactiveReplyId } =
     await parseMessageContent(message, accessToken)
   let contentText = parsedContentText
+
+  // A quote PDF is read once at ingestion and its bounded text becomes part
+  // of the conversation context. The pipeline classifier can then identify
+  // the offered material/service and total without a separate AI call.
+  if (
+    message.type === 'document' &&
+    message.document?.id &&
+    message.document.mime_type.toLowerCase().split(';')[0] === 'application/pdf'
+  ) {
+    try {
+      const mediaInfo = await getMediaUrl({ mediaId: message.document.id, accessToken })
+      const pdf = await downloadMedia({ downloadUrl: mediaInfo.url, accessToken })
+      const extracted = await extractInboundPdfText(
+        supabaseAdmin(),
+        accountId,
+        pdf.buffer,
+        message.document.filename,
+      )
+      if (extracted) contentText = [contentText, extracted].filter(Boolean).join('\n\n')
+    } catch (error) {
+      console.warn('[webhook] PDF extraction failed:', error)
+    }
+  }
 
   if (message.type === 'audio' && !contentText && message.audio?.id) {
     try {

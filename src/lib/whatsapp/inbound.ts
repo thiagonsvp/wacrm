@@ -450,7 +450,15 @@ export async function persistInboundMessage(
     }
   }
 
-  if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
+  // A document can contain a useful quote for the pipeline, but an
+  // automatic customer-facing reply to an attachment is surprising. PDF
+  // extraction is therefore consumed by the sales classifier below only.
+  if (
+    !flowConsumed &&
+    !interactiveReplyId &&
+    inboundText.trim() &&
+    (contentType === 'text' || contentType === 'audio')
+  ) {
     await dispatchInboundToAiReply({
       accountId,
       conversationId: conversation.id,
