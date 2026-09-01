@@ -7,6 +7,7 @@ import {
   type InteractiveListSection,
   type MediaKind,
 } from '@/lib/whatsapp/meta-api'
+import { sendText as uazapiSendText } from '@/lib/whatsapp/providers/uazapi'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
@@ -90,15 +91,30 @@ export async function engineSendText(
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
   }
-  if (config.provider !== 'meta') {
+  const isUazapi = config.provider === 'uazapi'
+  if (!isUazapi && config.provider !== 'meta') {
     throw new Error(
       `This flow step requires the Meta WhatsApp provider; the account is connected via ${config.provider}.`,
     )
   }
 
-  const accessToken = decrypt(config.access_token)
+  if (isUazapi && (!config.uazapi_base_url || !config.uazapi_token)) {
+    throw new Error('UAZAPI is not fully configured for this account')
+  }
+
+  const accessToken = isUazapi ? '' : decrypt(config.access_token)
+  const uazapiToken = isUazapi ? decrypt(config.uazapi_token) : ''
 
   const attempt = async (phone: string): Promise<string> => {
+    if (isUazapi) {
+      const r = await uazapiSendText({
+        baseUrl: config.uazapi_base_url,
+        token: uazapiToken,
+        number: phone,
+        text: args.text,
+      })
+      return r.messageId
+    }
     const r = await sendTextMessage({
       phoneNumberId: config.phone_number_id,
       accessToken,
@@ -140,7 +156,7 @@ export async function engineSendText(
     ai_generated: args.aiGenerated ?? false,
   })
   if (msgErr) {
-    throw new Error(`sent to Meta but DB insert failed: ${msgErr.message}`)
+    throw new Error(`sent to WhatsApp but DB insert failed: ${msgErr.message}`)
   }
 
   await db
