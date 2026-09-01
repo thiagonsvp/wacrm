@@ -1580,7 +1580,9 @@
     },
     "groups": {
       "account": "Account",
-      "workspace": "Workspace"
+      "conversation": "Conversation settings",
+      "settings": "Account settings",
+      "admin": "Administrator settings"
     },
     "profile": {
       "title": "Your profile",
@@ -1858,9 +1860,17 @@
       "createButton": "New company",
       "createConfirm": "Create",
       "cancel": "Cancel",
-      "created": "Company \"{name}\" created. Use the picker at the bottom of the menu to enter it.",
-      "createFailed": "Could not create the company.",
-      "usersTitle": "Users of this company",
+    "created": "Company \"{name}\" created. Use the picker at the bottom of the menu to enter it.",
+    "createFailed": "Could not create the company.",
+    "deactivateTitle": "Deactivate company",
+    "deactivateDesc": "Stops access for every member while preserving conversations, contacts, deals, and settings. A system administrator can reactivate it.",
+    "deactivateButton": "Deactivate company",
+    "deactivateDialogTitle": "Deactivate this company?",
+    "deactivateDialogDesc": "You and every member will lose access immediately. No data will be deleted.",
+    "deactivateConfirm": "Yes, deactivate",
+    "deactivated": "Company deactivated. Your data was preserved.",
+    "deactivateFailed": "Could not deactivate company.",
+    "usersTitle": "Users of this company",
       "usersDesc": "Who has access to {company}. Invite by email; each person signs in with their own login and sees only this company."
     },
     "metaMessaging": {

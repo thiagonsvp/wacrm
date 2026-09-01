@@ -3,16 +3,12 @@ import {
   BarChart3,
   ShieldCheck,
   Building2,
-  Coins,
   FileText,
-  ListChecks,
   Megaphone,
   MessageCircle,
   KeyRound,
-  LayoutGrid,
   Palette,
   PlugZap,
-  Shield,
   Tags,
   User,
   UsersRound,
@@ -23,79 +19,72 @@ import {
 /**
  * Settings information architecture for the redesigned page.
  *
- * The flat tab strip became a grouped left rail with a new Overview
- * landing. The URL query param stays `?tab=` (deep-linkable, and it
+ * The flat tab strip became a grouped left rail. The URL query param
+ * stays `?tab=` (deep-linkable, and it
  * keeps the existing links in sidebar.tsx / header.tsx working) — we
  * just map the old values onto the new sections.
  */
 export const SETTINGS_SECTIONS = [
-  'overview',
-  'setup',
   'profile',
-  'security',
   'appearance',
-  'whatsapp',
   'templates',
   'quick-replies',
   'fields',
-  'deals',
-  'company',
-  'members',
-  'permissions',
+  'whatsapp',
   'direct',
   'meta-ads',
   'windsor',
   'meta-approvals',
   'api',
+  'company',
+  'members',
+  'permissions',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
-export const DEFAULT_SECTION: SettingsSection = 'overview';
+export const DEFAULT_SECTION: SettingsSection = 'profile';
 
 /** Rail grouping. `adminOnly` items are hidden for non-admins. */
 export interface SectionMeta {
   id: SettingsSection;
   label: string;
   icon: LucideIcon;
-  group: 'top' | 'account' | 'workspace';
+  group: 'account' | 'conversation' | 'settings' | 'admin';
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
-  overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
-  setup: { id: 'setup', label: 'Setup guide', icon: ListChecks, group: 'top' },
   profile: { id: 'profile', label: 'Your profile', icon: User, group: 'account' },
-  security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
-  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
-  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace' },
-  'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace' },
-  fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
-  deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
-  company: { id: 'company', label: 'Company', icon: Building2, group: 'workspace' },
-  members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
-  permissions: { id: 'permissions', label: 'Perfis e permissoes', icon: ShieldCheck, group: 'workspace' },
-  direct: { id: 'direct', label: 'Instagram & Messenger', icon: MessageCircle, group: 'workspace' },
+  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'conversation' },
+  'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'conversation' },
+  fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'conversation' },
+  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'settings' },
+  direct: { id: 'direct', label: 'Instagram & Messenger', icon: MessageCircle, group: 'settings' },
   'meta-ads': {
     id: 'meta-ads',
     label: 'Meta Ads',
     icon: Megaphone,
-    group: 'workspace',
+    group: 'settings',
   },
-  windsor: { id: 'windsor', label: 'Relatórios de performance', icon: BarChart3, group: 'workspace' },
+  windsor: { id: 'windsor', label: 'Relatórios de performance', icon: BarChart3, group: 'settings' },
   'meta-approvals': {
     id: 'meta-approvals',
     label: 'Aprovar conversoes',
     icon: BadgeCheck,
-    group: 'workspace',
+    group: 'settings',
   },
-  api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
+  api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'settings' },
+  company: { id: 'company', label: 'Company', icon: Building2, group: 'admin' },
+  members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'admin' },
+  permissions: { id: 'permissions', label: 'Perfis e permissoes', icon: ShieldCheck, group: 'admin' },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [
-  { label: null, group: 'top' },
   { label: 'Account', group: 'account' },
-  { label: 'Workspace', group: 'workspace' },
+  { label: 'Conversation settings', group: 'conversation' },
+  { label: 'Account settings', group: 'settings' },
+  { label: 'Administrator settings', group: 'admin' },
 ];
 
 function isSection(value: string | null): value is SettingsSection {
@@ -106,10 +95,11 @@ function isSection(value: string | null): value is SettingsSection {
  * Resolve a raw `?tab=` value to a section. Legacy tabs from the old
  * flat layout collapse onto their new home (Tags + Custom fields → the
  * merged "Fields & tags" section). Anything unknown falls back to the
- * Overview landing.
+ * Profile landing.
  */
 export function resolveSection(raw: string | null): SettingsSection {
   if (raw === 'tags' || raw === 'custom-fields') return 'fields';
+  if (raw === 'security') return 'profile';
   if (isSection(raw)) return raw;
   return DEFAULT_SECTION;
 }

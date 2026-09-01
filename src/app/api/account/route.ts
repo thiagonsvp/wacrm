@@ -53,8 +53,30 @@ export async function PATCH(request: Request) {
     if (!limit.success) return rateLimitResponse(limit);
 
     const body = (await request.json().catch(() => null)) as
-      | { name?: unknown }
+      | { name?: unknown; is_active?: unknown }
       | null;
+    if (body?.is_active === false) {
+      // Deactivation is a soft delete: all history stays intact, but every
+      // member immediately loses access through the account RLS helper.
+      if (ctx.role !== "owner") {
+        return NextResponse.json(
+          { error: "Only the company owner can deactivate it" },
+          { status: 403 },
+        );
+      }
+      const { error } = await ctx.supabase
+        .from("accounts")
+        .update({ is_active: false })
+        .eq("id", ctx.accountId);
+      if (error) {
+        console.error("[PATCH /api/account] deactivate error:", error);
+        return NextResponse.json(
+          { error: "Failed to deactivate account" },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ ok: true });
+    }
     const rawName = body?.name;
 
     if (typeof rawName !== "string") {

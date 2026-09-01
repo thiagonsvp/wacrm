@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Loader2, Plus } from "lucide-react";
+import { AlertTriangle, Building2, Loader2, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
@@ -12,7 +12,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SettingsPanelHead } from "./settings-panel-head";
-import { MembersTab } from "./members-tab";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /**
  * The company this workspace belongs to, and the people in it.
@@ -29,7 +36,7 @@ import { MembersTab } from "./members-tab";
  * the member list is visibly attached to the one you are editing.
  */
 export function CompanyPanel() {
-  const { account, accountRole, user } = useAuth();
+  const { account, accountRole, user, signOut } = useAuth();
   const t = useTranslations("Settings.company");
 
   const [name, setName] = useState("");
@@ -38,6 +45,8 @@ export function CompanyPanel() {
   const [newName, setNewName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
 
   const canEdit = accountRole === "owner" || accountRole === "admin";
 
@@ -116,6 +125,26 @@ export function CompanyPanel() {
       setCreating(false);
     }
   }, [newName, t]);
+
+  const handleDeactivate = useCallback(async () => {
+    setDeactivating(true);
+    try {
+      const res = await fetch("/api/account", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? t("deactivateFailed"));
+        return;
+      }
+      toast.success(t("deactivated"));
+      await signOut();
+    } finally {
+      setDeactivating(false);
+    }
+  }, [signOut, t]);
 
   return (
     <div>
@@ -200,13 +229,47 @@ export function CompanyPanel() {
         </Card>
       )}
 
-      <div className="mt-8 border-t border-border pt-6">
-        <h3 className="text-sm font-medium text-foreground">{t("usersTitle")}</h3>
-        <p className="mt-1 mb-4 text-xs text-muted-foreground">
-          {t("usersDesc", { company: account?.name ?? "" })}
-        </p>
-        <MembersTab />
-      </div>
+      {accountRole === "owner" && (
+        <Card className="mt-4 border-red-500/30 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-foreground">{t("deactivateTitle")}</h3>
+              <p className="mt-1 max-w-xl text-xs text-muted-foreground">
+                {t("deactivateDesc")}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setDeactivateOpen(true)}
+              className="border-red-500/40 bg-red-500/10 text-red-300 hover:border-red-500/60 hover:bg-red-500/20 hover:text-red-200"
+            >
+              {t("deactivateButton")}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      <Dialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-4 text-amber-500" />
+              {t("deactivateDialogTitle")}
+            </DialogTitle>
+            <DialogDescription>{t("deactivateDialogDesc")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeactivateOpen(false)} disabled={deactivating}>
+              {t("cancel")}
+            </Button>
+            <Button onClick={handleDeactivate} disabled={deactivating} className="bg-red-600 text-white hover:bg-red-700">
+              {deactivating ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              {t("deactivateConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

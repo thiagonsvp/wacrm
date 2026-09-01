@@ -4,11 +4,8 @@ import { useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { SettingsRail } from '@/components/settings/settings-rail';
-import { SettingsOverview } from '@/components/settings/settings-overview';
-import { SetupGuide } from '@/components/settings/setup-guide';
 import { MetaAdsConfig } from '@/components/settings/meta-ads-config';
 import { WindsorConfig } from '@/components/settings/windsor-config';
 import { MetaApprovals } from '@/components/settings/meta-approvals';
@@ -21,7 +18,6 @@ import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { QuickRepliesManager } from '@/components/settings/quick-replies-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
-import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { CompanyPanel } from '@/components/settings/company-panel';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
@@ -33,14 +29,13 @@ import {
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency } = useAuth();
   const { mode } = useTheme();
   const t = useTranslations('Settings');
 
   // The URL (`?tab=`) is the single source of truth for the active
   // section — deep-linkable, and it keeps the existing links in the
-  // app sidebar/header working. Legacy tab values (tags, custom-fields)
-  // resolve onto their new home; unknown/empty → the Overview landing.
+  // app sidebar/header working. Legacy tab values resolve onto their
+  // new home; unknown/empty → the Profile landing.
   const section = resolveSection(searchParams.get('tab'));
 
   const go = (next: SettingsSection) => {
@@ -49,28 +44,21 @@ export default function SettingsPage() {
     router.replace(`/settings?${params.toString()}`, { scroll: false });
   };
 
-  // Cheap, fetch-free rail hints. The Overview landing carries the
-  // full live status/counts; the rail just surfaces the two that are
-  // already in context.
+  // Cheap, fetch-free rail hint for the active local appearance mode.
   const hints: Partial<Record<SettingsSection, ReactNode>> = useMemo(
     () => ({
       appearance: mode.charAt(0).toUpperCase() + mode.slice(1),
-      deals: defaultCurrency,
     }),
-    [mode, defaultCurrency],
+    [mode],
   );
 
   const panel: Record<SettingsSection, ReactNode> = {
-    overview: <SettingsOverview onSelect={go} />,
-    setup: <SetupGuide onSelect={go} />,
-    profile: <ProfileForm />,
-    security: <SecurityPanel />,
+    profile: <div className="space-y-8"><ProfileForm /><SecurityPanel /></div>,
     appearance: <AppearancePanel />,
     whatsapp: <WhatsAppConfig />,
     templates: <TemplateManager />,
     'quick-replies': <QuickRepliesManager />,
     fields: <FieldsAndTagsPanel />,
-    deals: <DealsSettings />,
     company: <CompanyPanel />,
     members: <MembersTab />,
     direct: <MetaMessagingConfig />,

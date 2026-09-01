@@ -1584,7 +1584,9 @@
     },
     "groups": {
       "account": "Conta",
-      "workspace": "Espaço de trabalho"
+      "conversation": "Configurações de conversa",
+      "settings": "Configurações de conta",
+      "admin": "Configurações de administrador"
     },
     "profile": {
       "title": "Seu perfil",
@@ -1862,9 +1864,17 @@
       "createButton": "Nova empresa",
       "createConfirm": "Cadastrar",
       "cancel": "Cancelar",
-      "created": "Empresa \"{name}\" cadastrada. Use o seletor no rodapé do menu para entrar nela.",
-      "createFailed": "Não foi possível cadastrar a empresa.",
-      "usersTitle": "Usuários desta empresa",
+    "created": "Empresa \"{name}\" cadastrada. Use o seletor no rodapé do menu para entrar nela.",
+    "createFailed": "Não foi possível cadastrar a empresa.",
+    "deactivateTitle": "Desativar empresa",
+    "deactivateDesc": "Interrompe o acesso de todos os membros e preserva conversas, contatos, negócios e configurações. A reativação é feita por um administrador do sistema.",
+    "deactivateButton": "Desativar empresa",
+    "deactivateDialogTitle": "Desativar esta empresa?",
+    "deactivateDialogDesc": "Você e todos os membros perderão o acesso imediatamente. Os dados não serão excluídos.",
+    "deactivateConfirm": "Sim, desativar",
+    "deactivated": "Empresa desativada. Seus dados foram preservados.",
+    "deactivateFailed": "Não foi possível desativar a empresa.",
+    "usersTitle": "Usuários desta empresa",
       "usersDesc": "Quem tem acesso a {company}. Convide pelo e-mail; cada pessoa entra com o próprio login e enxerga apenas esta empresa."
     },
     "metaMessaging": {
