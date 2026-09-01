@@ -5,6 +5,7 @@ import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text'
+import { transcribeInboundAudioBytes } from '@/lib/ai/transcription'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -22,7 +23,7 @@ import {
 // Inbound processing can fan out to per-media Meta verification calls, so
 // give it headroom beyond the platform default (Vercel clamps this to the
 // plan's ceiling). Tune as needed.
-export const maxDuration = 60
+export const maxDuration = 90
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -594,8 +595,28 @@ async function processMessage(
   }
 
   // Parse message content based on type
-  const { contentText, mediaUrl, mediaType, interactiveReplyId } =
+  const { contentText: parsedContentText, mediaUrl, mediaType, interactiveReplyId } =
     await parseMessageContent(message, accessToken)
+  let contentText = parsedContentText
+
+  if (message.type === 'audio' && !contentText && message.audio?.id) {
+    try {
+      const mediaInfo = await getMediaUrl({ mediaId: message.audio.id, accessToken })
+      const audio = await downloadMedia({ downloadUrl: mediaInfo.url, accessToken })
+      const bytes = audio.buffer.buffer.slice(
+        audio.buffer.byteOffset,
+        audio.buffer.byteOffset + audio.buffer.byteLength,
+      ) as ArrayBuffer
+      contentText = await transcribeInboundAudioBytes(
+        supabaseAdmin(),
+        accountId,
+        bytes,
+        audio.contentType || mediaType || 'audio/ogg',
+      )
+    } catch (error) {
+      console.error('[webhook] audio download for transcription failed:', error)
+    }
+  }
 
   // Resolve swipe-reply context if present. A missing parent is fine —
   // we just store NULL and the UI renders the message without a quote.

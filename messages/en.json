@@ -239,6 +239,7 @@
       "photo": "Photo",
       "video": "Video",
       "audio": "Audio",
+      "transcription": "Transcription",
       "unavailable": "{label} unavailable",
       "document": "Document",
       "locationShared": "Location shared",

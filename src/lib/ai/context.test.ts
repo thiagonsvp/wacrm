@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildConversationContext } from './context'
 
-/** Minimal fake matching the query chain in buildConversationContext:
- *  from().select().eq().eq().order().limit() → { data, error }. */
+/** Minimal fake matching the query chain in buildConversationContext. */
 function fakeDb(rows: unknown[]): SupabaseClient {
   const chain = {
     from: () => chain,
@@ -49,5 +48,13 @@ describe('buildConversationContext', () => {
       'conv-1',
     )
     expect(out).toEqual([{ role: 'user', content: 'real' }])
+  })
+
+  it('includes an audio transcription stored in content_text', async () => {
+    const out = await buildConversationContext(
+      fakeDb([{ sender_type: 'customer', content_text: 'Quero saber o preço.' }]),
+      'conv-1',
+    )
+    expect(out).toEqual([{ role: 'user', content: 'Quero saber o preço.' }])
   })
 })

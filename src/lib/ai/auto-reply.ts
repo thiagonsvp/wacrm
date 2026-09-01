@@ -2,8 +2,9 @@ import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
 import { retrieveKnowledge } from './knowledge'
+import { retrieveConversationMemory } from './memory'
 import { generateReply } from './generate'
-import { buildSystemPrompt } from './defaults'
+import { aiAutoReplyDebounceMs, buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
@@ -18,6 +19,10 @@ interface DispatchArgs {
   /** The account's WhatsApp config owner, used for the outbound send's
    *  audit columns (mirrors how the flow runner passes it through). */
   configOwnerUserId: string
+}
+
+function wait(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve()
 }
 
 /**
@@ -69,7 +74,7 @@ export async function dispatchInboundToAiReply(
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, last_message_at')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
@@ -78,6 +83,23 @@ export async function dispatchInboundToAiReply(
     // Cheap early-out; the authoritative cap check is the atomic claim
     // below (this read can race a concurrent inbound).
     if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) return
+
+    // Debounce by conversation: every inbound schedules this dispatcher,
+    // but only the one that still represents the latest message after the
+    // quiet period proceeds. A human reply/assignment during the wait also
+    // cancels the automatic response.
+    const observedLastMessageAt = conv.last_message_at
+    await wait(aiAutoReplyDebounceMs())
+
+    const { data: currentConv, error: currentConvErr } = await db
+      .from('conversations')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, last_message_at')
+      .eq('id', conversationId)
+      .maybeSingle()
+    if (currentConvErr || !currentConv) return
+    if (currentConv.last_message_at !== observedLastMessageAt) return
+    if (currentConv.assigned_agent_id || currentConv.ai_autoreply_disabled) return
+    if (currentConv.ai_reply_count >= config.autoReplyMaxPerConversation) return
 
     const messages = await buildConversationContext(db, conversationId)
     if (messages.length === 0) return
@@ -99,17 +121,17 @@ export async function dispatchInboundToAiReply(
     }
 
     // Ground the reply in the account's knowledge base (best-effort).
-    const knowledge = await retrieveKnowledge(
-      db,
-      accountId,
-      config,
-      latestUserMessage(messages),
-    )
+    const query = latestUserMessage(messages)
+    const [knowledge, examples] = await Promise.all([
+      retrieveKnowledge(db, accountId, config, query),
+      retrieveConversationMemory(db, accountId, query),
+    ])
 
     const systemPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,
       mode: 'auto_reply',
       knowledge,
+      examples,
     })
 
     const { text, handoff, usage } = await generateReply({
@@ -142,7 +164,7 @@ export async function dispatchInboundToAiReply(
       // which notifies the agent.
       const summary = buildHandoffSummary({
         messages,
-        replyCount: conv.ai_reply_count ?? 0,
+        replyCount: currentConv.ai_reply_count ?? 0,
       })
       const update: Record<string, unknown> = {
         ai_autoreply_disabled: true,
@@ -150,7 +172,7 @@ export async function dispatchInboundToAiReply(
       }
       // Only set the assignee when a target is configured AND the thread
       // isn't already owned — never stomp an existing human assignment.
-      if (config.handoffAgentId && !conv.assigned_agent_id) {
+      if (config.handoffAgentId && !currentConv.assigned_agent_id) {
         update.assigned_agent_id = config.handoffAgentId
       }
       await db.from('conversations').update(update).eq('id', conversationId)

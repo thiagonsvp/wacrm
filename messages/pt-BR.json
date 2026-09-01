@@ -240,6 +240,7 @@
       "photo": "Foto",
       "video": "Vídeo",
       "audio": "Áudio",
+      "transcription": "Transcrição",
       "unavailable": "{label} indisponível",
       "document": "Documento",
       "locationShared": "Localização compartilhada",

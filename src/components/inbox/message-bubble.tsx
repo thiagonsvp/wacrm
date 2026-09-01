@@ -56,7 +56,6 @@ function MediaUnavailable({ label, t }: { label: string, t: ReturnType<typeof us
     </div>
   );
 }
-
 function renderWhatsAppText(text: string | null | undefined) {
   if (!text) return null;
   return text.split("\n").map((line, lineIndex, lines) => {
@@ -205,6 +204,14 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
             <audio src={message.media_url} controls className="max-w-60" />
           ) : (
             <MediaUnavailable label={t("audio")} t={t} />
+          )}
+          {message.content_text && (
+            <div className="mt-2 max-w-60 rounded-md bg-muted/40 px-2.5 py-2 text-xs">
+              <span className="font-medium text-muted-foreground">{t("transcription")}: </span>
+              <span className="whitespace-pre-wrap break-words">
+                {renderWhatsAppText(message.content_text)}
+              </span>
+            </div>
           )}
         </div>
       );

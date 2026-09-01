@@ -6,10 +6,12 @@ const h = vi.hoisted(() => ({
   loadAiConfig: vi.fn(),
   buildConversationContext: vi.fn(),
   retrieveKnowledge: vi.fn(),
+  retrieveConversationMemory: vi.fn(),
   generateReply: vi.fn(),
   engineSendText: vi.fn(),
   state: {
     conv: null as Record<string, unknown> | null,
+    convReads: [] as (Record<string, unknown> | null)[],
     autoResponders: [] as { id: string }[],
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
@@ -20,6 +22,7 @@ const h = vi.hoisted(() => ({
 vi.mock('./config', () => ({ loadAiConfig: h.loadAiConfig }))
 vi.mock('./context', () => ({ buildConversationContext: h.buildConversationContext }))
 vi.mock('./knowledge', () => ({ retrieveKnowledge: h.retrieveKnowledge }))
+vi.mock('./memory', () => ({ retrieveConversationMemory: h.retrieveConversationMemory }))
 vi.mock('./generate', () => ({ generateReply: h.generateReply }))
 vi.mock('@/lib/flows/meta-send', () => ({ engineSendText: h.engineSendText }))
 vi.mock('./admin-client', () => ({
@@ -41,7 +44,12 @@ vi.mock('./admin-client', () => ({
         select: () => ({
           eq: () => ({
             maybeSingle: () =>
-              Promise.resolve({ data: h.state.conv, error: null }),
+              Promise.resolve({
+                data: h.state.convReads.length > 0
+                  ? h.state.convReads.shift()
+                  : h.state.conv,
+                error: null,
+              }),
           }),
         }),
         update: (payload: Record<string, unknown>) => {
@@ -87,11 +95,14 @@ function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
 }
 
 beforeEach(() => {
+  vi.stubEnv('AI_AUTOREPLY_DEBOUNCE_MS', '0')
   h.state.conv = {
     assigned_agent_id: null,
     ai_autoreply_disabled: false,
     ai_reply_count: 0,
+    last_message_at: '2026-09-01T12:00:00.000Z',
   }
+  h.state.convReads = []
   h.state.autoResponders = []
   h.state.claim = true
   h.state.updatePayload = null
@@ -99,6 +110,7 @@ beforeEach(() => {
   h.loadAiConfig.mockResolvedValue(aiConfig())
   h.buildConversationContext.mockResolvedValue([{ role: 'user', content: 'hi' }])
   h.retrieveKnowledge.mockResolvedValue([])
+  h.retrieveConversationMemory.mockResolvedValue([])
   h.generateReply.mockResolvedValue({ text: 'Hello!', handoff: false })
   h.engineSendText.mockResolvedValue({ whatsapp_message_id: 'm1' })
 })
@@ -123,6 +135,25 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     expect(h.retrieveKnowledge).toHaveBeenCalled()
     const systemPrompt = h.generateReply.mock.calls[0][0].systemPrompt as string
     expect(systemPrompt).toContain('Returns accepted within 30 days.')
+  })
+
+  it('uses similar human replies as compact style examples', async () => {
+    h.retrieveConversationMemory.mockResolvedValue([
+      'Cliente: Tem entrega?\nAtendente: Sim, entregamos em toda a cidade.',
+    ])
+    await dispatchInboundToAiReply(ARGS)
+    const systemPrompt = h.generateReply.mock.calls[0][0].systemPrompt as string
+    expect(systemPrompt).toContain('Atendente: Sim, entregamos em toda a cidade.')
+  })
+
+  it('lets only the latest inbound continue after the quiet period', async () => {
+    h.state.convReads = [
+      { ...h.state.conv, last_message_at: '2026-09-01T12:00:00.000Z' },
+      { ...h.state.conv, last_message_at: '2026-09-01T12:00:05.000Z' },
+    ]
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.buildConversationContext).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
   })
 
   it('stands down when an active message-level automation exists', async () => {
@@ -190,7 +221,6 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     expect(h.engineSendText).not.toHaveBeenCalled()
   })
 })
-
 describe('dispatchInboundToAiReply — handoff', () => {
   it('disables auto-reply, writes a summary, and does not send on handoff', async () => {
     h.generateReply.mockResolvedValue({ text: '', handoff: true })

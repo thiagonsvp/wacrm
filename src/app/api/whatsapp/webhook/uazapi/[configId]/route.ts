@@ -4,6 +4,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia } from '@/lib/whatsapp/providers/uazapi'
 import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text'
+import { transcribeInboundAudio } from '@/lib/ai/transcription'
 import {
   findOrCreateContact,
   findOrCreateConversation,
@@ -23,14 +24,13 @@ function supabaseAdmin() {
   }
   return _adminClient
 }
-
 // Matches the Meta webhook (api/whatsapp/webhook/route.ts). The `after()`
 // callback below runs within this route's max duration, and that callback
 // owns the whole inbound chain — media download, profile photo fetch,
 // contact/conversation/message writes, flows, automations, AI reply. The
 // platform default is far too tight for that, and anything still running
 // when it expires is killed silently.
-export const maxDuration = 60
+export const maxDuration = 90
 
 /**
  * POST /api/whatsapp/webhook/uazapi/[configId]
@@ -318,7 +318,7 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
 
   let contentType = inferContentType(msg)
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) contentType = 'text'
-  const contentText = msg.text ?? null
+  let contentText = msg.text ?? null
   const timestamp = msg.messageTimestamp ? new Date(msg.messageTimestamp) : new Date()
   const externalMessageId = msg.messageid || msg.id || `uazapi-${Date.now()}`
 
@@ -354,6 +354,10 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
       timestamp,
     })
     return
+  }
+
+  if (contentType === 'audio' && !contentText) {
+    contentText = await transcribeInboundAudio(db, config.account_id, mediaUrl)
   }
 
   const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
