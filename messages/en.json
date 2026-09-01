@@ -11,6 +11,7 @@
     "passwordPlaceholder": "Enter your password",
     "signingIn": "Signing in...",
     "signIn": "Sign in",
+    "loginUnavailable": "The sign-in service could not be reached. Try again in a few seconds.",
     "noAccount": "Don't have an account?",
     "createAccount": "Create account"
   },

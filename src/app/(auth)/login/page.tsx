@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
@@ -42,7 +42,6 @@ function LoginPageInner() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -50,21 +49,37 @@ function LoginPageInner() {
     setError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error(t("loginUnavailable"))),
+          15_000,
+        );
+      });
+      const { error } = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        timeout,
+      ]);
 
-    if (error) {
-      setError(error.message);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      // A navegação completa faz o middleware ler os cookies recém-
+      // gravados pelo Supabase. Em navegação interna, a requisição do
+      // dashboard pode chegar antes da sincronização e voltar ao login.
+      window.location.assign(
+        inviteToken
+          ? `/join/${encodeURIComponent(inviteToken)}`
+          : "/dashboard",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("loginUnavailable"));
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
       setLoading(false);
-      return;
-    }
-
-    if (inviteToken) {
-      router.push(`/join/${encodeURIComponent(inviteToken)}`);
-    } else {
-      router.push("/dashboard");
     }
   };
 

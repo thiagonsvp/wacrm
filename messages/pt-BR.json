@@ -11,6 +11,7 @@
     "passwordPlaceholder": "Digite sua senha",
     "signingIn": "Entrando...",
     "signIn": "Entrar",
+    "loginUnavailable": "Não foi possível acessar o serviço de login. Tente novamente em alguns segundos.",
     "noAccount": "Não tem uma conta?",
     "createAccount": "Criar conta"
   },
