@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { BarChart3, Bot, PencilLine } from 'lucide-react';
+import {
+  BarChart3,
+  Bot,
+  DatabaseZap,
+  FlaskConical,
+  Kanban,
+  PencilLine,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 import {
@@ -32,10 +39,14 @@ interface UsageResponse {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    /** Null when the deployment can't report it yet (migration 057). */
+    cached_prompt_tokens: number | null;
   };
   by_mode: {
     auto_reply: { calls: number; tokens: number };
     draft: { calls: number; tokens: number };
+    deal_pipeline: { calls: number; tokens: number };
+    playground: { calls: number; tokens: number };
   };
   by_model: {
     model: string;
@@ -105,11 +116,12 @@ export function AiUsageCard() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <BarChart3 className="h-4 w-4 text-primary" /> Token usage
+              <BarChart3 className="h-4 w-4 text-primary" /> Uso de tokens
             </CardTitle>
             <CardDescription>
-              Tokens spent on your provider key by drafts and the auto-reply
-              bot. Counts only — no message content is stored here.
+              Tokens consumidos da chave do provedor por rascunhos, respostas
+              automáticas e classificação do funil. Apenas contagens — nenhum
+              conteúdo de mensagem é armazenado aqui.
             </CardDescription>
           </div>
           <Select
@@ -122,7 +134,7 @@ export function AiUsageCard() {
             <SelectContent>
               {WINDOWS.map((w) => (
                 <SelectItem key={w} value={String(w)}>
-                  Last {w} days
+                  Últimos {w} dias
                 </SelectItem>
               ))}
             </SelectContent>
@@ -137,29 +149,51 @@ export function AiUsageCard() {
             <BarChart3 className="h-8 w-8 opacity-40" />
             <p>Ainda não há uso de IA nos últimos {data.window_days} dias.</p>
             <p className="text-xs">
-              This fills in as the assistant drafts and auto-replies.
+              Os dados aparecerão quando o assistente criar rascunhos e respostas automáticas.
             </p>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="Total tokens" value={formatCompactNumber(data.totals.total_tokens)} />
-              <Stat label="LLM calls" value={String(data.totals.calls)} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <Stat label="Total de tokens" value={formatCompactNumber(data.totals.total_tokens)} />
+              <Stat label="Chamadas ao modelo" value={String(data.totals.calls)} />
               <Stat
-                label="Auto-reply"
+                label="Fornecidos pelo cache"
+                value={
+                  data.totals.cached_prompt_tokens == null
+                    ? '—'
+                    : `${formatCompactNumber(data.totals.cached_prompt_tokens)} (${cachedShare(
+                        data.totals.cached_prompt_tokens,
+                        data.totals.prompt_tokens,
+                      )})`
+                }
+                icon={DatabaseZap}
+              />
+              <Stat
+                label="Funil de vendas"
+                value={formatCompactNumber(data.by_mode.deal_pipeline.tokens)}
+                icon={Kanban}
+              />
+              <Stat
+                label="Resposta automática"
                 value={formatCompactNumber(data.by_mode.auto_reply.tokens)}
                 icon={Bot}
               />
               <Stat
-                label="Drafts"
+                label="Rascunhos"
                 value={formatCompactNumber(data.by_mode.draft.tokens)}
                 icon={PencilLine}
+              />
+              <Stat
+                label="Ambiente de testes"
+                value={formatCompactNumber(data.by_mode.playground.tokens)}
+                icon={FlaskConical}
               />
             </div>
 
             <div>
               <p className="mb-2 text-xs font-medium text-muted-foreground">
-                Tokens per day
+                Tokens por dia
               </p>
               <BarChart
                 data={chartData}
@@ -176,7 +210,7 @@ export function AiUsageCard() {
             {data.by_model.length > 0 && (
               <div>
                 <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  By model
+                  Por modelo
                 </p>
                 <ul className="divide-y divide-border rounded-md border border-border">
                   {data.by_model.map((m) => (
@@ -192,7 +226,7 @@ export function AiUsageCard() {
                       </span>
                       <span className="flex-shrink-0 tabular-nums text-muted-foreground">
                         {formatCompactNumber(m.tokens)} tok · {m.calls}{' '}
-                        {m.calls === 1 ? 'call' : 'calls'}
+                        {m.calls === 1 ? 'chamada' : 'chamadas'}
                       </span>
                     </li>
                   ))}
@@ -202,8 +236,8 @@ export function AiUsageCard() {
 
             {data.truncated && (
               <p className="text-xs text-muted-foreground">
-                Showing a partial window — usage is high enough that only the
-                most recent records are summarized here.
+                Exibindo um período parcial — como o uso é alto, apenas os
+                registros mais recentes foram resumidos aqui.
               </p>
             )}
           </>
@@ -211,6 +245,13 @@ export function AiUsageCard() {
       </CardContent>
     </Card>
   );
+}
+
+/** "75%" — the share of prompt tokens the provider billed at the cached
+ *  rate. What makes the token total reconcilable with the invoice. */
+function cachedShare(cached: number, prompt: number): string {
+  if (prompt <= 0) return '0%';
+  return `${Math.round((cached / prompt) * 100)}%`;
 }
 
 function Stat({

@@ -64,32 +64,32 @@ const STATUS_META: Record<
   { label: string; classes: string; icon: typeof Clock }
 > = {
   active: {
-    label: "Active",
+    label: "Ativa",
     classes: "border-emerald-600/40 bg-emerald-500/10 text-emerald-300",
     icon: PlayCircle,
   },
   completed: {
-    label: "Completed",
+    label: "Concluída",
     classes: "border-border bg-muted text-muted-foreground",
     icon: CircleCheck,
   },
   handed_off: {
-    label: "Handed off",
+    label: "Transferida",
     classes: "border-amber-600/40 bg-amber-500/10 text-amber-300",
     icon: UserPlus,
   },
   timed_out: {
-    label: "Timed out",
+    label: "Expirada",
     classes: "border-border bg-muted/60 text-muted-foreground",
     icon: Clock,
   },
   paused_by_agent: {
-    label: "Paused by agent",
+    label: "Pausada pelo atendente",
     classes: "border-border bg-muted text-muted-foreground",
     icon: PauseCircle,
   },
   failed: {
-    label: "Failed",
+    label: "Falhou",
     classes: "border-red-600/40 bg-red-500/10 text-red-300",
     icon: CircleAlert,
   },

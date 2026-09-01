@@ -30,16 +30,24 @@ import {
   ctr,
   groupByCampaign,
   groupByCreative,
+  indexByAd,
+  indexIdentity,
   mediaTotals,
   reachedNegotiating,
   reachedQualified,
   roas,
   spendByDay,
   ticket,
+  toAdIdentity,
   toAdMedia,
 } from '@/lib/performance/merge'
 import { decimal, money, moneyOrDash, percent, quantity } from '@/lib/performance/format'
-import { emptyCounts, type AdMedia, type FunnelPayload } from '@/lib/performance/types'
+import {
+  emptyCounts,
+  type AdIdentity,
+  type AdMedia,
+  type FunnelPayload,
+} from '@/lib/performance/types'
 import { cn } from '@/lib/utils'
 
 // ============================================================
@@ -93,6 +101,7 @@ export default function PerformancePage() {
   const [to, setTo] = useState(initial.to)
   const [media, setMedia] = useState<AdMedia[]>([])
   const [funnel, setFunnel] = useState<FunnelPayload>(emptyFunnel)
+  const [identity, setIdentity] = useState<AdIdentity[]>([])
   const [mediaError, setMediaError] = useState('')
   const [crmError, setCrmError] = useState('')
   // "Atualizar" re-runs the same query, so it needs something to change.
@@ -127,24 +136,55 @@ export default function PerformancePage() {
         ads.status === 'fulfilled' ? await ads.value.json().catch(() => null) : null
       const crmPayload =
         crm.status === 'fulfilled' ? await crm.value.json().catch(() => null) : null
+
+      const adsOk = ads.status === 'fulfilled' && ads.value.ok
+      const crmOk = crm.status === 'fulfilled' && crm.value.ok
+      const mediaRows: AdMedia[] =
+        adsOk && Array.isArray(adsPayload) ? adsPayload.map(toAdMedia) : []
+      const funnelPayload: FunnelPayload = crmOk ? (crmPayload as FunnelPayload) : emptyFunnel()
+
+      // Second pass: leads whose ad id got no media row in the window.
+      // A wide, id-filtered Windsor lookup recovers those ads' campaign
+      // and creative names (paused ads, ads in a sibling ad account), so
+      // they group under their real campaign instead of a "no match"
+      // bucket. Identity only — its spend never enters the totals. Best
+      // effort: if it fails, the report still renders, just less named.
+      let identityRows: AdIdentity[] = []
+      const known = indexByAd(mediaRows)
+      const orphanIds = funnelPayload.ads
+        .map((ad) => ad.adId)
+        .filter((id) => !known.has(id))
+      if (adsOk && orphanIds.length) {
+        try {
+          const res = await fetch(
+            `/api/windsor/ad-identity?source=${source}&ids=${orphanIds.join(',')}`,
+            { cache: 'no-store' },
+          )
+          const payload = await res.json().catch(() => null)
+          if (res.ok && Array.isArray(payload)) identityRows = payload.map(toAdIdentity)
+        } catch {
+          // Leads keep their WhatsApp-headline fallback names.
+        }
+      }
       if (!current) return
 
-      if (ads.status === 'fulfilled' && ads.value.ok) {
-        setMedia(Array.isArray(adsPayload) ? adsPayload.map(toAdMedia) : [])
+      if (adsOk) {
+        setMedia(mediaRows)
         setMediaError('')
       } else {
         setMedia([])
         setMediaError(adsPayload?.error || 'Não foi possível consultar o Windsor.ai.')
       }
 
-      if (crm.status === 'fulfilled' && crm.value.ok) {
-        setFunnel(crmPayload as FunnelPayload)
+      if (crmOk) {
+        setFunnel(funnelPayload)
         setCrmError('')
       } else {
         setFunnel(emptyFunnel())
         setCrmError(crmPayload?.error || 'Não foi possível carregar os leads do CRM.')
       }
 
+      setIdentity(identityRows)
       setSettled(request)
     }
 
@@ -157,8 +197,15 @@ export default function PerformancePage() {
   const currency = funnel.currency
   const totals = useMemo(() => mediaTotals(media), [media])
   const counts = funnel.totals
-  const campaigns = useMemo(() => groupByCampaign(media, funnel.ads), [media, funnel.ads])
-  const creatives = useMemo(() => groupByCreative(media, funnel.ads), [media, funnel.ads])
+  const identityByAd = useMemo(() => indexIdentity(identity), [identity])
+  const campaigns = useMemo(
+    () => groupByCampaign(media, funnel.ads, identityByAd),
+    [media, funnel.ads, identityByAd],
+  )
+  const creatives = useMemo(
+    () => groupByCreative(media, funnel.ads, identityByAd),
+    [media, funnel.ads, identityByAd],
+  )
 
   const dailySpend = useMemo(() => spendByDay(media), [media])
   const trend = useMemo(() => buildTrend(funnel.daily, dailySpend), [funnel.daily, dailySpend])

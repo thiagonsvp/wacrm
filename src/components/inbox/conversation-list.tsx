@@ -677,10 +677,11 @@ type LeadSource = "facebook" | "instagram" | "google";
 
 function getLeadSource(
   tags?: Tag[],
-  acquisitionSource?: "Facebook" | "Instagram" | null,
+  acquisitionSource?: "Facebook" | "Instagram" | "Google" | null,
 ): LeadSource | null {
   if (acquisitionSource === "Facebook") return "facebook";
   if (acquisitionSource === "Instagram") return "instagram";
+  if (acquisitionSource === "Google") return "google";
 
   const names = (tags ?? []).map((tag) =>
     tag.name

@@ -376,10 +376,10 @@ export function Step3Personalize({
                           <SelectValue
                             placeholder={
                               loadingFields
-                                ? 'Loading…'
+                                ? 'Carregando…'
                                 : customFields.length === 0
-                                  ? 'No custom fields'
-                                  : 'Select custom field…'
+                                  ? 'Nenhum campo personalizado'
+                                  : 'Selecione um campo personalizado…'
                             }
                           />
                         </SelectTrigger>
@@ -426,7 +426,7 @@ export function Step3Personalize({
           <span className="font-mono font-semibold">
             {unmappedKeys.join(', ')}
           </span>
-          . Otherwise those placeholders will ship to Meta as empty strings.
+                    . Caso contrário, esses campos serão enviados à Meta como textos vazios.
         </div>
       )}
 

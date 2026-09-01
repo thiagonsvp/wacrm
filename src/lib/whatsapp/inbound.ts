@@ -26,7 +26,7 @@ export interface ContactOutcome {
 }
 
 export interface AcquisitionData {
-  source?: 'Facebook' | 'Instagram' | null
+  source?: 'Facebook' | 'Instagram' | 'Google' | null
   sourceId?: string | null
   campaign?: string | null
   adText?: string | null
@@ -34,8 +34,14 @@ export interface AcquisitionData {
   url?: string | null
   avatarUrl?: string | null
   /** Click-to-WhatsApp click id, required to attribute a later
-   *  conversion back to the ad (Conversions API `user_data.ctwa_clid`). */
+   *  conversion back to the ad (Conversions API `user_data.ctwa_clid`).
+   *  Meta only — a Google lead never has one, and lib/meta/dispatch.ts
+   *  relies on that to keep non-Meta leads out of the Conversions API. */
   ctwaClid?: string | null
+  /** Google Ads click id (gclid / wbraid / gbraid). Meta hands us
+   *  attribution structurally; Google has no such channel, so this
+   *  arrives inside the first message's text — see acquisition-text.ts. */
+  gclid?: string | null
 }
 
 export async function findOrCreateContact(
@@ -49,7 +55,7 @@ export async function findOrCreateContact(
   const existingContact = await findExistingContact(db, accountId, phone)
 
   if (existingContact) {
-    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url) {
+    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url || acquisition?.ctwaClid || acquisition?.gclid) {
       await db
         .from('contacts')
         .update({
@@ -63,6 +69,7 @@ export async function findOrCreateContact(
           ...(acquisition?.ctwaClid
             ? { acquisition_ctwa_clid: acquisition.ctwaClid }
             : {}),
+          ...(acquisition?.gclid ? { acquisition_gclid: acquisition.gclid } : {}),
           ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
           updated_at: new Date().toISOString(),
         })
@@ -87,6 +94,7 @@ export async function findOrCreateContact(
       ...(acquisition?.ctwaClid
         ? { acquisition_ctwa_clid: acquisition.ctwaClid }
         : {}),
+      ...(acquisition?.gclid ? { acquisition_gclid: acquisition.gclid } : {}),
       ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
     })
     .select()
@@ -465,6 +473,7 @@ export async function persistInboundMessage(
       contactId: contact.id,
       configOwnerUserId,
       contactName: contact.name,
+      inboundText,
     })
   }
 

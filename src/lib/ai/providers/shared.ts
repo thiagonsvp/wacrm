@@ -23,9 +23,13 @@ export function normalizeUsage(raw: {
   prompt?: unknown
   completion?: unknown
   total?: unknown
+  /** Cached share of `prompt`; kept only when the provider reported a
+   *  number, so "not reported" stays distinguishable from "0 cached". */
+  cached?: unknown
 }): AiUsage | null {
-  const num = (v: unknown): number =>
-    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0
+  const isCount = (v: unknown): v is number =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0
+  const num = (v: unknown): number => (isCount(v) ? Math.floor(v) : 0)
   const promptTokens = num(raw.prompt)
   const completionTokens = num(raw.completion)
   const total = num(raw.total)
@@ -33,7 +37,9 @@ export function normalizeUsage(raw: {
   if (promptTokens === 0 && completionTokens === 0 && totalTokens === 0) {
     return null
   }
-  return { promptTokens, completionTokens, totalTokens }
+  const usage: AiUsage = { promptTokens, completionTokens, totalTokens }
+  if (isCount(raw.cached)) usage.cachedPromptTokens = Math.floor(raw.cached)
+  return usage
 }
 
 /** Map a fetch rejection (timeout / DNS / offline) to a typed AiError. */

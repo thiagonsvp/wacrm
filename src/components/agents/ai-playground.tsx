@@ -118,7 +118,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
                 onClick={onGoToSetup}
                 className="mt-1 h-auto p-0 text-xs"
               >
-                Not set up yet? Go to Setup <ArrowRight className="ml-1 h-3 w-3" />
+                Ainda não configurou? Ir para Configuração <ArrowRight className="ml-1 h-3 w-3" />
               </Button>
             )}
           </div>
@@ -152,7 +152,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
                   )}
                 >
                   <UserCircle2 className="h-3.5 w-3.5" />
-                  Would hand off to a human here
+                  Encaminharia para um atendente neste ponto
                 </p>
               )}
             </div>
@@ -165,7 +165,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
         {sending && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Bot className="h-5 w-5 text-primary" />
-            <Loader2 className="h-4 w-4 animate-spin" /> Thinking…
+            <Loader2 className="h-4 w-4 animate-spin" /> Pensando…
           </div>
         )}
       </div>
@@ -176,7 +176,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a customer message…"
+          placeholder="Digite uma mensagem de cliente…"
           rows={1}
           className="flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
         />

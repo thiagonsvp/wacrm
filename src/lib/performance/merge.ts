@@ -11,6 +11,7 @@ import {
   addCounts,
   emptyCounts,
   type AdFunnel,
+  type AdIdentity,
   type AdMedia,
   type FunnelCounts,
   type PerformanceRow,
@@ -50,6 +51,39 @@ export function toAdMedia(row: Record<string, unknown>): AdMedia {
     reach: num(row.reach),
     clicks: num(row.clicks),
   }
+}
+
+/** Coerce one `/api/windsor/ad-identity` row. */
+export function toAdIdentity(row: Record<string, unknown>): AdIdentity {
+  return {
+    adId: text(row.ad_id),
+    campaign: text(row.campaign),
+    campaignId: text(row.campaign_id),
+    adName: text(row.ad_name),
+    adsetName: text(row.adset_name),
+    accountName: text(row.account_name),
+    imageUrl: text(row.image_url) || null,
+  }
+}
+
+/** One identity per ad id, first non-empty value wins per field. */
+export function indexIdentity(rows: AdIdentity[]): Map<string, AdIdentity> {
+  const byAd = new Map<string, AdIdentity>()
+  for (const row of rows) {
+    if (!row.adId) continue
+    const found = byAd.get(row.adId)
+    if (!found) {
+      byAd.set(row.adId, { ...row })
+      continue
+    }
+    found.campaign ||= row.campaign
+    found.campaignId ||= row.campaignId
+    found.adName ||= row.adName
+    found.adsetName ||= row.adsetName
+    found.accountName ||= row.accountName
+    found.imageUrl ??= row.imageUrl
+  }
+  return byAd
 }
 
 export interface MediaTotals {
@@ -168,19 +202,31 @@ function byWeight(a: PerformanceRow, b: PerformanceRow): number {
 const UNMATCHED = '__unmatched__'
 const UNMATCHED_LABEL = 'Sem correspondência no Windsor'
 
+/** "Paused before the window / other account" annotation for a group. */
+function identitySubtitle(identity: AdIdentity): string {
+  return identity.accountName
+    ? `Sem investimento no período · conta ${identity.accountName}`
+    : 'Sem investimento no período'
+}
+
 /**
  * Group by campaign.
  *
  * Leads reach a campaign through their ad id, never through
- * `acquisition_campaign` — see the note in `types.ts`. An ad id the
- * CRM saw but Windsor never reported (a paused ad outside the date
- * window, a different ad account, a boosted post) lands in one
- * explicit "no match" row so its leads stay visible and stay out of
- * the real campaigns' rates.
+ * `acquisition_campaign` — see the note in `types.ts`. When the ad id
+ * has no media row in the window, the `identity` map (the wide,
+ * id-filtered Windsor lookup) supplies the ad's REAL campaign, so the
+ * lead still lands on the right row — sharing the campaign-id key with
+ * the media branch, so a campaign that also spent in-window absorbs
+ * the orphan leads instead of splitting into two rows. Only ids
+ * Windsor has never heard of (boosted posts) fall into the explicit
+ * "no match" bucket, where they stay visible and stay out of the real
+ * campaigns' rates.
  */
 export function groupByCampaign(
   media: AdMedia[],
   funnels: AdFunnel[],
+  identity?: Map<string, AdIdentity>,
 ): PerformanceRow[] {
   const byAd = indexByAd(media)
   const groups = new Map<string, Draft>()
@@ -205,10 +251,20 @@ export function groupByCampaign(
 
   for (const ad of funnels) {
     const source = byAd.get(ad.adId)
-    const group = source
-      ? at(source.campaignId || source.campaign || UNMATCHED, source.campaign || 'Campanha sem nome')
-      : at(UNMATCHED, UNMATCHED_LABEL)
-    if (!source) group.subtitle = 'Anúncios fora do período ou de outra conta'
+    const recovered = source ? undefined : identity?.get(ad.adId)
+    let group: Draft
+    if (source) {
+      group = at(source.campaignId || source.campaign || UNMATCHED, source.campaign || 'Campanha sem nome')
+    } else if (recovered && (recovered.campaignId || recovered.campaign)) {
+      group = at(recovered.campaignId || recovered.campaign, recovered.campaign || 'Campanha sem nome')
+      // A campaign that also spent in-window keeps its own subtitle —
+      // the annotation only describes rows that exist purely through
+      // recovered identity.
+      if (!group.matched) group.subtitle = identitySubtitle(recovered)
+    } else {
+      group = at(UNMATCHED, UNMATCHED_LABEL)
+      group.subtitle = 'Anúncios que o Windsor.ai não conhece (ex.: post impulsionado)'
+    }
     // AdFunnel extends FunnelCounts, so the identity fields simply ride
     // along unread — no projection needed.
     addCounts(group.counts, ad)
@@ -221,6 +277,7 @@ export function groupByCampaign(
 export function groupByCreative(
   media: AdMedia[],
   funnels: AdFunnel[],
+  identity?: Map<string, AdIdentity>,
 ): PerformanceRow[] {
   const byAd = indexByAd(media)
   const groups = new Map<string, Draft>()
@@ -239,10 +296,15 @@ export function groupByCreative(
 
   for (const ad of funnels) {
     const found = groups.get(ad.adId)
-    const group = found ?? draft(ad.adId, ad.headline || `Anúncio ${ad.adId}`)
+    const recovered = found ? undefined : identity?.get(ad.adId)
+    const group =
+      found ??
+      draft(ad.adId, recovered?.adName || ad.headline || `Anúncio ${ad.adId}`)
     if (!found) {
-      group.subtitle = 'Sem correspondência no Windsor'
-      group.imageUrl = ad.imageUrl
+      group.subtitle = recovered
+        ? [recovered.campaign, identitySubtitle(recovered)].filter(Boolean).join(' · ')
+        : 'Sem correspondência no Windsor'
+      group.imageUrl = recovered?.imageUrl ?? ad.imageUrl
       groups.set(ad.adId, group)
     }
     // The headline is the only creative label a non-matching ad has, and

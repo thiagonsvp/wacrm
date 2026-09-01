@@ -69,6 +69,12 @@ export interface AiUsage {
   promptTokens: number
   completionTokens: number
   totalTokens: number
+  /** The part of `promptTokens` the provider served from its prompt
+   *  cache (OpenAI `prompt_tokens_details.cached_tokens`, Anthropic
+   *  `cache_read_input_tokens`) — billed at a fraction of the full rate,
+   *  so it's what separates "tokens sent" from "tokens paid for". Absent
+   *  when the provider didn't report it. */
+  cachedPromptTokens?: number
 }
 
 /** Raw text + usage a provider adapter returns before handoff parsing. */

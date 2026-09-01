@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { downloadMedia } from '@/lib/whatsapp/providers/uazapi'
+import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text'
 import {
   findOrCreateContact,
   findOrCreateConversation,
@@ -183,14 +184,39 @@ async function fetchFullProfilePhoto(config: any, phone: string): Promise<string
 
 function extractAcquisition(msg: UazapiMessage) {
   const ad = msg.content?.contextInfo?.externalAdReply
-  if (!ad) return undefined
+  if (!ad) {
+    // No Meta ad block. Google Ads has no structural equivalent — a
+    // gclid only reaches WhatsApp if the advertiser's site wrote it into
+    // the pre-filled text — so that is the one place left to look.
+    const fromText = parseAcquisitionFromText(msg.text)
+    if (!fromText.gclid && !fromText.source) return undefined
+    return {
+      source: fromText.source ?? null,
+      gclid: fromText.gclid ?? null,
+      campaign: fromText.campaign ?? null,
+      sourceId: null,
+      adText: null,
+      url: null,
+      avatarUrl: null,
+      ctwaClid: null,
+      adImageUrl: null,
+    }
+  }
   const sourceUrl = ad.sourceURL || ad.sourceUrl || null
   const sourceText = `${ad.sourceApp || ''} ${sourceUrl || ''}`.toLowerCase()
+  // An `externalAdReply` only exists because the lead clicked a Meta ad,
+  // so the platform is never genuinely unknown — only unnamed. Falling
+  // through to null used to strand those leads: the account's "Tag de
+  // origem" automation keys off `acquisition_source`, so a null left
+  // them untagged and invisible in the ad reports. Measured on real
+  // traffic, 18 of 31 untagged campaign leads came in this way — every
+  // one of them a WhatsApp Status ad (`wa.me/wamo/status/…`) or a
+  // shortened `fb.me` link, neither of which contains the word
+  // "facebook". Default to Facebook, matching the Meta webhook's own
+  // fallback in api/whatsapp/webhook/route.ts.
   const source = sourceText.includes('instagram')
-    ? 'Instagram' as const
-    : sourceText.includes('facebook')
-      ? 'Facebook' as const
-      : null
+    ? ('Instagram' as const)
+    : ('Facebook' as const)
   return {
     source,
     sourceId: ad.sourceID || ad.sourceId || null,

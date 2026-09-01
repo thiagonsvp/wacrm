@@ -36,7 +36,7 @@ export function InteractivePreview({
         ) : null}
         <p className="whitespace-pre-wrap break-words text-sm">
           {payload.body || (
-            <span className="text-muted-foreground">Message body…</span>
+            <span className="text-muted-foreground">Conteúdo da mensagem…</span>
           )}
         </p>
         {payload.footer ? (

@@ -4,6 +4,7 @@ import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
+import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -532,6 +533,14 @@ async function processMessage(
       ? 'Facebook' as const
       : null
 
+  // Google Ads leaves no `referral` block — a gclid only reaches
+  // WhatsApp if the advertiser's site wrote it into the pre-filled text.
+  // Read only when Meta did not already claim this lead, so a real ad
+  // click always wins over whatever the text happens to contain.
+  const textAcquisition = message.referral
+    ? null
+    : parseAcquisitionFromText(message.text?.body)
+
   // Find or create contact / conversation — shared with the Evolution
   // webhook via src/lib/whatsapp/inbound.ts.
   const contactOutcome = await findOrCreateContact(
@@ -547,6 +556,10 @@ async function processMessage(
       adText: message.referral.body,
       adImageUrl: message.referral.image_url,
       url: message.referral.source_url,
+    } : textAcquisition?.gclid || textAcquisition?.source ? {
+      source: textAcquisition.source ?? null,
+      gclid: textAcquisition.gclid ?? null,
+      campaign: textAcquisition.campaign ?? null,
     } : undefined
   )
   if (!contactOutcome) return

@@ -7,15 +7,17 @@ import {
   groupByCampaign,
   groupByCreative,
   indexByAd,
+  indexIdentity,
   mediaTotals,
   qualificationRate,
   reachedNegotiating,
   reachedQualified,
   roas,
   spendByDay,
+  toAdIdentity,
   toAdMedia,
 } from "./merge";
-import { emptyCounts, type AdFunnel, type AdMedia } from "./types";
+import { emptyCounts, type AdFunnel, type AdIdentity, type AdMedia } from "./types";
 
 // A Windsor row as it actually arrives: flat, string-y, one per day×ad.
 function windsorRow(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -181,6 +183,91 @@ describe("groupByCreative", () => {
     expect(rows[0].name).toBe("Oferta iPhone");
     expect(rows[0].matched).toBe(false);
     expect(rows[0].leads).toBe(2);
+  });
+});
+
+// The wide, id-filtered lookup that names ads the windowed media query
+// missed (paused ads, ads in a sibling ad account).
+function identityMap(...rows: Partial<AdIdentity>[]): Map<string, AdIdentity> {
+  return indexIdentity(
+    rows.map((over) =>
+      toAdIdentity({
+        ad_id: "orphan-1",
+        ad_name: "Video 08 - Iphone 14 128gb",
+        campaign: "[SM] [Vendas] [Whatsapp] [CBO]",
+        campaign_id: "c-real",
+        adset_name: "5KM",
+        account_name: "Victor Hugo Ramos",
+        image_url: null,
+        ...Object.fromEntries(
+          Object.entries(over).map(([k, v]) => [
+            { adId: "ad_id", adName: "ad_name", campaignId: "campaign_id", adsetName: "adset_name", accountName: "account_name", imageUrl: "image_url" }[k] ?? k,
+            v,
+          ]),
+        ),
+      }),
+    ),
+  );
+}
+
+describe("identity recovery for orphan ad ids", () => {
+  it("files orphan leads under their REAL campaign name, flagged as unfunded", () => {
+    // The Smart Especializada situation: the pinned Windsor account
+    // returns no media at all, but the wide lookup knows the ad.
+    const rows = groupByCampaign(
+      [],
+      [funnel({ adId: "orphan-1", leads: 28, qualified: 9, won: 1, revenue: 7400 })],
+      identityMap({}),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("[SM] [Vendas] [Whatsapp] [CBO]");
+    expect(rows[0].subtitle).toContain("Victor Hugo Ramos");
+    expect(rows[0].matched).toBe(false);
+    expect(rows[0].leads).toBe(28);
+    expect(rows[0].revenue).toBe(7400);
+  });
+
+  it("merges an orphan into the same campaign's in-window spend row", () => {
+    // Ad paused mid-window, campaign still live through another ad:
+    // one row, spend from the live ad, leads from both.
+    const media = [toAdMedia(windsorRow({ ad_id: "live-ad", campaign_id: "c-real", spend: 50 }))];
+    const rows = groupByCampaign(
+      media,
+      [
+        funnel({ adId: "live-ad", leads: 3 }),
+        funnel({ adId: "orphan-1", leads: 7 }),
+      ],
+      identityMap({}),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].matched).toBe(true);
+    expect(rows[0].spend).toBe(50);
+    expect(rows[0].leads).toBe(10);
+    // in-window row keeps its own subtitle, not the orphan annotation
+    expect(rows[0].subtitle).not.toContain("Sem investimento");
+  });
+
+  it("names an orphan creative by its Windsor ad name instead of the headline", () => {
+    const rows = groupByCreative(
+      [],
+      [funnel({ adId: "orphan-1", headline: "Converse conosco", leads: 5 })],
+      identityMap({}),
+    );
+    expect(rows[0].name).toBe("Video 08 - Iphone 14 128gb");
+    expect(rows[0].subtitle).toContain("[SM] [Vendas] [Whatsapp] [CBO]");
+    expect(rows[0].matched).toBe(false);
+  });
+
+  it("still buckets ids Windsor has never heard of", () => {
+    const rows = groupByCampaign(
+      [],
+      [funnel({ adId: "boosted-post", leads: 2 })],
+      identityMap({}),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].matched).toBe(false);
+    expect(rows[0].leads).toBe(2);
+    expect(rows[0].name).toBe("Sem correspondência no Windsor");
   });
 });
 

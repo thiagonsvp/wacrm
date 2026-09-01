@@ -6,6 +6,8 @@ import { retrieveKnowledge } from '@/lib/ai/knowledge'
 import { generateReply } from '@/lib/ai/generate'
 import { buildSystemPrompt } from '@/lib/ai/defaults'
 import { latestUserMessage } from '@/lib/ai/query'
+import { logAiUsage } from '@/lib/ai/usage'
+import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { AiError, type ChatMessage } from '@/lib/ai/types'
 
 // Keep the tested transcript bounded, mirroring the live context window.
@@ -84,7 +86,32 @@ export async function POST(request: Request) {
       knowledge,
     })
 
-    const { text, handoff } = await generateReply({ config, systemPrompt, messages })
+    const { text, handoff, usage } = await generateReply({
+      config,
+      systemPrompt,
+      messages,
+    })
+
+    // A test chat costs exactly what a real reply costs, so it belongs in
+    // the usage log — otherwise the dashboard under-reports the key's
+    // spend and can't be reconciled with the provider's invoice. Same
+    // discipline as the draft route: wrapped (constructing the admin
+    // client throws when the service-role key is unset) and
+    // fire-and-forget, so accounting never delays or fails the reply.
+    // `conversationId` is null — a Playground turn belongs to no thread.
+    try {
+      void logAiUsage(supabaseAdmin(), {
+        accountId,
+        conversationId: null,
+        mode: 'playground',
+        provider: config.provider,
+        model: config.model,
+        usage,
+      })
+    } catch (logErr) {
+      console.error('[ai/playground] usage log skipped:', logErr)
+    }
+
     return NextResponse.json({ reply: text, handoff })
   } catch (err) {
     if (err instanceof AiError) {

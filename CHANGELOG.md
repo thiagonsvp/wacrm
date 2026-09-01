@@ -9,6 +9,96 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [Unreleased]
+
+Cuts the AI sales-pipeline classifier's provider spend and makes what it
+does spend visible again.
+
+> **Migration required:** apply `supabase/migrations/057_ai_usage_cached_tokens.sql`
+> (adds `ai_usage_log.cached_prompt_tokens`) and
+> `058_ai_usage_playground_mode.sql` (allows `mode = 'playground'`). The
+> app keeps working without 057 — the usage dashboard just can't show the
+> cached split. Without 058 the Playground's usage row is rejected and
+> only logged as a console warning; nothing else is affected.
+
+### Added
+
+- **Google Ads leads are attributed, alongside Meta.** `acquisition_source`
+  now accepts `Google`, and a new `contacts.acquisition_gclid` stores the
+  Google click id (`gclid`, or the `wbraid` / `gbraid` that replace it on
+  iOS). Meta hands attribution over structurally, in the webhook's
+  `referral` block; Google has no equivalent — a gclid lives in the query
+  string of the advertiser's own site and clicking a `wa.me` link forwards
+  nothing but the pre-filled text. So the id is read from that text, in
+  either shape the site may produce:
+
+  ```
+  [Home-Float][gclid:Cj0KCQ...] Olá! Gostaria de um orçamento.
+  Olá! Vim pelo site ?gclid=Cj0KCQ...&utm_campaign=institucional
+  ```
+
+  Both webhooks (Meta and UAZAPI) read it, and only when no real ad click
+  is present — a Meta `referral` always wins. With nothing recognisable
+  in the text the lead stays organic; no attribution is invented. The
+  contact panel shows the gclid, and the pipeline card shows the Google
+  origin icon.
+
+  > **Migration required:** apply
+  > `supabase/migrations/059_acquisition_google_ads.sql`.
+
+  The two click-id columns stay separate on purpose: `ctwa_clid` is what
+  the Meta Conversions API sends back for attribution, so mixing a gclid
+  into it would push Google leads to Meta as unattributable events.
+
+### Changed
+
+- **Acks no longer buy a classification.** "ok", "obrigado", "bom dia",
+  a thumbs-up — messages the classifier is already told can never move a
+  deal — used to trigger a full provider call each (one call in five on
+  a real deployment). They're now recognised in code and skipped, unless
+  an earlier substantive message is still unread (e.g. one the cooldown
+  skipped), in which case the call happens as before.
+- **Won deals are not re-read.** A conversation whose deal is already
+  `won` skips the provider call outright: `won` is terminal, so the
+  planner discarded the result anyway. `lost` deals are still classified
+  (customers come back).
+- **The classifier's cooldown is 10 minutes, was 3.** A third of all
+  classifications were a re-read of a thread seen minutes earlier. A
+  message landing inside the gap is not lost — the next inbound
+  classifies the whole thread. Tune with `AI_DEAL_PIPELINE_COOLDOWN_MS`.
+- **Cached prompt tokens are logged.** Each usage row now records how
+  much of the prompt the provider served from its cache (OpenAI
+  `cached_tokens` / Anthropic `cache_read_input_tokens`), so "tokens
+  sent" can be reconciled with what the provider actually bills.
+- **The Playground's spend is logged.** Test chats run the same provider
+  call a real reply does, on the same key, but recorded nothing — so the
+  dashboard under-reported the key's spend. They now appear under their
+  own `playground` mode, kept separate from customer-facing work.
+
+### Fixed
+
+- **Campaign leads arriving through UAZAPI lost their origin.** When a
+  lead clicked a Meta ad whose source URL names neither "facebook" nor
+  "instagram" — WhatsApp Status ads (`wa.me/wamo/status/…`) and
+  shortened `fb.me` links — `extractAcquisition` left
+  `acquisition_source` null. The "Tag de origem" automation keys off
+  that column, so those leads were created untagged and disappeared from
+  every by-origin report. An `externalAdReply` only exists because the
+  lead clicked a Meta ad, so the platform now falls back to Facebook,
+  matching the Meta webhook's own behaviour. 31 historical leads were
+  backfilled.
+
+- **AI Agents → Usage was a blank error for any account using the sales
+  pipeline.** The summary route only knew `auto_reply` and `draft`; a
+  `deal_pipeline` row (the only kind most deployments write) threw
+  mid-aggregation and the whole card failed to load. It now reports all
+  three modes, plus the cached-token share.
+
+### Docs
+
+- `.env.local.example` documents `AI_DEAL_PIPELINE_COOLDOWN_MS`,
+  `DEAL_PIPELINE_EXCLUDED_TAGS` and `DEAL_PRODUCT_SCOPE`.
+
 ## [0.8.0] — 2026-07-08
 
 Polishes the AI auto-reply bot: it's now **visible and controllable from

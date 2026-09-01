@@ -186,3 +186,78 @@ describe('generateReply — Anthropic', () => {
     expect(body.messages).toHaveLength(1)
   })
 })
+
+describe('generateReply — cached prompt tokens', () => {
+  it('surfaces OpenAI prompt_tokens_details.cached_tokens', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        okResponse({
+          choices: [{ message: { content: '{"outcome":"none"}' } }],
+          usage: {
+            prompt_tokens: 2000,
+            completion_tokens: 8,
+            total_tokens: 2008,
+            prompt_tokens_details: { cached_tokens: 1536 },
+          },
+        }),
+      ),
+    )
+
+    const res = await generateReply({
+      config: config({ provider: 'openai' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+
+    expect(res.usage).toEqual({
+      promptTokens: 2000,
+      completionTokens: 8,
+      totalTokens: 2008,
+      cachedPromptTokens: 1536,
+    })
+  })
+
+  it('surfaces Anthropic cache_read_input_tokens', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        okResponse({
+          content: [{ type: 'text', text: 'ok' }],
+          usage: { input_tokens: 300, output_tokens: 6, cache_read_input_tokens: 250 },
+        }),
+      ),
+    )
+
+    const res = await generateReply({
+      config: config({ provider: 'anthropic' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+
+    expect(res.usage).toEqual({
+      promptTokens: 300,
+      completionTokens: 6,
+      totalTokens: 306,
+      cachedPromptTokens: 250,
+    })
+  })
+
+  it('leaves the field out when the provider does not report it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        okResponse({
+          choices: [{ message: { content: 'hi' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+        }),
+      ),
+    )
+    const res = await generateReply({
+      config: config({ provider: 'openai' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+    expect(res.usage).not.toHaveProperty('cachedPromptTokens')
+  })
+})

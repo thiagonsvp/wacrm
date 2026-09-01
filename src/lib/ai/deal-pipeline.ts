@@ -2,8 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
+import { aiContextMessageLimit } from './defaults'
 import { generateReply } from './generate'
 import { logAiUsage } from './usage'
+import { isAcknowledgement } from './deal-ack'
 import {
   buildDealSignalPrompt,
   dealProductScope,
@@ -35,7 +37,7 @@ import type { AiConfig } from './types'
 // a slow or failing provider must not disturb the inbound webhook.
 // ------------------------------------------------------------
 
-const DEFAULT_COOLDOWN_MS = 3 * 60_000
+const DEFAULT_COOLDOWN_MS = 10 * 60_000
 
 /**
  * Minimum gap between two classifications of the same conversation.
@@ -44,6 +46,13 @@ const DEFAULT_COOLDOWN_MS = 3 * 60_000
  * Customers routinely send "oi" / "boa tarde" / "tem iPhone 15?" as three
  * messages in ten seconds; without this each one would buy a separate
  * provider call for the same state.
+ *
+ * Was 3 minutes. Measured on real traffic, a third of all classifications
+ * were a re-read of a thread seen minutes earlier, and the board is a
+ * sales overview — nobody watches a card move in real time. What makes
+ * the longer gap safe is that a message landing inside it is not lost:
+ * the next inbound classifies the whole thread, and `hasUnreadSignal`
+ * makes sure even a trailing "ok" triggers that catch-up run.
  */
 export function dealPipelineCooldownMs(): number {
   const raw = Number(process.env.AI_DEAL_PIPELINE_COOLDOWN_MS)
@@ -121,6 +130,53 @@ interface DispatchArgs {
   configOwnerUserId: string
   /** Used as the card title when the model could not be identified. */
   contactName?: string | null
+  /** The text of the inbound that triggered this run. Lets the
+   *  dispatcher skip the provider call for a bare "ok" / "bom dia" when
+   *  nothing substantive is waiting to be read (see `deal-ack.ts`). */
+  inboundText?: string | null
+}
+
+/**
+ * Is there a customer message the classifier has not read yet that could
+ * actually move the deal?
+ *
+ * Looks at customer text newer than `ai_deal_analyzed_at` — everything
+ * since the last classification, including inbounds the cooldown skipped
+ * — and asks whether any of it is more than an acknowledgement. Null
+ * `ai_deal_analyzed_at` means the thread was never classified, so its
+ * whole (bounded) history counts as unread.
+ *
+ * Fails open: a lookup error answers "yes" so a DB hiccup costs one
+ * provider call rather than a silently unclassified lead.
+ */
+export async function hasUnreadSignal(
+  db: SupabaseClient,
+  conversationId: string,
+): Promise<boolean> {
+  const { data: conv, error: convErr } = await db
+    .from('conversations')
+    .select('ai_deal_analyzed_at')
+    .eq('id', conversationId)
+    .maybeSingle()
+  if (convErr || !conv) return true
+
+  let query = db
+    .from('messages')
+    .select('content_text')
+    .eq('conversation_id', conversationId)
+    .eq('sender_type', 'customer')
+    .eq('content_type', 'text')
+    .order('created_at', { ascending: false })
+    .limit(aiContextMessageLimit())
+  const analyzedAt = (conv as { ai_deal_analyzed_at: string | null }).ai_deal_analyzed_at
+  if (analyzedAt) query = query.gt('created_at', analyzedAt)
+
+  const { data, error } = await query
+  if (error) return true
+
+  return ((data ?? []) as { content_text: string | null }[]).some(
+    (m) => !!m.content_text?.trim() && !isAcknowledgement(m.content_text),
+  )
 }
 
 /**
@@ -364,6 +420,18 @@ export async function runDealPipelineForConversation(
     return { signal: null, plan: null, applied: null }
   }
 
+  // A recorded sale is final (transition.ts, invariant 2): whatever the
+  // model reads, the planner answers "none". Find that out from the
+  // card, not from a provider call.
+  const current = await loadCurrentDeal(db, { accountId, conversationId, contactId })
+  if (current?.status === 'won') {
+    return {
+      signal: null,
+      plan: { action: 'none', reason: 'deal already won (terminal)' },
+      applied: null,
+    }
+  }
+
   const messages = await buildConversationContext(db, conversationId)
   if (!messages.some((m) => m.role === 'user')) {
     return { signal: null, plan: null, applied: null }
@@ -412,7 +480,6 @@ export async function runDealPipelineForConversation(
     return { signal: null, plan: null, applied: null }
   }
 
-  const current = await loadCurrentDeal(db, { accountId, conversationId, contactId })
   const plan = planTransition({
     signal,
     current,
@@ -459,10 +526,11 @@ export async function runDealPipelineForConversation(
  *
  * Eligibility gates (any → silent no-op):
  *   - AI off for the account, or the deal pipeline not opted in
+ *   - the inbound is a bare ack/greeting and nothing unread could move the deal
  *   - this conversation was classified within the cooldown
  *   - the account is over its classification rate limit
  *   - the board has no Lead Qualificado / Negociação / Finalizado stages
- *   - the thread has no customer message to read
+ *   - the thread has no customer message to read, or its deal is already won
  *   - the model returned nothing usable
  */
 export async function dispatchInboundToDealPipeline(
@@ -475,6 +543,18 @@ export async function dispatchInboundToDealPipeline(
 
     const config = await loadAiConfig(db, accountId)
     if (!config || !config.dealPipelineEnabled) return
+
+    // "ok" / "obrigado" / "bom dia" / 👍 cannot change the state of a sale
+    // (the classifier prompt says as much), so they only earn a provider
+    // call when an earlier, substantive message is still waiting to be
+    // read — e.g. one the cooldown skipped. Checked before the claim so
+    // an ack never consumes the slot either.
+    if (
+      isAcknowledgement(args.inboundText) &&
+      !(await hasUnreadSignal(db, conversationId))
+    ) {
+      return
+    }
 
     // Claim before any expensive work so concurrent inbounds collapse to
     // one call for this thread.

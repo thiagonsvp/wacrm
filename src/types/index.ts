@@ -108,13 +108,17 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
-  /** Platform that originated a Meta click-to-WhatsApp ad. */
-  acquisition_source?: 'Facebook' | 'Instagram' | null;
+  /** Platform that originated the lead: a Meta click-to-WhatsApp ad
+   *  (Facebook / Instagram) or a Google Ads click. Null = organic. */
+  acquisition_source?: 'Facebook' | 'Instagram' | 'Google' | null;
   acquisition_source_id?: string | null;
   acquisition_campaign?: string | null;
   acquisition_ad_text?: string | null;
   acquisition_ad_image_url?: string | null;
   acquisition_url?: string | null;
+  /** Google Ads click id (gclid / wbraid / gbraid). Meta leads carry
+   *  `acquisition_ctwa_clid` instead; the two never coexist. */
+  acquisition_gclid?: string | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the

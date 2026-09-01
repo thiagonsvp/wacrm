@@ -31,6 +31,7 @@ type LeadSource = "facebook" | "instagram" | "google";
 function getLeadSource(contact: Deal["contact"]): LeadSource | null {
   if (contact?.acquisition_source === "Facebook") return "facebook";
   if (contact?.acquisition_source === "Instagram") return "instagram";
+  if (contact?.acquisition_source === "Google") return "google";
   const names = ((contact?.tags ?? []) as Tag[]).map((tag) =>
     tag.name.trim().toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
   );

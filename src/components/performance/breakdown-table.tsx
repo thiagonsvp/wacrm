@@ -296,7 +296,7 @@ export function BreakdownTable({
                           <AlertTriangle
                             className="h-3.5 w-3.5 shrink-0"
                             style={{ color: 'var(--viz-warning)' }}
-                            aria-label="Sem dados de mídia no Windsor.ai para este período"
+                            aria-label="Sem investimento no período selecionado — anúncio pausado, de outra conta ou desconhecido no Windsor.ai"
                           />
                         )}
                       </div>

@@ -147,6 +147,33 @@ export interface AdMedia {
   clicks: number
 }
 
+/**
+ * Identity of an ad the windowed media query did NOT return, recovered
+ * by a second, wider Windsor lookup (`/api/windsor/ad-identity`).
+ *
+ * Three real situations produce leads whose ad id has no media row:
+ * the ad lives in a DIFFERENT ad account than the one pinned in
+ * Configurações (the whole Smart Especializada dataset — pinned to
+ * "Smart 2026", ads actually in "Victor Hugo Ramos"); the ad was
+ * paused before the selected window, so the date-filtered query never
+ * sees it; or the ad is a boosted post Windsor doesn't track at all.
+ * The first two are recoverable: an unfiltered, year-wide, id-filtered
+ * query returns the ad's names, and the lead can then be grouped under
+ * its REAL campaign instead of a "no match" bucket. Spend from that
+ * wide query is deliberately NOT carried — money from outside the
+ * window (or another client's account) must never enter the totals.
+ */
+export interface AdIdentity {
+  adId: string
+  campaign: string
+  campaignId: string
+  adName: string
+  adsetName: string
+  /** Which Meta ad account the ad actually lives in. */
+  accountName: string
+  imageUrl: string | null
+}
+
 /** A campaign or creative row after the media × CRM join. */
 export interface PerformanceRow extends FunnelCounts {
   key: string

@@ -13,7 +13,11 @@ const ANTHROPIC_VERSION = '2023-06-01'
 
 interface AnthropicResponse {
   content?: { type?: string; text?: string }[]
-  usage?: { input_tokens?: number; output_tokens?: number }
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    cache_read_input_tokens?: number
+  }
 }
 
 /**
@@ -82,6 +86,7 @@ export async function generateAnthropic(args: ProviderArgs): Promise<ProviderRes
   const usage = normalizeUsage({
     prompt: data?.usage?.input_tokens,
     completion: data?.usage?.output_tokens,
+    cached: data?.usage?.cache_read_input_tokens,
   })
   return { text, usage }
 }

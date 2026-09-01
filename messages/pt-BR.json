@@ -1255,9 +1255,9 @@
       "title": "Membros da equipe",
       "description": "Pessoas com acesso a esta conta. Os perfis controlam o que cada colega pode fazer.",
       "inviteMember": "Convidar membro",
-      "online": "online",
+      "online": "conectados",
       "away": "ausente",
-      "offline": "offline",
+      "offline": "desconectados",
       "memberCount": "{count} {count, plural, =1 {membro} other {membros}}",
       "you": "Você",
       "unnamed": "Sem nome",
@@ -1317,7 +1317,7 @@
       "tagsDesc": "Rótulos coloridos para agrupar e filtrar contatos.",
       "fieldsTitle": "Campos personalizados",
       "fieldsDesc": "Campos extras de contato (ex.: CEP, origem do lead). Eles aparecem em todos os contatos e na ação de automação \"Atualizar campo do contato\".",
-      "adminRole": "Admin",
+      "adminRole": "Administrador",
       "failedToLoadTags": "Falha ao carregar tags",
       "nameRequired": "O nome da tag é obrigatório",
       "notAuthenticated": "Não autenticado",
@@ -1541,7 +1541,7 @@
     },
     "groups": {
       "account": "Conta",
-      "workspace": "Workspace"
+      "workspace": "Espaço de trabalho"
     },
     "profile": {
       "title": "Seu perfil",

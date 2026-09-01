@@ -145,7 +145,7 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
   const media = message.media_url;
   const preview = previewOpen && media ? (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewOpen(false)}>
-      <button type="button" aria-label="Close preview" className="absolute right-4 top-4 text-white" onClick={() => setPreviewOpen(false)}>
+      <button type="button" aria-label="Fechar pré-visualização" className="absolute right-4 top-4 text-white" onClick={() => setPreviewOpen(false)}>
         <X className="h-6 w-6" />
       </button>
       {message.content_type === "image" ? (

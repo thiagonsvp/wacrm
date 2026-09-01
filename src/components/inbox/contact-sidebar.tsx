@@ -232,6 +232,15 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 Source ID: <span className="font-mono">{contact.acquisition_source_id}</span>
               </div>
             )}
+            {contact.acquisition_gclid && (
+              <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                {/* Google's click id. Wraps because it is long and the
+                    operator needs to copy it whole to reconcile a sale
+                    in Google Ads. */}
+                gclid:{' '}
+                <span className="break-all font-mono">{contact.acquisition_gclid}</span>
+              </div>
+            )}
             {contact.acquisition_url && (
               <a href={contact.acquisition_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-primary hover:underline">
                 <ExternalLink className="h-3.5 w-3.5" />
