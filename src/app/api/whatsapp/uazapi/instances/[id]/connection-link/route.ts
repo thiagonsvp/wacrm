@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { publicBaseUrl } from '@/lib/public-url';
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -10,7 +11,6 @@ import {
   connectionLinkExpiresAt,
   connectionLinkUrl,
   generateConnectionLinkToken,
-  publicBaseUrl,
 } from '@/lib/whatsapp/connection-links';
 import {
   getUazapiServer,

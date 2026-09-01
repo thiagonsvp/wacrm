@@ -7,7 +7,6 @@ import {
   generateConnectionLinkToken,
   hashConnectionLinkToken,
   isConnectionLinkToken,
-  publicBaseUrl,
 } from './connection-links';
 
 describe('temporary WhatsApp connection links', () => {
@@ -32,23 +31,5 @@ describe('temporary WhatsApp connection links', () => {
     );
     expect(isConnectionLinkToken(token)).toBe(true);
     expect(isConnectionLinkToken('short')).toBe(false);
-  });
-
-  it('prefers the configured public URL and otherwise honors proxy headers', () => {
-    const previous = process.env.NEXT_PUBLIC_SITE_URL;
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://canonical.example/';
-    expect(publicBaseUrl(new Request('http://internal.local/path'))).toBe(
-      'https://canonical.example'
-    );
-    if (previous === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = previous;
-
-    const request = new Request('http://internal.local/path', {
-      headers: {
-        'x-forwarded-host': 'crm.example',
-        'x-forwarded-proto': 'https',
-      },
-    });
-    expect(publicBaseUrl(request)).toBe('https://crm.example');
   });
 });

@@ -24,23 +24,6 @@ export function connectionLinkUrl(token: string, baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/connect-whatsapp/${token}`;
 }
 
-export function publicBaseUrl(request: Request): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
-
-  const forwardedHost = request.headers
-    .get('x-forwarded-host')
-    ?.split(',')[0]
-    ?.trim();
-  const forwardedProto = request.headers
-    .get('x-forwarded-proto')
-    ?.split(',')[0]
-    ?.trim();
-  if (forwardedHost) return `${forwardedProto || 'https'}://${forwardedHost}`;
-
-  return new URL(request.url).origin;
-}
-
 export function isConnectionLinkToken(value: string): boolean {
   return /^[A-Za-z0-9_-]{43}$/.test(value);
 }
