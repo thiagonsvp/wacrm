@@ -27,6 +27,17 @@ function baseHeaders(token: string): Record<string, string> {
   return { token, 'Content-Type': 'application/json' }
 }
 
+/**
+ * Header do token de ADMINISTRADOR do servidor.
+ *
+ * Diferente de `baseHeaders`, que manda o token por-instância em
+ * `token`. A uazapiGO v2.1.1 responde 401 ao admin token enviado como
+ * `token` — verificado contra servidor real em 2026-08-31.
+ */
+function adminHeaders(adminToken: string): Record<string, string> {
+  return { admintoken: adminToken, 'Content-Type': 'application/json' }
+}
+
 function trimBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '')
 }
@@ -35,32 +46,118 @@ function trimBaseUrl(baseUrl: string): string {
 // Instance lifecycle
 // ============================================================
 
-export interface InitInstanceArgs {
+export interface CreateInstanceArgs {
   baseUrl: string
-  /** Admin/global token used only to create the instance. */
+  /** Admin token do servidor. Só ele pode criar instâncias. */
   adminToken: string
   name: string
+  /** Marca de posse: o `account_id` da empresa dona. */
+  adminField01?: string
 }
 
-export interface InitInstanceResult {
-  /** Per-instance token to use for every subsequent call. */
+export interface CreateInstanceResult {
+  id: string
+  /** Token por-instância, usado em todas as chamadas seguintes. */
   token: string
 }
 
-export async function initInstance(args: InitInstanceArgs): Promise<InitInstanceResult> {
-  const { baseUrl, adminToken, name } = args
-  const response = await fetch(`${trimBaseUrl(baseUrl)}/instance/init`, {
+export async function createInstance(
+  args: CreateInstanceArgs,
+): Promise<CreateInstanceResult> {
+  const { baseUrl, adminToken, name, adminField01 } = args
+  const body: Record<string, unknown> = { name }
+  if (adminField01) body.adminField01 = adminField01
+
+  const response = await fetch(`${trimBaseUrl(baseUrl)}/instance/create`, {
     method: 'POST',
-    headers: baseHeaders(adminToken),
-    body: JSON.stringify({ name }),
+    headers: adminHeaders(adminToken),
+    body: JSON.stringify(body),
   })
   if (!response.ok) {
     await throwUazapiError(response, `UAZAPI error: ${response.status}`)
   }
   const data = await response.json()
-  const token = data?.instance?.token
+  // A resposta traz o token no topo E dentro de `instance`. Ler os dois
+  // evita depender de qual das duas formas o servidor usa na versão
+  // instalada.
+  const token: string | undefined = data?.token ?? data?.instance?.token
+  const id: string | undefined = data?.instance?.id ?? data?.id
   if (!token) throw new Error('UAZAPI did not return an instance token.')
-  return { token }
+  if (!id) throw new Error('UAZAPI did not return an instance id.')
+  return { id, token }
+}
+
+/**
+ * Uma instância como o servidor a descreve. `token` está presente aqui
+ * porque `/instance/all` o devolve — mas ele NUNCA pode ser serializado
+ * para o browser. Use `toPublicInstance` de `uazapi-ownership.ts`.
+ */
+export interface UazapiInstance {
+  id: string
+  token: string
+  name: string
+  status: string
+  owner?: string
+  profileName?: string
+  profilePicUrl?: string
+  adminField01?: string
+  adminField02?: string
+  created?: string
+}
+
+export async function listInstances(args: {
+  baseUrl: string
+  adminToken: string
+}): Promise<UazapiInstance[]> {
+  const { baseUrl, adminToken } = args
+  const response = await fetch(`${trimBaseUrl(baseUrl)}/instance/all`, {
+    headers: adminHeaders(adminToken),
+  })
+  if (!response.ok) {
+    await throwUazapiError(response, `UAZAPI error: ${response.status}`)
+  }
+  const data = await response.json()
+  return Array.isArray(data) ? (data as UazapiInstance[]) : []
+}
+
+export async function stampAdminFields(args: {
+  baseUrl: string
+  adminToken: string
+  id: string
+  adminField01: string
+}): Promise<void> {
+  const { baseUrl, adminToken, id, adminField01 } = args
+  const response = await fetch(
+    `${trimBaseUrl(baseUrl)}/instance/updateAdminFields`,
+    {
+      method: 'POST',
+      headers: adminHeaders(adminToken),
+      body: JSON.stringify({ id, adminField01 }),
+    },
+  )
+  if (!response.ok) {
+    await throwUazapiError(response, `UAZAPI error: ${response.status}`)
+  }
+}
+
+export async function renameInstance(args: {
+  baseUrl: string
+  /** Token da instância — renomear não é operação de admin. */
+  token: string
+  name: string
+}): Promise<void> {
+  const { baseUrl, token, name } = args
+  const response = await fetch(
+    `${trimBaseUrl(baseUrl)}/instance/updateInstanceName`,
+    {
+      method: 'POST',
+      headers: baseHeaders(token),
+      body: JSON.stringify({ name }),
+    },
+  )
+  if (!response.ok) {
+    await throwUazapiError(response, `UAZAPI error: ${response.status}`)
+  }
 }
 
 export interface UazapiInstanceArgs {
@@ -161,16 +258,22 @@ export async function deleteInstance(args: UazapiInstanceArgs): Promise<void> {
 
 export interface SetWebhookArgs extends UazapiInstanceArgs {
   webhookUrl: string
+  /**
+   * `false` desliga a entrega sem apagar a configuração. O bind usa
+   * isso na instância que deixa de ser a vinculada, para que duas
+   * instâncias nunca postem na mesma URL de webhook.
+   */
+  enabled?: boolean
 }
 
 export async function setWebhook(args: SetWebhookArgs): Promise<void> {
-  const { baseUrl, token, webhookUrl } = args
+  const { baseUrl, token, webhookUrl, enabled = true } = args
   const response = await fetch(`${trimBaseUrl(baseUrl)}/webhook`, {
     method: 'POST',
     headers: baseHeaders(token),
     body: JSON.stringify({
       url: webhookUrl,
-      enabled: true,
+      enabled,
       events: ['messages', 'messages_update'],
       excludeMessages: ['wasSentByApi'],
     }),

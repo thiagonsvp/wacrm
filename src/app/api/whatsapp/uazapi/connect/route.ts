@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { decrypt, encrypt } from '@/lib/whatsapp/encryption'
-import { initInstance, connectInstance, setWebhook } from '@/lib/whatsapp/providers/uazapi'
+import { createInstance, connectInstance, setWebhook } from '@/lib/whatsapp/providers/uazapi'
 
 async function resolveAccountId(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       // Instance likely doesn't exist yet under this token — treat the
       // stored value as an admin/master token and initialize.
       try {
-        const created = await initInstance({ baseUrl, adminToken: token, name: instanceName })
+        const created = await createInstance({ baseUrl, adminToken: token, name: instanceName })
         const encryptedInstanceToken = encrypt(created.token)
         await supabase
           .from('whatsapp_config')
