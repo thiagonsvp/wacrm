@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
+import { useAuth } from "@/hooks/use-auth"
 import {
   ArrowLeft,
   ChevronDown,
@@ -238,6 +239,7 @@ function useResources(): AutomationResources {
 }
 
 function ResourcesProvider({ children }: { children: ReactNode }) {
+  const { accountId } = useAuth()
   const [tags, setTags] = useState<TagRecord[]>([])
   const [members, setMembers] = useState<AccountMember[]>([])
   const [templates, setTemplates] = useState<MessageTemplate[]>([])
@@ -263,7 +265,7 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
             .eq("status", "APPROVED")
             .order("name"),
           supabase.from("custom_fields").select("*").order("field_name"),
-          supabase.from("pipelines").select("id, name").order("name"),
+          supabase.from("pipelines").select("id, name").eq("account_id", accountId).order("name"),
           supabase
             .from("pipeline_stages")
             .select("id, name, pipeline_id, position")
@@ -294,7 +296,7 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [accountId])
 
   return (
     <ResourcesContext.Provider

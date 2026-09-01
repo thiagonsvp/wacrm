@@ -58,6 +58,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         .from("deals")
         .select("*, stage:pipeline_stages(*)")
         .eq("contact_id", contact.id)
+        .eq("account_id", accountId)
         .order("created_at", { ascending: false }),
       supabase
         .from("contact_notes")
@@ -83,7 +84,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
       setTags(mapped);
     }
     if (availableTagsRes.data) setAvailableTags(availableTagsRes.data as Tag[]);
-  }, [contact]);
+  }, [contact, accountId]);
 
   const handleAddTag = useCallback(async (tag: Tag) => {
     if (!contact) return;
@@ -98,7 +99,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     setAddingDeal(true);
     const supabase = createClient();
     const [{ data: pipeline }, { data: userData }] = await Promise.all([
-      supabase.from("pipelines").select("id").order("created_at").limit(1).maybeSingle(),
+      supabase.from("pipelines").select("id").eq("account_id", accountId).order("created_at").limit(1).maybeSingle(),
       supabase.auth.getUser(),
     ]);
     if (!pipeline || !userData.user) { setAddingDeal(false); return; }

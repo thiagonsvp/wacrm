@@ -74,16 +74,18 @@ export default function PipelinesPage() {
   const seedAttempted = useRef(false);
 
   const loadPipelines = useCallback(async () => {
+    if (!accountId) return [];
     const { data, error } = await supabase
       .from("pipelines")
       .select("*")
+      .eq("account_id", accountId)
       .order("created_at");
     if (error) {
       console.error("Failed to load pipelines:", error.message);
       return [];
     }
     return data ?? [];
-  }, [supabase]);
+  }, [supabase, accountId]);
 
   const loadStages = useCallback(
     async (pipelineId: string) => {
@@ -99,10 +101,12 @@ export default function PipelinesPage() {
 
   const loadDeals = useCallback(
     async (pipelineId: string) => {
+      if (!accountId) return [] as Deal[];
       const { data } = await supabase
         .from("deals")
         .select("*, contact:contacts(*, contact_tags(tags(*))), assignee:profiles!deals_assigned_to_fkey(*)")
         .eq("pipeline_id", pipelineId)
+        .eq("account_id", accountId)
         .order("created_at", { ascending: false });
     // Flatten the embedded join so pipeline cards can use the same Contact
     // shape as the inbox and contacts views.
@@ -124,7 +128,7 @@ export default function PipelinesPage() {
       };
     }) as Deal[];
     },
-    [supabase],
+    [supabase, accountId],
   );
 
   const seedDefaultPipeline = useCallback(async (): Promise<Pipeline | null> => {

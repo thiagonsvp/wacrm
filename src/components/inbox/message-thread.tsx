@@ -870,6 +870,7 @@ export function MessageThread({
       const { data: pipeline, error: pipelineError } = await supabase
         .from("pipelines")
         .select("*")
+        .eq("account_id", accountId)
         .order("created_at")
         .limit(1)
         .maybeSingle();
@@ -902,7 +903,7 @@ export function MessageThread({
         existingDeal: (existingDeal as Deal | null) ?? null,
       };
     },
-    [],
+    [accountId],
   );
 
   const handleQualifyLead = useCallback(async () => {
