@@ -549,12 +549,28 @@ async function saveUazapiConfig(
     //     to one instance means whichever one loses the race gets another
     //     company's messages — the same class of bug as issue #136 on the
     //     Meta side, which this route already guards against.
-    const { data: claimed } = await supabaseAdmin()
+    // O erro NÃO pode ser descartado. Com o painel de instâncias, duas
+    // linhas com o mesmo nome de instância passam a ser alcançáveis, e
+    // aí `maybeSingle()` devolve PGRST116 com data: null — a guarda
+    // falharia aberta exatamente no caso para o qual foi escrita.
+    const { data: claimed, error: claimedError } = await supabaseAdmin()
       .from('whatsapp_config')
       .select('account_id, accounts(name)')
       .eq('uazapi_instance_name', resolvedInstance)
       .neq('account_id', accountId)
       .maybeSingle()
+
+    if (claimedError) {
+      console.error('[whatsapp/config] claim check failed:', claimedError)
+      return NextResponse.json(
+        {
+          error:
+            'Não foi possível verificar se esta instância já pertence a outra empresa. ' +
+            'Tente novamente.',
+        },
+        { status: 503 }
+      )
+    }
 
     if (claimed) {
       const owner = (claimed as { accounts?: { name?: string } }).accounts?.name
@@ -573,11 +589,23 @@ async function saveUazapiConfig(
     // (2) This account is already connected to a DIFFERENT instance.
     //     Silently replacing it is how the 2026-08-06 incident happened,
     //     so require the caller to say so explicitly.
-    const { data: current } = await supabase
+    const { data: current, error: currentError } = await supabase
       .from('whatsapp_config')
       .select('uazapi_instance_name, status')
       .eq('account_id', accountId)
       .maybeSingle()
+
+    if (currentError) {
+      console.error('[whatsapp/config] current config check failed:', currentError)
+      return NextResponse.json(
+        {
+          error:
+            'Não foi possível verificar a configuração atual desta empresa. ' +
+            'Tente novamente.',
+        },
+        { status: 503 }
+      )
+    }
 
     if (
       current?.uazapi_instance_name &&

@@ -276,6 +276,18 @@ export async function sendMessageToConversation(
     );
   }
 
+  // O painel de instâncias pode deixar a linha com provider 'uazapi' e
+  // token nulo (instância vinculada deletada). `decrypt(null)` estoura
+  // um TypeError e vira 500; o chamador precisa do mesmo 400 que
+  // qualquer outra config incompleta produz.
+  if (isUazapi && !config.uazapi_token) {
+    throw new SendMessageError(
+      'whatsapp_not_configured',
+      'WhatsApp not configured. Please set up your WhatsApp integration first.',
+      400
+    );
+  }
+
   const accessToken = isMeta ? decrypt(config.access_token) : '';
   const uazapiToken = isUazapi ? decrypt(config.uazapi_token) : '';
 
