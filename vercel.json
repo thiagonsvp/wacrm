@@ -2,18 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "env": {
     "NEXT_PUBLIC_SITE_URL": "https://crm.natividadedigital.com.br"
-  },
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [
-        {
-          "type": "host",
-          "value": "wacrm-eight-pi.vercel.app"
-        }
-      ],
-      "destination": "https://crm.natividadedigital.com.br/:path*",
-      "permanent": true
-    }
-  ]
+  }
 }
