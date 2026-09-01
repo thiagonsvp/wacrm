@@ -494,11 +494,9 @@ export async function POST(request: Request) {
 
 /**
  * Save (create or update) a UAZAPI config for the account.
- * `uazapi_token` is whatever the user pastes in — either the server's
- * admin/master token (first save, instance not created yet) or an
- * existing per-instance token. /api/whatsapp/uazapi/connect decides
- * which one it has and, on init, overwrites this field with the
- * instance-specific token UAZAPI returns.
+ * Legacy compatibility path for clients that still save UAZAPI
+ * credentials directly. The instance panel uses the scoped
+ * `/api/whatsapp/uazapi/instances` routes instead.
  */
 async function saveUazapiConfig(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -690,8 +688,7 @@ async function saveUazapiConfig(
     }
   }
 
-  // Instance creation + connect happen in /api/whatsapp/uazapi/connect,
-  // which the UI calls right after this save succeeds.
+  // New clients create, bind and connect through the instance panel.
   return NextResponse.json({ success: true, saved: true, provider: 'uazapi' })
 }
 
