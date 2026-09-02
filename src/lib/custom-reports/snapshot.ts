@@ -38,7 +38,7 @@ export async function buildCustomReportSnapshot(
         .limit(MAX_ROWS),
       db
         .from('conversations')
-        .select('id,status,contact_id,assigned_to,created_at,updated_at')
+        .select('id,status,contact_id,created_at,updated_at')
         .eq('account_id', accountId)
         .order('updated_at', { ascending: false })
         .limit(MAX_ROWS),
