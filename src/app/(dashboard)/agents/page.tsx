@@ -45,8 +45,8 @@ export default function AgentsPage() {
         </h1>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Configure seu agente de IA com sua própria chave e teste-o no ambiente
-        de testes antes que ele responda aos clientes na caixa de entrada.
+        Configure o comportamento do agente desta empresa e teste-o antes que
+        ele responda aos clientes na caixa de entrada.
       </p>
 
       {decided && (
