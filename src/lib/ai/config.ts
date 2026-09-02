@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import type { AiConfig } from './types'
+import { loadGlobalAiCredentials } from './global-config'
 
 interface AiConfigRow {
   provider: 'openai' | 'anthropic'
@@ -167,16 +168,16 @@ export async function loadAiConfig(
   // The Playground passes requireActive:false so an admin can test the
   // agent before flipping the master switch on.
   if (requireActive && !row.is_active) return null
-  // Defensive: the column is NOT NULL, but a partial write / manual DB
-  // edit could leave it empty. Treat a missing key as "not configured"
-  // rather than letting decrypt() throw on null.
-  if (!row.api_key) return null
+  // Credentials are deployment-wide. Keep the account columns as a legacy
+  // fallback during rollout so an unapplied migration cannot stop agents.
+  const globalCredentials = await loadGlobalAiCredentials()
+  if (!globalCredentials && !row.api_key) return null
 
   // The embeddings key is optional and independent of the chat key —
   // a corrupt/undecryptable one should downgrade to lexical KB, not
   // take down draft/auto-reply, so decrypt failures are swallowed here.
-  let embeddingsApiKey: string | null = null
-  if (row.embeddings_api_key) {
+  let embeddingsApiKey: string | null = globalCredentials?.apiKey ?? null
+  if (!globalCredentials && row.embeddings_api_key) {
     try {
       embeddingsApiKey = decrypt(row.embeddings_api_key)
     } catch {
@@ -190,9 +191,9 @@ export async function loadAiConfig(
   }
 
   return {
-    provider: row.provider,
-    model: row.model,
-    apiKey: decrypt(row.api_key),
+    provider: globalCredentials?.provider ?? row.provider,
+    model: globalCredentials?.model ?? row.model,
+    apiKey: globalCredentials?.apiKey ?? decrypt(row.api_key),
     systemPrompt: row.system_prompt,
     isActive: row.is_active,
     autoReplyEnabled: row.auto_reply_enabled,
@@ -226,6 +227,9 @@ export async function loadEmbeddingsKey(
   db: SupabaseClient,
   accountId: string,
 ): Promise<{ key: string | null; corrupt: boolean }> {
+  const globalCredentials = await loadGlobalAiCredentials()
+  if (globalCredentials) return { key: globalCredentials.apiKey, corrupt: false }
+
   const { data, error } = await db
     .from('ai_configs')
     .select('embeddings_api_key')

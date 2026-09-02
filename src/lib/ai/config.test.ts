@@ -5,6 +5,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 vi.mock('@/lib/whatsapp/encryption', () => ({
   decrypt: (v: string) => `plain:${v}`,
 }))
+vi.mock('./global-config', () => ({
+  loadGlobalAiCredentials: () => Promise.resolve(null),
+}))
 
 import {
   isUndefinedColumnError,
