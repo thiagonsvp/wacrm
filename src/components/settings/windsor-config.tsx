@@ -145,9 +145,15 @@ function SourceAccount({
             disabled={disabled || !accounts.length}
             className="border-input mt-1 h-9 w-full rounded-md border bg-transparent px-3 text-sm"
           >
-            <option value="">Não exibir esta fonte</option>
+            <option value="" className="bg-white text-slate-950">
+              Não exibir esta fonte
+            </option>
             {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
+              <option
+                key={account.id}
+                value={account.id}
+                className="bg-white text-slate-950"
+              >
                 {account.name || account.id} ({account.id})
               </option>
             ))}
