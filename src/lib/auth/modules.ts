@@ -16,23 +16,24 @@
 // still reachable by typing the URL or calling the API directly.
 // ============================================================
 
-import { type AccountRole, roleRank } from "./roles";
+import { type AccountRole, roleRank } from './roles';
 
 /** Every gated area of the product. Mirrors the sidebar and settings rail. */
 export const MODULES = [
-  "dashboard",
-  "performance",
-  "inbox",
-  "notifications",
-  "contacts",
-  "pipelines",
-  "broadcasts",
-  "automations",
-  "flows",
-  "agents",
-  "settings",
+  'dashboard',
+  'performance',
+  'custom-reports',
+  'inbox',
+  'notifications',
+  'contacts',
+  'pipelines',
+  'broadcasts',
+  'automations',
+  'flows',
+  'agents',
+  'settings',
   // Inside Settings, gated separately because it releases ad spend.
-  "meta-approvals",
+  'meta-approvals',
 ] as const;
 
 export type Module = (typeof MODULES)[number];
@@ -47,24 +48,25 @@ export type Module = (typeof MODULES)[number];
  */
 const MODULE_FLOOR: Record<Module, AccountRole> = {
   // --- Everyone who works the floor ---
-  dashboard: "viewer",
-  performance: "viewer",
-  inbox: "viewer",
-  notifications: "viewer",
-  contacts: "viewer",
-  pipelines: "viewer",
+  dashboard: 'viewer',
+  performance: 'viewer',
+  'custom-reports': 'agent',
+  inbox: 'viewer',
+  notifications: 'viewer',
+  contacts: 'viewer',
+  pipelines: 'viewer',
 
   // --- Manager and up: reaches customers in bulk, or releases money ---
   // A broadcast goes to hundreds of people at once and cannot be recalled.
-  broadcasts: "manager",
+  broadcasts: 'manager',
   // Approving a conversion tells Meta to spend against that outcome.
-  "meta-approvals": "manager",
+  'meta-approvals': 'manager',
 
   // --- Admin and up: changes how the system behaves for everyone ---
-  automations: "admin",
-  flows: "admin",
-  agents: "admin",
-  settings: "admin",
+  automations: 'admin',
+  flows: 'admin',
+  agents: 'admin',
+  settings: 'admin',
 };
 
 /** True when this role may open the module. */
@@ -91,7 +93,7 @@ export function moduleFloor(module: Module): AccountRole {
  * choosing the wrong one.
  */
 export const ASSIGNABLE_ROLES: readonly AccountRole[] = [
-  "admin",
-  "manager",
-  "agent",
+  'admin',
+  'manager',
+  'agent',
 ] as const;

@@ -19,6 +19,7 @@
     "title": "Natividade CRM",
     "dashboard": "Painel",
     "performance": "Performance de anúncios",
+    "customReports": "Relatório Personalizado",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
     "contacts": "Contatos",
@@ -45,6 +46,8 @@
   },
   "Header": {
     "dashboard": "Painel",
+    "performance": "Performance de anúncios",
+    "customReports": "Relatório Personalizado",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
     "contacts": "Contatos",

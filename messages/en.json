@@ -18,6 +18,8 @@
   "Sidebar": {
     "title": "Natividade CRM",
     "dashboard": "Dashboard",
+    "performance": "Ad performance",
+    "customReports": "Custom Report",
     "inbox": "Inbox",
     "notifications": "Notifications",
     "contacts": "Contacts",
@@ -44,6 +46,8 @@
   },
   "Header": {
     "dashboard": "Dashboard",
+    "performance": "Ad performance",
+    "customReports": "Custom Report",
     "inbox": "Inbox",
     "notifications": "Notifications",
     "contacts": "Contacts",

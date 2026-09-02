@@ -88,6 +88,7 @@ export async function middleware(request: NextRequest) {
   const protectedPaths = [
     '/dashboard',
     '/performance',
+    '/custom-reports',
     '/inbox',
     '/contacts',
     '/pipelines',
