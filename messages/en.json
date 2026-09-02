@@ -1590,7 +1590,11 @@
       "api": "API keys",
       "setup": "Setup guide",
       "direct": "Instagram & Messenger",
-      "meta-ads": "Meta Ads"
+      "meta-ads": "Meta Ads",
+      "permissions": "Roles and permissions",
+      "windsor": "Dashboard settings",
+      "windsor-global": "Global integration",
+      "meta-approvals": "Meta conversions"
     },
     "groups": {
       "account": "Account",

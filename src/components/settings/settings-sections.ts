@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   BarChart3,
+  Globe2,
   ShieldCheck,
   Building2,
   FileText,
@@ -34,6 +35,7 @@ export const SETTINGS_SECTIONS = [
   'direct',
   'meta-ads',
   'windsor',
+  'windsor-global',
   'meta-approvals',
   'api',
   'company',
@@ -51,6 +53,7 @@ export interface SectionMeta {
   label: string;
   icon: LucideIcon;
   group: 'account' | 'conversation' | 'settings' | 'admin';
+  superAdminOnly?: boolean;
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
@@ -68,6 +71,13 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
     group: 'settings',
   },
   windsor: { id: 'windsor', label: 'Relatórios de performance', icon: BarChart3, group: 'settings' },
+  'windsor-global': {
+    id: 'windsor-global',
+    label: 'Integração global',
+    icon: Globe2,
+    group: 'admin',
+    superAdminOnly: true,
+  },
   'meta-approvals': {
     id: 'meta-approvals',
     label: 'Aprovar conversoes',

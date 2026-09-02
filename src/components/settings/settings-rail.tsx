@@ -26,10 +26,12 @@ export function SettingsRail({
   active,
   onSelect,
   hints,
+  isSuperAdmin = false,
 }: {
   active: SettingsSection;
   onSelect: (section: SettingsSection) => void;
   hints?: Partial<Record<SettingsSection, ReactNode>>;
+  isSuperAdmin?: boolean;
 }) {
   const t = useTranslations('Settings');
   const activeRef = useRef<HTMLButtonElement>(null);
@@ -57,7 +59,9 @@ export function SettingsRail({
     >
       {RAIL_GROUPS.map(({ label, group }) => {
         const items = SETTINGS_SECTIONS.filter(
-          (s) => SECTION_META[s].group === group,
+          (s) =>
+            SECTION_META[s].group === group &&
+            (!SECTION_META[s].superAdminOnly || isSuperAdmin),
         );
         return (
           <div

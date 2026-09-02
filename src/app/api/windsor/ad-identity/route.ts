@@ -22,8 +22,8 @@
 
 import { NextResponse } from 'next/server'
 import { requireModule, toErrorResponse } from '@/lib/auth/account'
-import { decrypt } from '@/lib/whatsapp/encryption'
-import { tokenFromWindsorUrl, windsorMcpCall } from '@/lib/windsor/mcp'
+import { loadGlobalWindsorToken } from '@/lib/windsor/global-config'
+import { windsorMcpCall } from '@/lib/windsor/mcp'
 
 const META_FIELDS = ['ad_id', 'ad_name', 'campaign', 'campaign_id', 'adset_name', 'account_name', 'image_url']
 // google_ads exposes no adset_name/account_name (see get_fields).
@@ -44,7 +44,6 @@ export async function GET(request: Request) {
     const { supabase, accountId } = await requireModule('performance')
     const params = new URL(request.url).searchParams
     const isGoogle = params.get('source') === 'google'
-    const configColumn = isGoogle ? 'google_ads_url' : 'meta_ads_url'
     const connector = isGoogle ? 'google_ads' : 'facebook'
 
     const ids = (params.get('ids') ?? '')
@@ -56,16 +55,17 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabase
       .from('windsor_configs')
-      .select('meta_ads_url, google_ads_url')
+      .select('meta_ads_account_id, google_ads_account_id')
       .eq('account_id', accountId)
       .maybeSingle()
     if (error) throw error
-    if (!data?.[configColumn]) {
-      return NextResponse.json({ error: 'Configure a fonte do Windsor.ai em Configurações.' }, { status: 404 })
+    const selected = isGoogle ? data?.google_ads_account_id : data?.meta_ads_account_id
+    if (!selected) {
+      return NextResponse.json({ error: 'Esta fonte não está configurada para a empresa.' }, { status: 404 })
     }
-    const token = tokenFromWindsorUrl(decrypt(data[configColumn]))
+    const token = await loadGlobalWindsorToken()
     if (!token) {
-      return NextResponse.json({ error: 'O link salvo não contém uma chave do Windsor.ai.' }, { status: 400 })
+      return NextResponse.json({ error: 'A chave global do Windsor.ai não está configurada.' }, { status: 400 })
     }
 
     // Deliberately NO `accounts` argument — the whole point is to look

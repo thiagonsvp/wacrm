@@ -97,6 +97,7 @@ const emptyFunnel = (): FunnelPayload => ({
 export default function PerformancePage() {
   const initial = daysAgo(30)
   const [source, setSource] = useState<'meta' | 'google'>('meta')
+  const [availableSources, setAvailableSources] = useState<Array<'meta' | 'google'> | null>(null)
   const [from, setFrom] = useState(initial.from)
   const [to, setTo] = useState(initial.to)
   const [media, setMedia] = useState<AdMedia[]>([])
@@ -108,15 +109,40 @@ export default function PerformancePage() {
   const [nonce, setNonce] = useState(0)
   const [settled, setSettled] = useState<string | null>(null)
 
+  useEffect(() => {
+    let current = true
+    void fetch('/api/windsor/config', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!current) return
+        const sources = (Array.isArray(data.configured_sources)
+          ? data.configured_sources
+          : []) as Array<'meta' | 'google'>
+        setAvailableSources(sources)
+        if (sources.length) {
+          setSource((currentSource) =>
+            sources.includes(currentSource) ? currentSource : sources[0],
+          )
+        }
+      })
+      .catch(() => {
+        if (current) setAvailableSources([])
+      })
+    return () => {
+      current = false
+    }
+  }, [])
+
   // `loading` is DERIVED, not stored. Storing it would mean flipping it
   // on inside the effect body, which cascades an extra render before a
   // single byte has been fetched; comparing "what we asked for" against
   // "what came back" says the same thing with no state to keep in sync,
   // and it can never get stuck on after an early return.
-  const request = `${source}|${from}|${to}|${nonce}`
-  const loading = settled !== request
+  const request = `${availableSources?.join(',') ?? 'loading'}|${source}|${from}|${to}|${nonce}`
+  const loading = availableSources === null || settled !== request
 
   useEffect(() => {
+    if (availableSources === null) return
     // Guards an out-of-order response: switch Meta → Google quickly and
     // the slower first reply would otherwise land last and win.
     let current = true
@@ -127,17 +153,20 @@ export default function PerformancePage() {
       // Windsor connection must not blank out the CRM funnel, and a CRM
       // hiccup must not hide the media spend. Each side reports its own
       // failure and the page renders whatever did arrive.
+      const sourceConfigured = availableSources.includes(source)
       const [ads, crm] = await Promise.allSettled([
-        fetch(`/api/windsor/performance?source=${source}&from=${from}&to=${to}`, { cache: 'no-store' }),
+        sourceConfigured
+          ? fetch(`/api/windsor/performance?source=${source}&from=${from}&to=${to}`, { cache: 'no-store' })
+          : Promise.resolve(null),
         fetch(`/api/performance/funnel?from=${from}&to=${to}&tz=${encodeURIComponent(tz)}`, { cache: 'no-store' }),
       ])
 
       const adsPayload =
-        ads.status === 'fulfilled' ? await ads.value.json().catch(() => null) : null
+        ads.status === 'fulfilled' && ads.value ? await ads.value.json().catch(() => null) : null
       const crmPayload =
         crm.status === 'fulfilled' ? await crm.value.json().catch(() => null) : null
 
-      const adsOk = ads.status === 'fulfilled' && ads.value.ok
+      const adsOk = ads.status === 'fulfilled' && !!ads.value?.ok
       const crmOk = crm.status === 'fulfilled' && crm.value.ok
       const mediaRows: AdMedia[] =
         adsOk && Array.isArray(adsPayload) ? adsPayload.map(toAdMedia) : []
@@ -173,7 +202,11 @@ export default function PerformancePage() {
         setMediaError('')
       } else {
         setMedia([])
-        setMediaError(adsPayload?.error || 'Não foi possível consultar o Windsor.ai.')
+        setMediaError(
+          sourceConfigured
+            ? adsPayload?.error || 'Não foi possível consultar o Windsor.ai.'
+            : 'Nenhuma conta de anúncios foi selecionada para esta empresa.',
+        )
       }
 
       if (crmOk) {
@@ -192,7 +225,7 @@ export default function PerformancePage() {
     return () => {
       current = false
     }
-  }, [source, from, to, request])
+  }, [source, from, to, request, availableSources])
 
   const currency = funnel.currency
   const totals = useMemo(() => mediaTotals(media), [media])
@@ -233,8 +266,9 @@ export default function PerformancePage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {availableSources && availableSources.length > 0 ? (
           <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1">
-            {(['meta', 'google'] as const).map((option) => (
+            {availableSources.map((option) => (
               <button
                 key={option}
                 type="button"
@@ -250,6 +284,7 @@ export default function PerformancePage() {
               </button>
             ))}
           </div>
+          ) : null}
           <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1">
             {PRESETS.map((preset) => (
               <button

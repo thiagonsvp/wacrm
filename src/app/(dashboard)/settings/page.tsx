@@ -8,6 +8,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { SettingsRail } from '@/components/settings/settings-rail';
 import { MetaAdsConfig } from '@/components/settings/meta-ads-config';
 import { WindsorConfig } from '@/components/settings/windsor-config';
+import { WindsorGlobalConfig } from '@/components/settings/windsor-global-config';
+import { useAuth } from '@/hooks/use-auth';
 import { MetaApprovals } from '@/components/settings/meta-approvals';
 import { PermissionsMatrix } from '@/components/settings/permissions-matrix';
 import { MetaMessagingConfig } from '@/components/settings/meta-messaging-config';
@@ -31,6 +33,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { mode } = useTheme();
   const t = useTranslations('Settings');
+  const { isSuperAdmin } = useAuth();
 
   // The URL (`?tab=`) is the single source of truth for the active
   // section — deep-linkable, and it keeps the existing links in the
@@ -64,6 +67,7 @@ export default function SettingsPage() {
     direct: <MetaMessagingConfig />,
     'meta-ads': <MetaAdsConfig />,
     windsor: <WindsorConfig />,
+    'windsor-global': isSuperAdmin ? <WindsorGlobalConfig /> : <WindsorConfig />,
     'meta-approvals': <MetaApprovals />,
     permissions: <PermissionsMatrix />,
     api: <ApiKeysSettings />,
@@ -81,7 +85,12 @@ export default function SettingsPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
-        <SettingsRail active={section} onSelect={go} hints={hints} />
+        <SettingsRail
+          active={section}
+          onSelect={go}
+          hints={hints}
+          isSuperAdmin={isSuperAdmin}
+        />
         <div className="min-w-0">{panel[section]}</div>
       </div>
     </div>
