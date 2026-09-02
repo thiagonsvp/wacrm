@@ -1,4 +1,4 @@
-import crypto from 'crypto'
+import crypto from 'crypto';
 
 // ------------------------------------------------------------
 // Meta Conversions API — Business Messaging (Click-to-WhatsApp).
@@ -15,8 +15,8 @@ import crypto from 'crypto'
 // no optimisation at all.
 // ------------------------------------------------------------
 
-const GRAPH_VERSION = 'v21.0'
-const REQUEST_TIMEOUT_MS = 10_000
+const GRAPH_VERSION = 'v21.0';
+const REQUEST_TIMEOUT_MS = 10_000;
 
 /**
  * Meta rejects an event whose `event_time` is more than 7 days old — and
@@ -25,18 +25,18 @@ const REQUEST_TIMEOUT_MS = 10_000
  * safety margin so an event sitting in a retry queue near the boundary
  * doesn't poison a whole send.
  */
-export const MAX_EVENT_AGE_MS = 7 * 24 * 60 * 60 * 1000
-const AGE_SAFETY_MARGIN_MS = 60 * 60 * 1000
+export const MAX_EVENT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const AGE_SAFETY_MARGIN_MS = 60 * 60 * 1000;
 
 /** Event names this integration sends. Both are Meta standard events. */
-export type MetaEventName = 'QualifiedLead' | 'Purchase'
+export type MetaEventName = 'QualifiedLead' | 'Purchase';
 
 export interface MetaCapiConfig {
-  datasetId: string
+  datasetId: string;
   /** Decrypted token. */
-  accessToken: string
+  accessToken: string;
   /** WhatsApp Business Account id — only exists on the official Cloud API. */
-  wabaId: string | null
+  wabaId: string | null;
   /**
    * Facebook Page id running the ads. Meta accepts EITHER this or a WABA
    * id as the business identifier for `business_messaging`, which is what
@@ -44,32 +44,32 @@ export interface MetaCapiConfig {
    * The Page must be connected to the dataset in Events Manager, or Meta
    * rejects with subcode 2804065.
    */
-  pageId?: string | null
+  pageId?: string | null;
   /** When set, events land in Events Manager's Test Events tab instead
    *  of counting as real conversions. */
-  testEventCode: string | null
+  testEventCode: string | null;
 }
 
 export interface MetaCapiEvent {
-  eventName: MetaEventName
+  eventName: MetaEventName;
   /** Idempotency key echoed to Meta, which dedupes on it. */
-  eventId: string
+  eventId: string;
   /** When the conversion happened (not when we send it). */
-  eventTime: Date
-  ctwaClid: string
+  eventTime: Date;
+  ctwaClid: string;
   /** Customer phone in E.164 without '+', hashed before sending. */
-  phone?: string | null
-  value?: number | null
-  currency?: string | null
+  phone?: string | null;
+  value?: number | null;
+  currency?: string | null;
 }
 
 export interface MetaCapiResult {
-  ok: boolean
+  ok: boolean;
   /** Events Meta reported as received. */
-  received?: number
-  error?: string
+  received?: number;
+  error?: string;
   /** True when retrying could plausibly succeed (network, 5xx, throttle). */
-  retryable?: boolean
+  retryable?: boolean;
 }
 
 /**
@@ -79,44 +79,49 @@ export interface MetaCapiResult {
  * hashing it would make attribution impossible.
  */
 export function hashIdentifier(raw: string): string {
-  return crypto.createHash('sha256').update(raw.trim().toLowerCase()).digest('hex')
+  return crypto
+    .createHash('sha256')
+    .update(raw.trim().toLowerCase())
+    .digest('hex');
 }
 
 /** Digits only, no leading '+' — Meta's normalisation for phone before hashing. */
 export function normalizePhoneForHash(phone: string): string {
-  return phone.replace(/\D/g, '')
+  return phone.replace(/\D/g, '');
 }
 
 /** True when this event is still inside Meta's 7-day acceptance window. */
-export function isWithinEventWindow(eventTime: Date, now: Date = new Date()): boolean {
-  const age = now.getTime() - eventTime.getTime()
+export function isWithinEventWindow(
+  eventTime: Date,
+  now: Date = new Date()
+): boolean {
+  const age = now.getTime() - eventTime.getTime();
   // A future timestamp is a clock problem, not an acceptable event.
-  if (age < 0) return false
-  return age <= MAX_EVENT_AGE_MS - AGE_SAFETY_MARGIN_MS
+  if (age < 0) return false;
+  return age <= MAX_EVENT_AGE_MS - AGE_SAFETY_MARGIN_MS;
 }
 
 /** Build the `data` entry for one event. Exported for testing. */
 export function buildEventPayload(
   event: MetaCapiEvent,
-  config: MetaCapiConfig,
+  config: MetaCapiConfig
 ): Record<string, unknown> {
-  const userData: Record<string, unknown> = {
-  }
+  const userData: Record<string, unknown> = {};
   // Meta needs an identifier for the business before it will accept the
   // attributable `business_messaging` contract — EITHER a WABA id (official
   // Cloud API only) or the Page id running the ads (subcode 2804116).
   // Without one we fall back to a generic dataset event, which Meta accepts
   // and attributes to nothing: the campaign shows zero conversions.
-  const isBusinessMessaging = Boolean(config.wabaId || config.pageId)
+  const isBusinessMessaging = Boolean(config.wabaId || config.pageId);
   if (isBusinessMessaging) {
-    userData.ctwa_clid = event.ctwaClid
+    userData.ctwa_clid = event.ctwaClid;
     // Send whichever identifier we actually have. Prefer the WABA id: on
     // the official API it is the more specific of the two.
-    if (config.wabaId) userData.whatsapp_business_account_id = config.wabaId
-    else userData.page_id = config.pageId
+    if (config.wabaId) userData.whatsapp_business_account_id = config.wabaId;
+    else userData.page_id = config.pageId;
   }
   if (event.phone) {
-    userData.ph = hashIdentifier(normalizePhoneForHash(event.phone))
+    userData.ph = hashIdentifier(normalizePhoneForHash(event.phone));
   }
 
   const payload: Record<string, unknown> = {
@@ -125,19 +130,19 @@ export function buildEventPayload(
     event_id: event.eventId,
     action_source: isBusinessMessaging ? 'business_messaging' : 'other',
     user_data: userData,
-  }
-  if (isBusinessMessaging) payload.messaging_channel = 'whatsapp'
+  };
+  if (isBusinessMessaging) payload.messaging_channel = 'whatsapp';
 
   // Only attach custom_data when there is a real amount. Sending
   // value: 0 would teach Meta that these conversions are worthless.
   if (event.value != null && event.value > 0) {
     payload.custom_data = {
-      currency: (event.currency ?? 'USD').toUpperCase(),
+      currency: 'BRL',
       value: event.value,
-    }
+    };
   }
 
-  return payload
+  return payload;
 }
 
 /**
@@ -153,10 +158,13 @@ export function buildEventPayload(
  */
 export async function sendMetaCapiEvent(
   event: MetaCapiEvent,
-  config: MetaCapiConfig,
+  config: MetaCapiConfig
 ): Promise<MetaCapiResult> {
   if ((config.wabaId || config.pageId) && !event.ctwaClid) {
-    return { ok: false, error: 'missing ctwa_clid — event would not be attributable' }
+    return {
+      ok: false,
+      error: 'missing ctwa_clid — event would not be attributable',
+    };
   }
   // Meta requires value AND currency on a Purchase. We deliberately omit
   // `custom_data` for a zero/absent value (see buildEventPayload), which
@@ -167,31 +175,35 @@ export async function sendMetaCapiEvent(
   // whose price has not been recorded yet, which happens when the AI reads
   // a purchase signal before the amount is agreed. Refuse now and let the
   // caller retry: the ledger only suppresses events already marked 'sent'.
-  if (event.eventName === 'Purchase' && !(event.value != null && event.value > 0)) {
+  if (
+    event.eventName === 'Purchase' &&
+    !(event.value != null && event.value > 0)
+  ) {
     return {
       ok: false,
-      error: 'Purchase needs a positive value and currency — deal has no amount yet',
+      error:
+        'Purchase needs a positive value and currency — deal has no amount yet',
       retryable: true,
-    }
+    };
   }
   if (!isWithinEventWindow(event.eventTime)) {
     return {
       ok: false,
-      error: 'event_time is outside Meta\'s 7-day acceptance window',
-    }
+      error: "event_time is outside Meta's 7-day acceptance window",
+    };
   }
 
   const body: Record<string, unknown> = {
     data: [buildEventPayload(event, config)],
-  }
-  if (config.testEventCode) body.test_event_code = config.testEventCode
+  };
+  if (config.testEventCode) body.test_event_code = config.testEventCode;
 
   const url =
     `https://graph.facebook.com/${GRAPH_VERSION}/` +
-    `${encodeURIComponent(config.datasetId)}/events`
+    `${encodeURIComponent(config.datasetId)}/events`;
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
     const res = await fetch(url, {
@@ -204,47 +216,51 @@ export async function sendMetaCapiEvent(
       },
       body: JSON.stringify(body),
       signal: controller.signal,
-    })
+    });
 
-    const text = await res.text()
-    let parsed: Record<string, unknown> | null = null
+    const text = await res.text();
+    let parsed: Record<string, unknown> | null = null;
     try {
-      parsed = JSON.parse(text) as Record<string, unknown>
+      parsed = JSON.parse(text) as Record<string, unknown>;
     } catch {
       // Meta returned something non-JSON (gateway error page, etc).
     }
 
     if (!res.ok) {
       const metaError = (parsed?.error ?? null) as {
-        message?: string
-        type?: string
-        code?: number
-        error_subcode?: number
-        error_user_title?: string
-        error_user_msg?: string
-      } | null
+        message?: string;
+        type?: string;
+        code?: number;
+        error_subcode?: number;
+        error_user_title?: string;
+        error_user_msg?: string;
+      } | null;
       const details = [
         metaError?.error_user_title,
         metaError?.error_user_msg,
         metaError?.type,
         metaError?.code != null ? `code=${metaError.code}` : null,
-        metaError?.error_subcode != null ? `subcode=${metaError.error_subcode}` : null,
-      ].filter(Boolean)
+        metaError?.error_subcode != null
+          ? `subcode=${metaError.error_subcode}`
+          : null,
+      ].filter(Boolean);
       return {
         ok: false,
-        error:
-          [metaError?.message ?? `HTTP ${res.status}: ${text.slice(0, 200)}`, ...details]
-            .join(' — ')
-            .slice(0, 1000),
+        error: [
+          metaError?.message ?? `HTTP ${res.status}: ${text.slice(0, 200)}`,
+          ...details,
+        ]
+          .join(' — ')
+          .slice(0, 1000),
         // 4xx is our payload's fault and will fail identically on retry;
         // 429/5xx is Meta's side and may clear.
         retryable: res.status === 429 || res.status >= 500,
-      }
+      };
     }
 
-    return { ok: true, received: Number(parsed?.events_received ?? 1) }
+    return { ok: true, received: Number(parsed?.events_received ?? 1) };
   } catch (err) {
-    const aborted = err instanceof Error && err.name === 'AbortError'
+    const aborted = err instanceof Error && err.name === 'AbortError';
     return {
       ok: false,
       error: aborted
@@ -253,8 +269,8 @@ export async function sendMetaCapiEvent(
           ? err.message
           : String(err),
       retryable: true,
-    }
+    };
   } finally {
-    clearTimeout(timer)
+    clearTimeout(timer);
   }
 }

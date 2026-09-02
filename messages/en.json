@@ -1698,9 +1698,9 @@
     },
     "deals": {
       "title": "Deals & currency",
-      "description": "The currency used for new deals and for pipeline and dashboard totals.",
-      "defaultCurrency": "Default currency",
-      "defaultCurrencyDesc": "New deals default to this currency, and pipeline and dashboard totals are shown in it. Existing deals keep the currency they were saved with.",
+      "description": "All deals, reports, and totals use Brazilian reais (R$) exclusively.",
+      "defaultCurrency": "System currency",
+      "defaultCurrencyDesc": "Currency is fixed to Brazilian real (R$ / BRL) for existing and new data.",
       "currencyLabel": "Currency",
       "adminOnlyHint": "Only account admins can change the default currency.",
       "save": "Save",

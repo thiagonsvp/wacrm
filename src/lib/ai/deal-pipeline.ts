@@ -1,28 +1,31 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { supabaseAdmin } from './admin-client'
-import { loadAiConfig } from './config'
-import { buildConversationContext } from './context'
-import { aiContextMessageLimit } from './defaults'
-import { generateReply } from './generate'
-import { logAiUsage } from './usage'
-import { isAcknowledgement } from './deal-ack'
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from './admin-client';
+import { loadAiConfig } from './config';
+import { buildConversationContext } from './context';
+import { aiContextMessageLimit } from './defaults';
+import { generateReply } from './generate';
+import { logAiUsage } from './usage';
+import { isAcknowledgement } from './deal-ack';
 import {
   buildDealSignalPrompt,
   dealProductScope,
   parseDealSignal,
   renderTranscript,
-} from './deal-signal'
-import { resolvePipelineStages, type PipelineStageMap } from '@/lib/deals/stage-map'
+} from './deal-signal';
+import {
+  resolvePipelineStages,
+  type PipelineStageMap,
+} from '@/lib/deals/stage-map';
 import {
   planTransition,
   type CurrentDeal,
   type DealSignal,
   type DealStatus,
   type TransitionPlan,
-} from '@/lib/deals/transition'
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
-import { dispatchDealConversions } from '@/lib/meta/dispatch'
-import type { AiConfig } from './types'
+} from '@/lib/deals/transition';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { dispatchDealConversions } from '@/lib/meta/dispatch';
+import type { AiConfig } from './types';
 
 // ------------------------------------------------------------
 // AI-driven sales pipeline.
@@ -36,7 +39,7 @@ import type { AiConfig } from './types'
 // a slow or failing provider must not disturb the inbound webhook.
 // ------------------------------------------------------------
 
-const DEFAULT_COOLDOWN_MS = 10 * 60_000
+const DEFAULT_COOLDOWN_MS = 10 * 60_000;
 
 /**
  * Minimum gap between two classifications of the same conversation.
@@ -54,11 +57,11 @@ const DEFAULT_COOLDOWN_MS = 10 * 60_000
  * makes sure even a trailing "ok" triggers that catch-up run.
  */
 export function dealPipelineCooldownMs(): number {
-  const raw = Number(process.env.AI_DEAL_PIPELINE_COOLDOWN_MS)
-  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_COOLDOWN_MS
+  const raw = Number(process.env.AI_DEAL_PIPELINE_COOLDOWN_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_COOLDOWN_MS;
 }
 
-const DEFAULT_EXCLUDED_TAGS = ['Fornecedor', 'Outros']
+const DEFAULT_EXCLUDED_TAGS = ['Fornecedor', 'Outros'];
 
 /** Fold accents and case, so "Fornecedor" matches however it was typed. */
 function normalizeTag(name: string): string {
@@ -66,7 +69,7 @@ function normalizeTag(name: string): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .trim()
+    .trim();
 }
 
 /**
@@ -84,9 +87,9 @@ function normalizeTag(name: string): string {
  * (comma-separated); set it empty to disable the exclusion.
  */
 export function dealPipelineExcludedTags(): string[] {
-  const raw = process.env.DEAL_PIPELINE_EXCLUDED_TAGS
-  const list = raw == null ? DEFAULT_EXCLUDED_TAGS : raw.split(',')
-  return list.map(normalizeTag).filter(Boolean)
+  const raw = process.env.DEAL_PIPELINE_EXCLUDED_TAGS;
+  const list = raw == null ? DEFAULT_EXCLUDED_TAGS : raw.split(',');
+  return list.map(normalizeTag).filter(Boolean);
 }
 
 /**
@@ -95,44 +98,54 @@ export function dealPipelineExcludedTags(): string[] {
  */
 export async function excludedTagFor(
   db: SupabaseClient,
-  contactId: string,
+  contactId: string
 ): Promise<string | null> {
-  const excluded = dealPipelineExcludedTags()
-  if (excluded.length === 0) return null
+  const excluded = dealPipelineExcludedTags();
+  if (excluded.length === 0) return null;
 
   const { data, error } = await db
     .from('contact_tags')
     .select('tags(name)')
-    .eq('contact_id', contactId)
+    .eq('contact_id', contactId);
   if (error) {
     // Fail open: a tag lookup problem must not stop real leads being
     // classified. Worst case an excluded contact gets a card, which the
     // operator can delete — the reverse would silently drop customers.
-    console.error('[ai deal pipeline] tag lookup failed:', error)
-    return null
+    console.error('[ai deal pipeline] tag lookup failed:', error);
+    return null;
   }
 
-  for (const row of (data ?? []) as { tags: { name: string } | { name: string }[] | null }[]) {
-    const tags = Array.isArray(row.tags) ? row.tags : row.tags ? [row.tags] : []
+  for (const row of (data ?? []) as {
+    tags: { name: string } | { name: string }[] | null;
+  }[]) {
+    const tags = Array.isArray(row.tags)
+      ? row.tags
+      : row.tags
+        ? [row.tags]
+        : [];
     for (const t of tags) {
-      if (t?.name && excluded.includes(normalizeTag(t.name))) return t.name
+      if (t?.name && excluded.includes(normalizeTag(t.name))) return t.name;
     }
   }
-  return null
+  return null;
 }
 
 interface DispatchArgs {
-  accountId: string
-  conversationId: string
-  contactId: string
+  accountId: string;
+  conversationId: string;
+  contactId: string;
   /** Audit column on a created deal (mirrors the auto-reply's sender-of-record). */
-  configOwnerUserId: string
+  configOwnerUserId: string;
   /** Used as the card title when the model could not be identified. */
-  contactName?: string | null
+  contactName?: string | null;
   /** The text of the inbound that triggered this run. Lets the
    *  dispatcher skip the provider call for a bare "ok" / "bom dia" when
    *  nothing substantive is waiting to be read (see `deal-ack.ts`). */
-  inboundText?: string | null
+  inboundText?: string | null;
+  /** Reclassify immediately after a seller sends a proposal document.
+   *  The normal inbound cooldown must not hide the event that advances
+   *  the card to the proposal/negotiation stage. */
+  forceAnalysis?: boolean;
 }
 
 /**
@@ -150,14 +163,14 @@ interface DispatchArgs {
  */
 export async function hasUnreadSignal(
   db: SupabaseClient,
-  conversationId: string,
+  conversationId: string
 ): Promise<boolean> {
   const { data: conv, error: convErr } = await db
     .from('conversations')
     .select('ai_deal_analyzed_at')
     .eq('id', conversationId)
-    .maybeSingle()
-  if (convErr || !conv) return true
+    .maybeSingle();
+  if (convErr || !conv) return true;
 
   let query = db
     .from('messages')
@@ -165,16 +178,17 @@ export async function hasUnreadSignal(
     .eq('conversation_id', conversationId)
     .eq('sender_type', 'customer')
     .order('created_at', { ascending: false })
-    .limit(aiContextMessageLimit())
-  const analyzedAt = (conv as { ai_deal_analyzed_at: string | null }).ai_deal_analyzed_at
-  if (analyzedAt) query = query.gt('created_at', analyzedAt)
+    .limit(aiContextMessageLimit());
+  const analyzedAt = (conv as { ai_deal_analyzed_at: string | null })
+    .ai_deal_analyzed_at;
+  if (analyzedAt) query = query.gt('created_at', analyzedAt);
 
-  const { data, error } = await query
-  if (error) return true
+  const { data, error } = await query;
+  if (error) return true;
 
   return ((data ?? []) as { content_text: string | null }[]).some(
-    (m) => !!m.content_text?.trim() && !isAcknowledgement(m.content_text),
-  )
+    (m) => !!m.content_text?.trim() && !isAcknowledgement(m.content_text)
+  );
 }
 
 /**
@@ -190,42 +204,59 @@ export async function hasUnreadSignal(
 async function claimAnalysisSlot(
   db: SupabaseClient,
   conversationId: string,
+  force = false
 ): Promise<boolean> {
-  const cooldownMs = dealPipelineCooldownMs()
-  const cutoff = new Date(Date.now() - cooldownMs).toISOString()
+  if (force) {
+    const { data, error } = await db
+      .from('conversations')
+      .update({ ai_deal_analyzed_at: new Date().toISOString() })
+      .eq('id', conversationId)
+      .select('id');
+    if (error) {
+      console.error(
+        '[ai deal pipeline] could not claim forced analysis slot:',
+        error
+      );
+      return false;
+    }
+    return (data?.length ?? 0) > 0;
+  }
+
+  const cooldownMs = dealPipelineCooldownMs();
+  const cutoff = new Date(Date.now() - cooldownMs).toISOString();
 
   const { data, error } = await db
     .from('conversations')
     .update({ ai_deal_analyzed_at: new Date().toISOString() })
     .eq('id', conversationId)
     .or(`ai_deal_analyzed_at.is.null,ai_deal_analyzed_at.lt.${cutoff}`)
-    .select('id')
+    .select('id');
 
   if (error) {
     // Almost always "column ai_deal_analyzed_at does not exist" — i.e.
     // migration 042 hasn't been applied to this project yet. Log it
     // loudly: a silent return makes "the pipeline never moves" impossible
     // to diagnose from the outside.
-    console.error('[ai deal pipeline] could not claim analysis slot:', error)
-    return false
+    console.error('[ai deal pipeline] could not claim analysis slot:', error);
+    return false;
   }
-  return (data?.length ?? 0) > 0
+  return (data?.length ?? 0) > 0;
 }
 
 interface DealRow {
-  id: string
-  title: string
-  value: number | null
-  status: DealStatus
-  stage_id: string
-  conversation_id: string | null
-  pipeline_stages: { position: number } | { position: number }[] | null
+  id: string;
+  title: string;
+  value: number | null;
+  status: DealStatus;
+  stage_id: string;
+  conversation_id: string | null;
+  pipeline_stages: { position: number } | { position: number }[] | null;
 }
 
 function stagePositionOf(row: DealRow): number {
-  const s = row.pipeline_stages
-  if (!s) return -1
-  return Array.isArray(s) ? (s[0]?.position ?? -1) : s.position
+  const s = row.pipeline_stages;
+  if (!s) return -1;
+  return Array.isArray(s) ? (s[0]?.position ?? -1) : s.position;
 }
 
 /**
@@ -239,39 +270,42 @@ function stagePositionOf(row: DealRow): number {
  */
 async function loadCurrentDeal(
   db: SupabaseClient,
-  args: { accountId: string; conversationId: string; contactId: string },
+  args: { accountId: string; conversationId: string; contactId: string }
 ): Promise<CurrentDeal | null> {
   const { data, error } = await db
     .from('deals')
     .select(
-      'id, title, value, status, stage_id, conversation_id, pipeline_stages(position)',
+      'id, title, value, status, stage_id, conversation_id, pipeline_stages(position)'
     )
     .eq('account_id', args.accountId)
-    .or(`conversation_id.eq.${args.conversationId},contact_id.eq.${args.contactId}`)
-    .order('created_at', { ascending: false })
+    .or(
+      `conversation_id.eq.${args.conversationId},contact_id.eq.${args.contactId}`
+    )
+    .order('created_at', { ascending: false });
 
-  if (error) throw error
-  const rows = (data ?? []) as unknown as DealRow[]
-  if (rows.length === 0) return null
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as DealRow[];
+  if (rows.length === 0) return null;
 
-  const row = rows.find((r) => r.conversation_id === args.conversationId) ?? rows[0]
+  const row =
+    rows.find((r) => r.conversation_id === args.conversationId) ?? rows[0];
   return {
     id: row.id,
     stagePosition: stagePositionOf(row),
     status: row.status,
     title: row.title,
     value: row.value,
-  }
+  };
 }
 
 export interface AppliedPlan {
   /** The deal that was written — needed to attribute a conversion. */
-  dealId: string
-  description: string
+  dealId: string;
+  description: string;
   /** Deal state after the write, for the ad-platform dispatch. */
-  status: DealStatus
-  value: number | null
-  currency: string | null
+  status: DealStatus;
+  value: number | null;
+  currency: string | null;
 }
 
 /** Apply a plan. Returns what was written, or null when nothing changed. */
@@ -279,22 +313,17 @@ export async function applyPlan(
   db: SupabaseClient,
   plan: TransitionPlan,
   ctx: {
-    accountId: string
-    conversationId: string
-    contactId: string
-    configOwnerUserId: string
-    stages: PipelineStageMap
-  },
+    accountId: string;
+    conversationId: string;
+    contactId: string;
+    configOwnerUserId: string;
+    stages: PipelineStageMap;
+  }
 ): Promise<AppliedPlan | null> {
-  if (plan.action === 'none') return null
+  if (plan.action === 'none') return null;
 
   if (plan.action === 'create') {
-    const { data: account } = await db
-      .from('accounts')
-      .select('default_currency')
-      .eq('id', ctx.accountId)
-      .maybeSingle()
-    const currency = (account?.default_currency as string | undefined) ?? 'USD'
+    const currency = 'BRL';
 
     const { data: created, error } = await db
       .from('deals')
@@ -315,15 +344,15 @@ export async function applyPlan(
         notes: 'Card criado automaticamente pela análise de IA da conversa.',
       })
       .select('id')
-      .single()
-    if (error) throw error
+      .single();
+    if (error) throw error;
     return {
       dealId: created.id,
       description: `created "${plan.title}" (${plan.status}, ${plan.value})`,
       status: plan.status,
       value: plan.value,
       currency,
-    }
+    };
   }
 
   const { data: updated, error } = await db
@@ -337,24 +366,24 @@ export async function applyPlan(
     })
     .eq('id', plan.dealId)
     .select('id, status, value, currency')
-    .single()
-  if (error) throw error
+    .single();
+  if (error) throw error;
   return {
     dealId: plan.dealId,
     description: `updated ${plan.dealId}: ${JSON.stringify(plan.changes)}`,
     status: updated.status as DealStatus,
     value: updated.value as number | null,
     currency: updated.currency as string | null,
-  }
+  };
 }
 
 export interface PipelineRunResult {
   /** What the model read, or null when its output was unusable. */
-  signal: DealSignal | null
+  signal: DealSignal | null;
   /** What that means for the board, or null when there was no signal. */
-  plan: TransitionPlan | null
+  plan: TransitionPlan | null;
   /** Human-readable description of the write, or null when nothing changed. */
-  applied: string | null
+  applied: string | null;
 }
 
 /**
@@ -373,23 +402,23 @@ export interface PipelineRunResult {
 export async function runDealPipelineForConversation(
   db: SupabaseClient,
   args: {
-    config: AiConfig
-    stages: PipelineStageMap
-    accountId: string
-    conversationId: string
-    contactId: string
-    configOwnerUserId: string
-    contactName?: string | null
-    apply?: boolean
-  },
+    config: AiConfig;
+    stages: PipelineStageMap;
+    accountId: string;
+    conversationId: string;
+    contactId: string;
+    configOwnerUserId: string;
+    contactName?: string | null;
+    apply?: boolean;
+  }
 ): Promise<PipelineRunResult> {
-  const { config, stages, accountId, conversationId, contactId } = args
-  const apply = args.apply !== false
+  const { config, stages, accountId, conversationId, contactId } = args;
+  const apply = args.apply !== false;
 
   // Checked here rather than in the dispatcher so the backfill script
   // honours it too — the two must never disagree about who belongs on
   // the board.
-  const excluded = await excludedTagFor(db, contactId)
+  const excluded = await excludedTagFor(db, contactId);
   if (excluded) {
     // Also clear any card the contact already has. Tagging usually
     // happens AFTER the classifier has already filed someone — the
@@ -403,39 +432,46 @@ export async function runDealPipelineForConversation(
         .delete()
         .eq('account_id', accountId)
         .eq('contact_id', contactId)
-        .select('id')
+        .select('id');
       if (error) {
-        console.error('[ai deal pipeline] could not clear excluded contact card:', error)
+        console.error(
+          '[ai deal pipeline] could not clear excluded contact card:',
+          error
+        );
       } else if (removed?.length) {
         console.log(
-          `[ai deal pipeline] removed ${removed.length} card(s) for contact tagged "${excluded}"`,
-        )
+          `[ai deal pipeline] removed ${removed.length} card(s) for contact tagged "${excluded}"`
+        );
       }
     }
     console.log(
-      `[ai deal pipeline] conversation ${conversationId}: skipped — contact is tagged "${excluded}"`,
-    )
-    return { signal: null, plan: null, applied: null }
+      `[ai deal pipeline] conversation ${conversationId}: skipped — contact is tagged "${excluded}"`
+    );
+    return { signal: null, plan: null, applied: null };
   }
 
   // A recorded sale is final (transition.ts, invariant 2): whatever the
   // model reads, the planner answers "none". Find that out from the
   // card, not from a provider call.
-  const current = await loadCurrentDeal(db, { accountId, conversationId, contactId })
+  const current = await loadCurrentDeal(db, {
+    accountId,
+    conversationId,
+    contactId,
+  });
   if (current?.status === 'won') {
     return {
       signal: null,
       plan: { action: 'none', reason: 'deal already won (terminal)' },
       applied: null,
-    }
+    };
   }
 
-  const messages = await buildConversationContext(db, conversationId)
+  const messages = await buildConversationContext(db, conversationId);
   if (!messages.some((m) => m.role === 'user')) {
-    return { signal: null, plan: null, applied: null }
+    return { signal: null, plan: null, applied: null };
   }
 
-  const transcript = renderTranscript(messages)
+  const transcript = renderTranscript(messages);
 
   const systemPrompt = buildDealSignalPrompt({
     // Per-account first: business scope and sale criteria vary by
@@ -443,14 +479,14 @@ export async function runDealPipelineForConversation(
     productScope: config.dealProductScope?.trim() || dealProductScope(),
     businessContext: config.systemPrompt,
     automationInstructions: config.dealPipelineInstructions,
-  })
+  });
 
   // Single flattened document, not chat turns — see renderTranscript.
   const { text, usage } = await generateReply({
     config,
     systemPrompt,
     messages: [{ role: 'user', content: transcript }],
-  })
+  });
 
   // Fire-and-forget: logAiUsage swallows its own errors, so this floating
   // promise cannot reject. Logged regardless of what the model said — the
@@ -462,16 +498,16 @@ export async function runDealPipelineForConversation(
     provider: config.provider,
     model: config.model,
     usage,
-  })
+  });
 
-  const parsed: DealSignal | null = parseDealSignal(text)
-  const signal = parsed
+  const parsed: DealSignal | null = parseDealSignal(text);
+  const signal = parsed;
   if (!signal) {
     console.warn(
       `[ai deal pipeline] unusable model output for conversation ${conversationId}:`,
-      text.slice(0, 200),
-    )
-    return { signal: null, plan: null, applied: null }
+      text.slice(0, 200)
+    );
+    return { signal: null, plan: null, applied: null };
   }
 
   const plan = planTransition({
@@ -479,9 +515,9 @@ export async function runDealPipelineForConversation(
     current,
     stages,
     fallbackTitle: args.contactName?.trim() || 'Lead sem nome',
-  })
+  });
 
-  if (!apply) return { signal, plan, applied: null }
+  if (!apply) return { signal, plan, applied: null };
 
   const written = await applyPlan(db, plan, {
     accountId,
@@ -489,7 +525,7 @@ export async function runDealPipelineForConversation(
     contactId,
     configOwnerUserId: args.configOwnerUserId,
     stages,
-  })
+  });
 
   // A disqualified lead is the opposite of a conversion. Reporting one as
   // QualifiedLead would teach Meta to spend the budget finding more
@@ -509,10 +545,10 @@ export async function runDealPipelineForConversation(
       won: written.status === 'won',
       value: written.value,
       currency: written.currency,
-    })
+    });
   }
 
-  return { signal, plan, applied: written?.description ?? null }
+  return { signal, plan, applied: written?.description ?? null };
 }
 
 /**
@@ -528,15 +564,15 @@ export async function runDealPipelineForConversation(
  *   - the model returned nothing usable
  */
 export async function dispatchInboundToDealPipeline(
-  args: DispatchArgs,
+  args: DispatchArgs
 ): Promise<void> {
-  const { accountId, conversationId, contactId, configOwnerUserId } = args
+  const { accountId, conversationId, contactId, configOwnerUserId } = args;
 
   try {
-    const db = supabaseAdmin()
+    const db = supabaseAdmin();
 
-    const config = await loadAiConfig(db, accountId)
-    if (!config || !config.dealPipelineEnabled) return
+    const config = await loadAiConfig(db, accountId);
+    if (!config || !config.dealPipelineEnabled) return;
 
     // "ok" / "obrigado" / "bom dia" / 👍 cannot change the state of a sale
     // (the classifier prompt says as much), so they only earn a provider
@@ -544,33 +580,41 @@ export async function dispatchInboundToDealPipeline(
     // read — e.g. one the cooldown skipped. Checked before the claim so
     // an ack never consumes the slot either.
     if (
+      !args.forceAnalysis &&
       isAcknowledgement(args.inboundText) &&
       !(await hasUnreadSignal(db, conversationId))
     ) {
-      return
+      return;
     }
 
     // Claim before any expensive work so concurrent inbounds collapse to
     // one call for this thread.
-    if (!(await claimAnalysisSlot(db, conversationId))) return
+    if (
+      !(await claimAnalysisSlot(
+        db,
+        conversationId,
+        args.forceAnalysis === true
+      ))
+    )
+      return;
 
     const acctLimit = checkRateLimit(
       `ai-deal-pipeline:${accountId}`,
-      RATE_LIMITS.aiDealPipelineAccount,
-    )
+      RATE_LIMITS.aiDealPipelineAccount
+    );
     if (!acctLimit.success) {
       console.warn(
-        `[ai deal pipeline] account ${accountId} hit the per-account rate limit — skipping this inbound.`,
-      )
-      return
+        `[ai deal pipeline] account ${accountId} hit the per-account rate limit — skipping this inbound.`
+      );
+      return;
     }
 
     const stages = await resolvePipelineStages(db, accountId, {
       qualified: config.dealStageQualifiedId,
       negotiating: config.dealStageNegotiatingId,
       closed: config.dealStageClosedId,
-    })
-    if (!stages) return
+    });
+    if (!stages) return;
 
     const { signal, plan, applied } = await runDealPipelineForConversation(db, {
       config,
@@ -580,15 +624,16 @@ export async function dispatchInboundToDealPipeline(
       contactId,
       configOwnerUserId,
       contactName: args.contactName,
-    })
-    if (!signal || !plan) return
+    });
+    if (!signal || !plan) return;
 
     console.log(
       `[ai deal pipeline] conversation ${conversationId}: outcome=${signal.outcome} ` +
         `model=${signal.model ?? '-'} price=${signal.price ?? '-'} → ` +
-        (applied ?? `no change (${plan.action === 'none' ? plan.reason : plan.action})`),
-    )
+        (applied ??
+          `no change (${plan.action === 'none' ? plan.reason : plan.action})`)
+    );
   } catch (err) {
-    console.error('[ai deal pipeline] dispatch failed:', err)
+    console.error('[ai deal pipeline] dispatch failed:', err);
   }
 }

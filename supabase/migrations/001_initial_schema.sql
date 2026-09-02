@@ -273,7 +273,7 @@ CREATE TABLE IF NOT EXISTS deals (
   conversation_id UUID REFERENCES conversations(id),
   title TEXT NOT NULL,
   value NUMERIC(12,2) NOT NULL DEFAULT 0,
-  currency TEXT DEFAULT 'USD',
+  currency TEXT DEFAULT 'BRL',
   notes TEXT,
   expected_close_date DATE,
   status TEXT DEFAULT 'active',

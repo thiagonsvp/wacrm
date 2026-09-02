@@ -1,10 +1,17 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, BadgeCheck, Check, Loader2, MessageSquareQuote, X } from "lucide-react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  BadgeCheck,
+  Check,
+  Loader2,
+  MessageSquareQuote,
+  X,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 
 /**
  * Approve or reject Purchase conversions before they reach Meta.
@@ -36,15 +43,15 @@ interface Pending {
   expired: boolean;
 }
 
-function money(value: number | null, currency: string | null) {
-  if (value == null) return "—";
+function money(value: number | null, _currency: string | null) {
+  if (value == null) return '—';
   try {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: currency || "BRL",
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
     }).format(value);
   } catch {
-    return `${currency ?? ""} ${value}`.trim();
+    return `R$ ${value}`;
   }
 }
 
@@ -54,7 +61,7 @@ export function MetaApprovals() {
   const [migrationPending, setMigrationPending] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/meta/capi/pending");
+    const res = await fetch('/api/meta/capi/pending');
     const data = await res.json().catch(() => null);
     if (!res.ok || !data) {
       setItems([]);
@@ -68,31 +75,31 @@ export function MetaApprovals() {
     void load();
   }, [load]);
 
-  async function decide(item: Pending, decision: "approve" | "reject") {
+  async function decide(item: Pending, decision: 'approve' | 'reject') {
     setBusy(item.id);
-    const res = await fetch("/api/meta/capi/pending", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch('/api/meta/capi/pending', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: item.id, decision }),
     });
     const data = await res.json().catch(() => null);
     setBusy(null);
 
     if (!res.ok) {
-      toast.error(data?.error ?? "Não foi possível registrar a decisão.");
+      toast.error(data?.error ?? 'Não foi possível registrar a decisão.');
       return;
     }
     toast.success(
-      decision === "approve"
+      decision === 'approve'
         ? `Compra de ${money(item.value, item.currency)} enviada à Meta.`
-        : "Conversão descartada — nada foi enviado.",
+        : 'Conversão descartada — nada foi enviado.'
     );
     void load();
   }
 
   if (items === null) {
     return (
-      <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center gap-2 p-6 text-sm">
         <Loader2 className="h-4 w-4 animate-spin" />
         Carregando…
       </div>
@@ -106,23 +113,25 @@ export function MetaApprovals() {
           <BadgeCheck className="h-5 w-5" />
           Aprovar conversões
         </h2>
-        <p className="max-w-2xl text-sm text-muted-foreground">
+        <p className="text-muted-foreground max-w-2xl text-sm">
           Cada venda que a IA identifica espera aqui antes de ir para a Meta. Um
           evento enviado não pode ser desfeito: a partir dele a Meta passa a
           procurar mais pessoas parecidas com esse cliente. Leads qualificados
-          continuam sendo enviados automaticamente — só o dinheiro passa por você.
+          continuam sendo enviados automaticamente — só o dinheiro passa por
+          você.
         </p>
       </header>
 
       {migrationPending && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-          Rode <code>supabase/migrations/051_meta_capi_purchase_approval.sql</code> no
-          editor SQL do Supabase para ativar a fila.
+          Rode{' '}
+          <code>supabase/migrations/051_meta_capi_purchase_approval.sql</code>{' '}
+          no editor SQL do Supabase para ativar a fila.
         </div>
       )}
 
       {items.length === 0 && !migrationPending && (
-        <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+        <div className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
           Nenhuma venda esperando aprovação.
         </div>
       )}
@@ -131,13 +140,15 @@ export function MetaApprovals() {
         {items.map((item) => (
           <li
             key={item.id}
-            className="rounded-lg border bg-card p-4 sm:p-5 space-y-4"
+            className="bg-card space-y-4 rounded-lg border p-4 sm:p-5"
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-medium break-words">{item.title ?? "Sem título"}</p>
-                <p className="text-sm text-muted-foreground break-words">
-                  {item.contact ?? "Contato desconhecido"}
+                <p className="font-medium break-words">
+                  {item.title ?? 'Sem título'}
+                </p>
+                <p className="text-muted-foreground text-sm break-words">
+                  {item.contact ?? 'Contato desconhecido'}
                 </p>
               </div>
               <p className="text-lg font-semibold tabular-nums">
@@ -146,8 +157,8 @@ export function MetaApprovals() {
             </div>
 
             {item.last_customer_message && (
-              <figure className="rounded-md bg-muted/50 p-3">
-                <figcaption className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <figure className="bg-muted/50 rounded-md p-3">
+                <figcaption className="text-muted-foreground mb-1 flex items-center gap-1.5 text-xs font-medium">
                   <MessageSquareQuote className="h-3.5 w-3.5" />
                   Última mensagem do cliente
                 </figcaption>
@@ -160,7 +171,7 @@ export function MetaApprovals() {
             {/* Meta refuses events older than 7 days, so the deadline is
                 part of the decision, not a footnote. */}
             {item.expired ? (
-              <p className="flex items-center gap-1.5 text-sm text-destructive">
+              <p className="text-destructive flex items-center gap-1.5 text-sm">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 Fora do prazo de 7 dias da Meta — não é mais possível enviar.
               </p>
@@ -168,19 +179,19 @@ export function MetaApprovals() {
               <p
                 className={
                   item.days_left <= 2
-                    ? "text-sm font-medium text-amber-600 dark:text-amber-500"
-                    : "text-sm text-muted-foreground"
+                    ? 'text-sm font-medium text-amber-600 dark:text-amber-500'
+                    : 'text-muted-foreground text-sm'
                 }
               >
                 {item.days_left === 0
-                  ? "Vence hoje"
-                  : `Faltam ${item.days_left} dia${item.days_left === 1 ? "" : "s"} para enviar`}
+                  ? 'Vence hoje'
+                  : `Faltam ${item.days_left} dia${item.days_left === 1 ? '' : 's'} para enviar`}
               </p>
             )}
 
             <div className="flex flex-wrap gap-2">
               <Button
-                onClick={() => decide(item, "approve")}
+                onClick={() => decide(item, 'approve')}
                 disabled={busy === item.id || item.expired}
                 className="gap-1.5"
               >
@@ -193,7 +204,7 @@ export function MetaApprovals() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => decide(item, "reject")}
+                onClick={() => decide(item, 'reject')}
                 disabled={busy === item.id}
                 className="gap-1.5"
               >

@@ -1702,9 +1702,9 @@
     },
     "deals": {
       "title": "Negócios e moeda",
-      "description": "A moeda usada para novos negócios e para os totais do pipeline e do painel.",
-      "defaultCurrency": "Moeda padrão",
-      "defaultCurrencyDesc": "Novos negócios usam esta moeda por padrão, e os totais do pipeline e do painel são exibidos nela. Negócios existentes mantêm a moeda com que foram salvos.",
+      "description": "Todos os negócios, relatórios e totais do sistema usam exclusivamente reais (R$).",
+      "defaultCurrency": "Moeda do sistema",
+      "defaultCurrencyDesc": "A moeda é fixa em real brasileiro (R$ / BRL) para dados existentes e novos.",
       "currencyLabel": "Moeda",
       "adminOnlyHint": "Somente admins da conta podem alterar a moeda padrão.",
       "save": "Salvar",

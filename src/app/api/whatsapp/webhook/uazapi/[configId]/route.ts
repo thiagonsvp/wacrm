@@ -1,29 +1,30 @@
-import { NextResponse, after } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { normalizePhone } from '@/lib/whatsapp/phone-utils'
-import { decrypt } from '@/lib/whatsapp/encryption'
-import { downloadMedia } from '@/lib/whatsapp/providers/uazapi'
-import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text'
-import { transcribeInboundAudio } from '@/lib/ai/transcription'
-import { extractInboundPdfText } from '@/lib/ai/pdf'
+import { NextResponse, after } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { normalizePhone } from '@/lib/whatsapp/phone-utils';
+import { decrypt } from '@/lib/whatsapp/encryption';
+import { downloadMedia } from '@/lib/whatsapp/providers/uazapi';
+import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text';
+import { transcribeInboundAudio } from '@/lib/ai/transcription';
+import { extractInboundPdfText } from '@/lib/ai/pdf';
+import { dispatchInboundToDealPipeline } from '@/lib/ai/deal-pipeline';
 import {
   findOrCreateContact,
   findOrCreateConversation,
   persistInboundMessage,
   persistAgentDeviceMessage,
   ALLOWED_CONTENT_TYPES,
-} from '@/lib/whatsapp/inbound'
+} from '@/lib/whatsapp/inbound';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _adminClient: any = null
+let _adminClient: any = null;
 function supabaseAdmin() {
   if (!_adminClient) {
     _adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    );
   }
-  return _adminClient
+  return _adminClient;
 }
 // Matches the Meta webhook (api/whatsapp/webhook/route.ts). The `after()`
 // callback below runs within this route's max duration, and that callback
@@ -31,7 +32,7 @@ function supabaseAdmin() {
 // contact/conversation/message writes, flows, automations, AI reply. The
 // platform default is far too tight for that, and anything still running
 // when it expires is killed silently.
-export const maxDuration = 90
+export const maxDuration = 90;
 
 /**
  * POST /api/whatsapp/webhook/uazapi/[configId]
@@ -48,15 +49,15 @@ export const maxDuration = 90
  */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ configId: string }> },
+  { params }: { params: Promise<{ configId: string }> }
 ) {
-  const { configId } = await params
+  const { configId } = await params;
 
-  let body: unknown
+  let body: unknown;
   try {
-    body = await request.json()
+    body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
   // TEMP DIAGNOSTIC — remove once the UAZAPI inbound payload shape is
@@ -65,9 +66,9 @@ export async function POST(
   try {
     await supabaseAdmin()
       .from('whatsapp_webhook_debug')
-      .insert({ provider: 'uazapi', raw_body: body })
+      .insert({ provider: 'uazapi', raw_body: body });
   } catch (err) {
-    console.error('[uazapi-webhook] TEMP DIAGNOSTIC insert failed:', err)
+    console.error('[uazapi-webhook] TEMP DIAGNOSTIC insert failed:', err);
   }
 
   const { data: config, error: configError } = await supabaseAdmin()
@@ -75,24 +76,27 @@ export async function POST(
     .select('*')
     .eq('provider', 'uazapi')
     .eq('id', configId)
-    .maybeSingle()
+    .maybeSingle();
 
   if (configError || !config) {
-    console.error('[uazapi-webhook] no config for id:', configId, configError)
-    return NextResponse.json({ status: 'ignored' }, { status: 200 })
+    console.error('[uazapi-webhook] no config for id:', configId, configError);
+    return NextResponse.json({ status: 'ignored' }, { status: 200 });
   }
 
-  warnOnInstanceMismatch(body as UazapiWebhookPayload & { token?: string }, config)
+  warnOnInstanceMismatch(
+    body as UazapiWebhookPayload & { token?: string },
+    config
+  );
 
   after(async () => {
     try {
-      await processUazapiWebhook(body as UazapiWebhookPayload, config)
+      await processUazapiWebhook(body as UazapiWebhookPayload, config);
     } catch (error) {
-      console.error('[uazapi-webhook] processing error:', error)
+      console.error('[uazapi-webhook] processing error:', error);
     }
-  })
+  });
 
-  return NextResponse.json({ status: 'received' }, { status: 200 })
+  return NextResponse.json({ status: 'received' }, { status: 200 });
 }
 
 // Confirmed live against real UAZAPI traffic (captured via the TEMP
@@ -100,48 +104,58 @@ export async function POST(
 // like Evolution. UAZAPI flattens the message and includes rich
 // `chat` metadata alongside it.
 interface UazapiMessage {
-  messageid?: string
-  id?: string
-  text?: string
-  type?: string
-  messageType?: string
-  fromMe?: boolean | string
-  from_me?: boolean | string
-  isFromMe?: boolean | string
-  isGroup?: boolean
-  chatid?: string
-  sender?: string
+  messageid?: string;
+  id?: string;
+  text?: string;
+  type?: string;
+  messageType?: string;
+  fromMe?: boolean | string;
+  from_me?: boolean | string;
+  isFromMe?: boolean | string;
+  isGroup?: boolean;
+  chatid?: string;
+  sender?: string;
   /** Phone-based JID for the sender — reliable even when `sender`/`chatid` use `@lid` addressing. */
-  sender_pn?: string
-  senderName?: string
+  sender_pn?: string;
+  senderName?: string;
   /** Epoch MILLISECONDS (not seconds, unlike Evolution/raw Baileys). */
-  messageTimestamp?: number
+  messageTimestamp?: number;
   content?: {
     contextInfo?: {
       externalAdReply?: {
-        sourceID?: string
-        sourceId?: string
-        sourceApp?: string
-        sourceURL?: string
-        sourceUrl?: string
-        sourceType?: string
-        title?: string
-        body?: string
-        ctwaClid?: string
-        thumbnailUrl?: string
-        thumbnail_url?: string
-      }
-    }
-  }
+        sourceID?: string;
+        sourceId?: string;
+        sourceApp?: string;
+        sourceURL?: string;
+        sourceUrl?: string;
+        sourceType?: string;
+        title?: string;
+        body?: string;
+        ctwaClid?: string;
+        thumbnailUrl?: string;
+        thumbnail_url?: string;
+      };
+    };
+  };
 }
 
 interface UazapiWebhookPayload {
-  EventType?: string
-  message?: UazapiMessage
-  chat?: { wa_contactName?: string; lead_name?: string; name?: string; image?: string; imagePreview?: string; chatid?: string; wa_chatid?: string; phone?: string; wa_phone?: string }
-  instanceName?: string
+  EventType?: string;
+  message?: UazapiMessage;
+  chat?: {
+    wa_contactName?: string;
+    lead_name?: string;
+    name?: string;
+    image?: string;
+    imagePreview?: string;
+    chatid?: string;
+    wa_chatid?: string;
+    phone?: string;
+    wa_phone?: string;
+  };
+  instanceName?: string;
   /** The sending instance's own token — used to detect a config mismatch. */
-  token?: string
+  token?: string;
 }
 
 const MEDIA_TYPE_MAP: Record<string, string> = {
@@ -150,47 +164,58 @@ const MEDIA_TYPE_MAP: Record<string, string> = {
   document: 'document',
   audio: 'audio',
   ptt: 'audio',
-}
+};
 
 function inferContentType(msg: UazapiMessage): string {
-  const messageType = (msg.messageType || '').toLowerCase()
+  const messageType = (msg.messageType || '').toLowerCase();
   for (const [needle, contentType] of Object.entries(MEDIA_TYPE_MAP)) {
-    if (messageType.includes(needle)) return contentType
+    if (messageType.includes(needle)) return contentType;
   }
-  return 'text'
+  return 'text';
 }
 
-const MEDIA_CONTENT_TYPES = new Set(['image', 'video', 'audio', 'document'])
+const MEDIA_CONTENT_TYPES = new Set(['image', 'video', 'audio', 'document']);
 
-async function fetchFullProfilePhoto(config: any, phone: string): Promise<string | null> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (!config.uazapi_base_url || !config.uazapi_token || !config.uazapi_instance_name) return null
+async function fetchFullProfilePhoto(
+  config: any,
+  phone: string
+): Promise<string | null> {
+  // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (
+    !config.uazapi_base_url ||
+    !config.uazapi_token ||
+    !config.uazapi_instance_name
+  )
+    return null;
   try {
-    const token = decrypt(config.uazapi_token)
+    const token = decrypt(config.uazapi_token);
     const response = await fetch(
       `${config.uazapi_base_url.replace(/\/+$/, '')}/chat/fetchProfilePictureUrl/${encodeURIComponent(config.uazapi_instance_name)}`,
       {
         method: 'POST',
         headers: { token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ number: phone }),
-      },
-    )
-    if (!response.ok) return null
-    const data = await response.json()
-    return data?.profilePictureUrl || data?.profile_picture_url || data?.url || null
+      }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    return (
+      data?.profilePictureUrl || data?.profile_picture_url || data?.url || null
+    );
   } catch (error) {
-    console.warn('[uazapi-webhook] full profile photo lookup failed:', error)
-    return null
+    console.warn('[uazapi-webhook] full profile photo lookup failed:', error);
+    return null;
   }
 }
 
 function extractAcquisition(msg: UazapiMessage) {
-  const ad = msg.content?.contextInfo?.externalAdReply
+  const ad = msg.content?.contextInfo?.externalAdReply;
   if (!ad) {
     // No Meta ad block. Google Ads has no structural equivalent — a
     // gclid only reaches WhatsApp if the advertiser's site wrote it into
     // the pre-filled text — so that is the one place left to look.
-    const fromText = parseAcquisitionFromText(msg.text)
-    if (!fromText.gclid && !fromText.source) return undefined
+    const fromText = parseAcquisitionFromText(msg.text);
+    if (!fromText.gclid && !fromText.source) return undefined;
     return {
       source: fromText.source ?? null,
       gclid: fromText.gclid ?? null,
@@ -201,10 +226,10 @@ function extractAcquisition(msg: UazapiMessage) {
       avatarUrl: null,
       ctwaClid: null,
       adImageUrl: null,
-    }
+    };
   }
-  const sourceUrl = ad.sourceURL || ad.sourceUrl || null
-  const sourceText = `${ad.sourceApp || ''} ${sourceUrl || ''}`.toLowerCase()
+  const sourceUrl = ad.sourceURL || ad.sourceUrl || null;
+  const sourceText = `${ad.sourceApp || ''} ${sourceUrl || ''}`.toLowerCase();
   // An `externalAdReply` only exists because the lead clicked a Meta ad,
   // so the platform is never genuinely unknown — only unnamed. Falling
   // through to null used to strand those leads: the account's "Tag de
@@ -217,7 +242,7 @@ function extractAcquisition(msg: UazapiMessage) {
   // fallback in api/whatsapp/webhook/route.ts.
   const source = sourceText.includes('instagram')
     ? ('Instagram' as const)
-    : ('Facebook' as const)
+    : ('Facebook' as const);
   return {
     source,
     sourceId: ad.sourceID || ad.sourceId || null,
@@ -230,7 +255,7 @@ function extractAcquisition(msg: UazapiMessage) {
     // after the click, so if it is not stored now it is gone for good.
     ctwaClid: ad.ctwaClid || null,
     adImageUrl: ad.thumbnailUrl || ad.thumbnail_url || null,
-  }
+  };
 }
 
 /**
@@ -247,20 +272,20 @@ function extractAcquisition(msg: UazapiMessage) {
  */
 function warnOnInstanceMismatch(
   body: UazapiWebhookPayload & { token?: string; instanceName?: string },
-  config: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  config: any // eslint-disable-line @typescript-eslint/no-explicit-any
 ): void {
-  if (!body?.token) return
+  if (!body?.token) return;
   try {
-    if (decrypt(config.uazapi_token) === body.token) return
+    if (decrypt(config.uazapi_token) === body.token) return;
   } catch {
-    return // token undecryptable — a different problem, reported elsewhere
+    return; // token undecryptable — a different problem, reported elsewhere
   }
   console.error(
     '[uazapi-webhook] CONFIG MISMATCH: event came from instance ' +
       `"${body.instanceName ?? 'unknown'}" but account ${config.account_id} has ` +
       `"${config.uazapi_instance_name}" stored. Media downloads WILL fail ` +
-      '("Message not found") until the correct token is saved for this company.',
-  )
+      '("Message not found") until the correct token is saved for this company.'
+  );
 }
 
 /**
@@ -271,32 +296,37 @@ function warnOnInstanceMismatch(
 async function resolveMediaUrl(
   config: any, // eslint-disable-line @typescript-eslint/no-explicit-any
   contentType: string,
-  messageId: string,
+  messageId: string
 ): Promise<string | null> {
-  if (!MEDIA_CONTENT_TYPES.has(contentType)) return null
+  if (!MEDIA_CONTENT_TYPES.has(contentType)) return null;
   try {
-    const token = decrypt(config.uazapi_token)
-    const result = await downloadMedia({ baseUrl: config.uazapi_base_url, token, messageId })
-    return result.fileUrl
+    const token = decrypt(config.uazapi_token);
+    const result = await downloadMedia({
+      baseUrl: config.uazapi_base_url,
+      token,
+      messageId,
+    });
+    return result.fileUrl;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    const message = err instanceof Error ? err.message : String(err);
     // "Message not found" almost always means the stored token belongs to
     // a different instance than the one that received the message, not
     // that the media is gone — name it so the next reader isn't hunting
     // through UAZAPI internals.
     const hint = /not found/i.test(message)
       ? ` — instance "${config.uazapi_instance_name}" does not know message ${messageId}; the stored token likely belongs to another instance`
-      : ''
-    console.error(`[uazapi-webhook] media download failed: ${message}${hint}`)
-    return null
+      : '';
+    console.error(`[uazapi-webhook] media download failed: ${message}${hint}`);
+    return null;
   }
 }
 
-async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (body.EventType !== 'messages') return
+async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) {
+  // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (body.EventType !== 'messages') return;
 
-  const msg = body.message
-  if (!msg || msg.isGroup) return
+  const msg = body.message;
+  if (!msg || msg.isGroup) return;
 
   // `chatid` identifies the CHAT (the lead), regardless of who sent
   // this particular message — never the sender. It can be `@lid`
@@ -306,65 +336,47 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
   // sender is the agent's own number, so no such fallback applies —
   // skip rather than risk misattributing to the wrong contact.
   const fromMe = [msg.fromMe, msg.from_me, msg.isFromMe].some(
-    value => value === true || value === 'true' || value === '1',
-  )
-  const chat = body.chat
-  const chatIdentity = msg.chatid || chat?.chatid || chat?.wa_chatid || chat?.phone || chat?.wa_phone
-  const rawJid = chatIdentity?.endsWith('@lid') && msg.sender_pn && !fromMe
-    ? msg.sender_pn
-    : chatIdentity
-  if (!rawJid || rawJid.endsWith('@lid')) return
+    (value) => value === true || value === 'true' || value === '1'
+  );
+  const chat = body.chat;
+  const chatIdentity =
+    msg.chatid ||
+    chat?.chatid ||
+    chat?.wa_chatid ||
+    chat?.phone ||
+    chat?.wa_phone;
+  const rawJid =
+    chatIdentity?.endsWith('@lid') && msg.sender_pn && !fromMe
+      ? msg.sender_pn
+      : chatIdentity;
+  if (!rawJid || rawJid.endsWith('@lid')) return;
 
-  const phone = normalizePhone(rawJid.replace(/@.*/, ''))
+  const phone = normalizePhone(rawJid.replace(/@.*/, ''));
 
-  let contentType = inferContentType(msg)
-  if (!ALLOWED_CONTENT_TYPES.has(contentType)) contentType = 'text'
-  let contentText = msg.text ?? null
-  const timestamp = msg.messageTimestamp ? new Date(msg.messageTimestamp) : new Date()
-  const externalMessageId = msg.messageid || msg.id || `uazapi-${Date.now()}`
+  let contentType = inferContentType(msg);
+  if (!ALLOWED_CONTENT_TYPES.has(contentType)) contentType = 'text';
+  let contentText = msg.text ?? null;
+  const timestamp = msg.messageTimestamp
+    ? new Date(msg.messageTimestamp)
+    : new Date();
+  const externalMessageId = msg.messageid || msg.id || `uazapi-${Date.now()}`;
 
-  const db = supabaseAdmin()
-  const mediaUrl = await resolveMediaUrl(config, contentType, externalMessageId)
+  const db = supabaseAdmin();
+  const mediaUrl = await resolveMediaUrl(
+    config,
+    contentType,
+    externalMessageId
+  );
 
-  if (fromMe) {
-    // Sent from the agent's own linked phone, not through the CRM
-    // (UAZAPI's `excludeMessages: wasSentByApi` keeps CRM-originated
-    // sends from ever reaching this webhook). The chat id identifies the
-    // lead, so bootstrap the contact/conversation when the agent starts
-    // the conversation from WhatsApp. Previously this returned early for
-    // new leads, dropping the initial messages from the CRM entirely.
-    const contactName = body.chat?.wa_contactName || body.chat?.lead_name || phone
-    const contactOutcome = await findOrCreateContact(
-      db,
-      config.account_id,
-      config.user_id,
-      phone,
-      contactName,
-      { avatarUrl: body.chat?.image || body.chat?.imagePreview || null },
-    )
-    if (!contactOutcome) return
-    const convResult = await findOrCreateConversation(db, config.account_id, config.user_id, contactOutcome.contact.id)
-    if (!convResult) return
-    await persistAgentDeviceMessage({
-      db,
-      conversation: convResult.conversation,
-      contentType,
-      contentText,
-      mediaUrl,
-      externalMessageId,
-      timestamp,
-    })
-    return
-  }
-
-  if (contentType === 'audio' && !contentText) {
-    contentText = await transcribeInboundAudio(db, config.account_id, mediaUrl)
-  }
-
+  // Proposals are commonly sent from the linked WhatsApp device. Extract
+  // their text before the fromMe branch so the persisted seller message
+  // becomes useful context for the deal classifier too.
   if (contentType === 'document' && mediaUrl) {
     try {
-      const response = await fetch(mediaUrl, { signal: AbortSignal.timeout(20_000) })
-      const declaredLength = Number(response.headers.get('content-length'))
+      const response = await fetch(mediaUrl, {
+        signal: AbortSignal.timeout(20_000),
+      });
+      const declaredLength = Number(response.headers.get('content-length'));
       if (
         response.ok &&
         (!Number.isFinite(declaredLength) || declaredLength <= 16 * 1024 * 1024)
@@ -373,22 +385,80 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
           db,
           config.account_id,
           Buffer.from(await response.arrayBuffer()),
-          contentText,
-        )
-        if (extracted) contentText = [contentText, extracted].filter(Boolean).join('\n\n')
+          contentText
+        );
+        if (extracted)
+          contentText = [contentText, extracted].filter(Boolean).join('\n\n');
       }
     } catch (error) {
-      console.warn('[uazapi-webhook] PDF extraction failed:', error)
+      console.warn('[uazapi-webhook] PDF extraction failed:', error);
     }
   }
 
-  const contactName = body.chat?.wa_contactName || body.chat?.lead_name || msg.senderName || phone
-  const acquisition = extractAcquisition(msg)
+  if (fromMe) {
+    // Sent from the agent's own linked phone, not through the CRM
+    // (UAZAPI's `excludeMessages: wasSentByApi` keeps CRM-originated
+    // sends from ever reaching this webhook). The chat id identifies the
+    // lead, so bootstrap the contact/conversation when the agent starts
+    // the conversation from WhatsApp. Previously this returned early for
+    // new leads, dropping the initial messages from the CRM entirely.
+    const contactName =
+      body.chat?.wa_contactName || body.chat?.lead_name || phone;
+    const contactOutcome = await findOrCreateContact(
+      db,
+      config.account_id,
+      config.user_id,
+      phone,
+      contactName,
+      { avatarUrl: body.chat?.image || body.chat?.imagePreview || null }
+    );
+    if (!contactOutcome) return;
+    const convResult = await findOrCreateConversation(
+      db,
+      config.account_id,
+      config.user_id,
+      contactOutcome.contact.id
+    );
+    if (!convResult) return;
+    await persistAgentDeviceMessage({
+      db,
+      conversation: convResult.conversation,
+      contentType,
+      contentText,
+      mediaUrl,
+      externalMessageId,
+      timestamp,
+    });
+    if (contentType === 'document' && contentText?.trim()) {
+      await dispatchInboundToDealPipeline({
+        accountId: config.account_id,
+        conversationId: convResult.conversation.id,
+        contactId: contactOutcome.contact.id,
+        configOwnerUserId: config.user_id,
+        contactName: contactOutcome.contact.name,
+        inboundText: contentText,
+        forceAnalysis: true,
+      });
+    }
+    return;
+  }
+
+  if (contentType === 'audio' && !contentText) {
+    contentText = await transcribeInboundAudio(db, config.account_id, mediaUrl);
+  }
+
+  const contactName =
+    body.chat?.wa_contactName ||
+    body.chat?.lead_name ||
+    msg.senderName ||
+    phone;
+  const acquisition = extractAcquisition(msg);
   // `imagePreview` is a small thumbnail; prefer the full profile image.
-  const avatarUrl = await fetchFullProfilePhoto(config, phone)
-    || body.chat?.image
-    || body.chat?.imagePreview
-    || null
+  const avatarUrl =
+    (await fetchFullProfilePhoto(config, phone)) ||
+    body.chat?.image ||
+    body.chat?.imagePreview ||
+    null;
 
   const contactOutcome = await findOrCreateContact(
     db,
@@ -396,17 +466,17 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
     config.user_id,
     phone,
     contactName,
-    { ...acquisition, avatarUrl },
-  )
-  if (!contactOutcome) return
+    { ...acquisition, avatarUrl }
+  );
+  if (!contactOutcome) return;
 
   const convResult = await findOrCreateConversation(
     db,
     config.account_id,
     config.user_id,
-    contactOutcome.contact.id,
-  )
-  if (!convResult) return
+    contactOutcome.contact.id
+  );
+  if (!convResult) return;
 
   await persistInboundMessage({
     db,
@@ -421,5 +491,5 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) { /
     mediaUrl,
     externalMessageId,
     timestamp,
-  })
+  });
 }

@@ -3,10 +3,10 @@
 --
 -- Make the default deal currency configurable per account.
 --
--- Before this, the app hardcoded USD everywhere — deal-value
+-- Before this, the app hardcoded a foreign currency everywhere — deal-value
 -- formatters, the new-deal form, and automation-created deals all
--- assumed USD. wacrm is self-hostable and used globally, so a fixed
--- USD default made deal tracking unhelpful for non-US businesses
+-- assumed that currency. wacrm is self-hostable and used globally, so that
+-- default made deal tracking unhelpful for Brazilian businesses
 -- (issue #218).
 --
 -- We add a single `default_currency` column to `accounts`. New deals
@@ -21,7 +21,7 @@
 -- ============================================================
 
 ALTER TABLE accounts
-  ADD COLUMN IF NOT EXISTS default_currency TEXT NOT NULL DEFAULT 'USD';
+  ADD COLUMN IF NOT EXISTS default_currency TEXT NOT NULL DEFAULT 'BRL';
 
 -- Keep the value an ISO-4217-shaped 3-letter uppercase code without
 -- pinning to a fixed enum — forks can use any currency Intl supports.
