@@ -313,7 +313,7 @@ function Metric({ label, value, icon: Icon, danger = false }: { label: string; v
 }
 
 function FilterSelect({ value, onChange, label, options }: { value: string; onChange: (value: string) => void; label: string; options: { value: string; label: string }[] }) {
-  return <select value={value} onChange={(e) => onChange(e.target.value)} className="border-input bg-background h-9 min-w-44 rounded-lg border px-3 text-sm"><option value="all">{label}</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+  return <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="border-input bg-background h-9 min-w-44 rounded-lg border px-3 text-sm"><option className="bg-white text-slate-950" value="all">{label}</option>{options.map((option) => <option className="bg-white text-slate-950" key={option.value} value={option.value}>{option.label}</option>)}</select>
 }
 
 function TaskColumn({ status, tasks, onAdd, onEdit }: { status: SystemTaskStatus; tasks: SystemTask[]; onAdd: () => void; onEdit: (task: SystemTask) => void }) {
@@ -361,7 +361,7 @@ function TaskSheet({ open, onOpenChange, editing, form, setForm, accounts, savin
 }
 
 function FormSelect({ label, value, onChange, options, empty }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; empty?: string }) {
-  return <div className="space-y-2"><Label>{label}</Label><select value={value} onChange={(e) => onChange(e.target.value)} className="border-input bg-background h-9 w-full rounded-lg border px-3 text-sm">{empty !== undefined && <option value="">{empty}</option>}{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+  return <div className="space-y-2"><Label>{label}</Label><select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="border-input bg-background h-9 w-full rounded-lg border px-3 text-sm">{empty !== undefined && <option className="bg-white text-slate-950" value="">{empty}</option>}{options.map((option) => <option className="bg-white text-slate-950" key={option.value} value={option.value}>{option.label}</option>)}</select></div>
 }
 
 function historyText(item: SystemTaskHistory) {
