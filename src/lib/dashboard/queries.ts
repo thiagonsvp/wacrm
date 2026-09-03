@@ -35,6 +35,34 @@ type DashboardContactRow = {
   contact_tags?: { tags?: { name?: string | null } | null }[]
 }
 
+type DashboardContactTags = DashboardContactRow['contact_tags']
+
+/**
+ * Resolve the reporting source from the persisted acquisition data, falling
+ * back to the account's source tags. Automations commonly add a source tag
+ * after the contact is created, while acquisition_source remains null.
+ */
+export function resolveLeadOrigin(
+  acquisitionSource: string | null | undefined,
+  contactTags: DashboardContactTags,
+): 'Facebook' | 'Instagram' | 'Google' | 'Orgânico / não informado' {
+  const normalizedSource = acquisitionSource?.trim().toLocaleLowerCase()
+  if (normalizedSource === 'facebook') return 'Facebook'
+  if (normalizedSource === 'instagram') return 'Instagram'
+  if (normalizedSource === 'google') return 'Google'
+
+  const tagNames = new Set(
+    (contactTags ?? []).map((join) =>
+      join.tags?.name?.trim().toLocaleLowerCase(),
+    ),
+  )
+  if (tagNames.has('google')) return 'Google'
+  if (tagNames.has('instagram')) return 'Instagram'
+  if (tagNames.has('facebook')) return 'Facebook'
+
+  return 'Orgânico / não informado'
+}
+
 function countDashboardContacts(
   rows: DashboardContactRow[] | null,
 ): number {
@@ -481,13 +509,7 @@ export async function loadLeadStats(db: DB, rangeDays = 30): Promise<LeadStats> 
   for (const row of (data ?? []) as Array<{ created_at: string; acquisition_source: string | null; contact_tags?: DashboardContactRow['contact_tags'] }>) {
     if ((row.contact_tags ?? []).some((j) => EXCLUDED_CONTACT_TAGS.has(j.tags?.name?.trim().toLocaleLowerCase() ?? ''))) continue
     const day = localDayKey(row.created_at)
-    const rawOrigin = row.acquisition_source?.trim()
-    const origin = rawOrigin
-      ? rawOrigin.toLocaleLowerCase() === 'facebook' ? 'Facebook'
-        : rawOrigin.toLocaleLowerCase() === 'instagram' ? 'Instagram'
-          : rawOrigin.toLocaleLowerCase() === 'google' ? 'Google'
-            : rawOrigin
-      : 'Orgânico / não informado'
+    const origin = resolveLeadOrigin(row.acquisition_source, row.contact_tags)
     const dayOrigins = days.get(day)
     if (dayOrigins) dayOrigins.set(origin, (dayOrigins.get(origin) ?? 0) + 1)
     origins.set(origin, (origins.get(origin) ?? 0) + 1)
