@@ -89,6 +89,7 @@ export async function middleware(request: NextRequest) {
     '/dashboard',
     '/performance',
     '/custom-reports',
+    '/tasks',
     '/inbox',
     '/contacts',
     '/pipelines',

@@ -11,6 +11,7 @@ import { useUnreadNotifications } from '@/hooks/use-unread-notifications';
 import {
   Bell,
   Bot,
+  ClipboardCheck,
   Crown,
   GitBranch,
   LayoutDashboard,
@@ -90,6 +91,8 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** Deployment-wide tools are visible only to the platform operator. */
+  superAdminOnly?: boolean;
   /** Which module gates this row. The server re-checks it; this only
    *  decides whether to draw the door. */
   module: Module;
@@ -113,6 +116,13 @@ const navItems: NavItem[] = [
     labelKey: 'customReports',
     icon: FileChartColumn,
     module: 'custom-reports',
+  },
+  {
+    href: '/tasks',
+    labelKey: 'systemTasks',
+    icon: ClipboardCheck,
+    module: 'settings',
+    superAdminOnly: true,
   },
   { href: '/inbox', labelKey: 'inbox', icon: MessageSquare, module: 'inbox' },
   {
@@ -175,14 +185,16 @@ import { useTranslations } from 'next-intl';
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations('Sidebar');
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const { profile, profileLoading, account, accountRole, isSuperAdmin, signOut } = useAuth();
 
   // Do not show people doors they cannot open. Access itself is enforced
   // server-side by requireModule(); this is purely about what to draw.
   // While the role is still loading, show only what every role can open,
   // so a restricted profile never sees a privileged item flash and vanish.
-  const visibleNav = navItems.filter((item) =>
-    canAccessModule(accountRole ?? 'viewer', item.module)
+  const visibleNav = navItems.filter(
+    (item) =>
+      canAccessModule(accountRole ?? 'viewer', item.module) &&
+      (!item.superAdminOnly || (!profileLoading && isSuperAdmin))
   );
   const visibleBottomNav = bottomNavItems.filter((item) =>
     canAccessModule(accountRole ?? 'viewer', item.module)

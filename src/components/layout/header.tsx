@@ -18,6 +18,7 @@ const pageTitles: Record<string, string> = {
   '/dashboard': 'dashboard',
   '/performance': 'performance',
   '/custom-reports': 'customReports',
+  '/tasks': 'systemTasks',
   '/inbox': 'inbox',
   '/notifications': 'notifications',
   '/contacts': 'contacts',
