@@ -22,6 +22,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
+  Legend,
   Line,
   LineChart,
   Pie,
@@ -143,17 +145,28 @@ const chartNumber = new Intl.NumberFormat('pt-BR', {
 });
 
 function ReportChart({ chart }: { chart: CustomReportChart }) {
+  const hasLongLabels = chart.data.some((point) => point.label.length > 18);
+  const useHorizontalBars =
+    chart.type === 'bar' && (hasLongLabels || chart.data.length > 6);
+  const usePie = chart.type === 'pie' && chart.data.length <= 6;
+  const chartHeight = useHorizontalBars
+    ? Math.max(288, chart.data.length * 48 + 40)
+    : 320;
+  const shortLabel = (value: unknown, maximum = 24) => {
+    const label = String(value);
+    return label.length > maximum ? `${label.slice(0, maximum - 1)}…` : label;
+  };
   const common = {
     data: chart.data,
-    margin: { top: 8, right: 12, bottom: 12, left: 0 },
+    margin: { top: 8, right: 36, bottom: 12, left: 0 },
   };
 
   return (
     <div className="break-inside-avoid rounded-xl border p-4">
       <h3 className="mb-4 font-semibold">{chart.title}</h3>
-      <div className="h-72 w-full">
+      <div className="w-full" style={{ height: chartHeight }}>
         <ResponsiveContainer width="100%" height="100%">
-          {chart.type === 'pie' ? (
+          {usePie ? (
             <PieChart>
               <Pie
                 data={chart.data}
@@ -161,10 +174,8 @@ function ReportChart({ chart }: { chart: CustomReportChart }) {
                 nameKey="label"
                 cx="50%"
                 cy="48%"
-                outerRadius="72%"
-                label={({ name, percent }) =>
-                  `${String(name).slice(0, 16)} ${Math.round((percent ?? 0) * 100)}%`
-                }
+                outerRadius="68%"
+                label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
               >
                 {chart.data.map((point, index) => (
                   <Cell
@@ -173,14 +184,27 @@ function ReportChart({ chart }: { chart: CustomReportChart }) {
                   />
                 ))}
               </Pie>
-              <Tooltip formatter={(value) => Number(value).toLocaleString('pt-BR')} />
+              <Tooltip
+                formatter={(value) => [Number(value).toLocaleString('pt-BR'), 'Valor']}
+              />
+              <Legend
+                verticalAlign="bottom"
+                formatter={(value) => shortLabel(value, 28)}
+              />
             </PieChart>
           ) : chart.type === 'line' ? (
             <LineChart {...common}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11 }}
+                interval="preserveStartEnd"
+                tickFormatter={(value) => shortLabel(value, 14)}
+              />
               <YAxis tickFormatter={(value) => chartNumber.format(Number(value))} width={48} />
-              <Tooltip formatter={(value) => Number(value).toLocaleString('pt-BR')} />
+              <Tooltip
+                formatter={(value) => [Number(value).toLocaleString('pt-BR'), 'Valor']}
+              />
               <Line
                 type="monotone"
                 dataKey="value"
@@ -189,13 +213,53 @@ function ReportChart({ chart }: { chart: CustomReportChart }) {
                 dot={{ r: 3 }}
               />
             </LineChart>
+          ) : useHorizontalBars || chart.type === 'pie' ? (
+            <BarChart {...common} layout="vertical" margin={{ ...common.margin, left: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis
+                type="number"
+                tickFormatter={(value) => chartNumber.format(Number(value))}
+              />
+              <YAxis
+                type="category"
+                dataKey="label"
+                width={176}
+                tick={{ fontSize: 11 }}
+                tickFormatter={(value) => shortLabel(value, 26)}
+              />
+              <Tooltip
+                formatter={(value) => [Number(value).toLocaleString('pt-BR'), 'Valor']}
+              />
+              <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[0, 6, 6, 0]}>
+                <LabelList
+                  dataKey="value"
+                  position="right"
+                  formatter={(value: unknown) => chartNumber.format(Number(value))}
+                  className="fill-foreground text-xs font-medium"
+                />
+              </Bar>
+            </BarChart>
           ) : (
             <BarChart {...common}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11 }}
+                interval={0}
+                tickFormatter={(value) => shortLabel(value, 12)}
+              />
               <YAxis tickFormatter={(value) => chartNumber.format(Number(value))} width={48} />
-              <Tooltip formatter={(value) => Number(value).toLocaleString('pt-BR')} />
-              <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]} />
+              <Tooltip
+                formatter={(value) => [Number(value).toLocaleString('pt-BR'), 'Valor']}
+              />
+              <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]}>
+                <LabelList
+                  dataKey="value"
+                  position="top"
+                  formatter={(value: unknown) => chartNumber.format(Number(value))}
+                  className="fill-foreground text-xs font-medium"
+                />
+              </Bar>
             </BarChart>
           )}
         </ResponsiveContainer>
@@ -241,7 +305,12 @@ function ReportContent({ value }: { value: string }) {
       ) : null}
 
       {report.charts.length ? (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div
+          className={cn(
+            'grid gap-4',
+            report.charts.length > 1 && 'xl:grid-cols-2'
+          )}
+        >
           {report.charts.map((chart, index) => (
             <ReportChart key={`${chart.title}-${index}`} chart={chart} />
           ))}
