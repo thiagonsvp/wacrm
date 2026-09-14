@@ -12,6 +12,7 @@ import {
   buildCustomReportSnapshot,
   customReportSystemPrompt,
 } from '@/lib/custom-reports/snapshot';
+import { serializeCustomReportResult } from '@/lib/custom-reports/result';
 
 export async function POST(request: Request) {
   try {
@@ -81,9 +82,13 @@ export async function POST(request: Request) {
     });
 
     const generatedAt = new Date().toISOString();
+    const structuredResult = serializeCustomReportResult(text);
     const { data: saved, error: saveError } = await supabase
       .from('custom_reports')
-      .update({ last_result: text, last_generated_at: generatedAt })
+      .update({
+        last_result: structuredResult,
+        last_generated_at: generatedAt,
+      })
       .eq('id', report.id)
       .eq('account_id', accountId)
       .select(

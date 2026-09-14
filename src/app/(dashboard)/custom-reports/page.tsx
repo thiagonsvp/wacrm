@@ -1,15 +1,36 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   Clipboard,
+  Download,
   FileChartColumn,
   Loader2,
   Plus,
-  Printer,
   Save,
   Sparkles,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +43,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  normalizeCustomReportResult,
+  type CustomReportChart,
+} from '@/lib/custom-reports/result';
 import { cn } from '@/lib/utils';
 
 interface CustomReport {
@@ -60,7 +85,7 @@ function inline(text: string): ReactNode[] {
     );
 }
 
-function ReportContent({ value }: { value: string }) {
+function RichText({ value }: { value: string }) {
   return (
     <div className="text-foreground space-y-2 text-sm leading-7 sm:text-base">
       {value.split('\n').map((raw, index) => {
@@ -101,6 +126,141 @@ function ReportContent({ value }: { value: string }) {
   );
 }
 
+const CHART_COLORS = [
+  '#7c3aed',
+  '#0891b2',
+  '#16a34a',
+  '#ea580c',
+  '#dc2626',
+  '#4f46e5',
+  '#0d9488',
+  '#ca8a04',
+];
+
+const chartNumber = new Intl.NumberFormat('pt-BR', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+function ReportChart({ chart }: { chart: CustomReportChart }) {
+  const common = {
+    data: chart.data,
+    margin: { top: 8, right: 12, bottom: 12, left: 0 },
+  };
+
+  return (
+    <div className="break-inside-avoid rounded-xl border p-4">
+      <h3 className="mb-4 font-semibold">{chart.title}</h3>
+      <div className="h-72 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          {chart.type === 'pie' ? (
+            <PieChart>
+              <Pie
+                data={chart.data}
+                dataKey="value"
+                nameKey="label"
+                cx="50%"
+                cy="48%"
+                outerRadius="72%"
+                label={({ name, percent }) =>
+                  `${String(name).slice(0, 16)} ${Math.round((percent ?? 0) * 100)}%`
+                }
+              >
+                {chart.data.map((point, index) => (
+                  <Cell
+                    key={`${point.label}-${index}`}
+                    fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => Number(value).toLocaleString('pt-BR')} />
+            </PieChart>
+          ) : chart.type === 'line' ? (
+            <LineChart {...common}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+              <YAxis tickFormatter={(value) => chartNumber.format(Number(value))} width={48} />
+              <Tooltip formatter={(value) => Number(value).toLocaleString('pt-BR')} />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={CHART_COLORS[0]}
+                strokeWidth={3}
+                dot={{ r: 3 }}
+              />
+            </LineChart>
+          ) : (
+            <BarChart {...common}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} />
+              <YAxis tickFormatter={(value) => chartNumber.format(Number(value))} width={48} />
+              <Tooltip formatter={(value) => Number(value).toLocaleString('pt-BR')} />
+              <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]} />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function ReportContent({ value }: { value: string }) {
+  const report = useMemo(() => normalizeCustomReportResult(value), [value]);
+
+  return (
+    <div className="space-y-7 text-foreground">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+          Dashboard comercial
+        </p>
+        <h2 className="mt-2 text-2xl font-bold tracking-tight">{report.title}</h2>
+        {report.summary ? (
+          <p className="mt-3 max-w-4xl text-sm leading-6 text-muted-foreground sm:text-base">
+            {report.summary}
+          </p>
+        ) : null}
+      </div>
+
+      {report.metrics.length ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {report.metrics.map((metric, index) => (
+            <div
+              key={`${metric.label}-${index}`}
+              className="break-inside-avoid rounded-xl border bg-muted/20 p-4"
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {metric.label}
+              </p>
+              <p className="mt-2 text-2xl font-bold">{metric.value}</p>
+              {metric.detail ? (
+                <p className="mt-1 text-xs text-muted-foreground">{metric.detail}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {report.charts.length ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {report.charts.map((chart, index) => (
+            <ReportChart key={`${chart.title}-${index}`} chart={chart} />
+          ))}
+        </div>
+      ) : null}
+
+      {report.sections.map((section, index) => (
+        <section
+          key={`${section.title}-${index}`}
+          className="break-inside-avoid border-t pt-5"
+        >
+          <h3 className="mb-2 text-lg font-semibold">{section.title}</h3>
+          <RichText value={section.content} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export default function CustomReportsPage() {
   const [reports, setReports] = useState<CustomReport[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -111,6 +271,8 @@ export default function CustomReportsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const selectReport = useCallback((report: CustomReport) => {
     setSelectedId(report.id);
@@ -211,8 +373,87 @@ export default function CustomReportsPage() {
   }
 
   async function copyResult() {
-    await navigator.clipboard.writeText(result);
+    const parsed = normalizeCustomReportResult(result);
+    const plainText = [
+      parsed.title,
+      parsed.summary,
+      ...parsed.metrics.map((metric) => `${metric.label}: ${metric.value}`),
+      ...parsed.sections.flatMap((section) => [section.title, section.content]),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    await navigator.clipboard.writeText(plainText);
     toast.success('Relatório copiado.');
+  }
+
+  async function exportPdf() {
+    if (!reportRef.current) return;
+    setExportingPdf(true);
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas-pro'),
+        import('jspdf'),
+      ]);
+      const canvas = await html2canvas(reportRef.current, {
+        backgroundColor: '#ffffff',
+        scale: Math.min(window.devicePixelRatio || 1, 2),
+        useCORS: true,
+      });
+
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = 194;
+      const pageHeight = 281;
+      const sliceHeight = Math.floor((canvas.width * pageHeight) / pageWidth);
+      let offset = 0;
+      let page = 0;
+
+      while (offset < canvas.height) {
+        const height = Math.min(sliceHeight, canvas.height - offset);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = height;
+        const context = pageCanvas.getContext('2d');
+        if (!context) throw new Error('Não foi possível montar a página do PDF.');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        context.drawImage(
+          canvas,
+          0,
+          offset,
+          canvas.width,
+          height,
+          0,
+          0,
+          canvas.width,
+          height
+        );
+        if (page > 0) pdf.addPage();
+        pdf.addImage(
+          pageCanvas.toDataURL('image/jpeg', 0.94),
+          'JPEG',
+          8,
+          8,
+          pageWidth,
+          (height * pageWidth) / canvas.width
+        );
+        offset += height;
+        page += 1;
+      }
+
+      const filename = (name || 'relatorio-personalizado')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase();
+      pdf.save(`${filename || 'relatorio-personalizado'}.pdf`);
+      toast.success('PDF gerado com sucesso.');
+    } catch (error) {
+      console.error('[custom-report] PDF export failed:', error);
+      toast.error('Não foi possível gerar o PDF. Tente novamente.');
+    } finally {
+      setExportingPdf(false);
+    }
   }
 
   return (
@@ -375,9 +616,15 @@ export default function CustomReportsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => window.print()}
+                      onClick={() => void exportPdf()}
+                      disabled={exportingPdf}
                     >
-                      <Printer className="mr-2 h-4 w-4" /> Imprimir
+                      {exportingPdf ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                      )}
+                      {exportingPdf ? 'Gerando PDF...' : 'Baixar PDF'}
                     </Button>
                   </div>
                 ) : null}
@@ -395,7 +642,10 @@ export default function CustomReportsPage() {
                   </div>
                 </div>
               ) : result ? (
-                <div className="bg-background rounded-lg border p-5 sm:p-7">
+                <div
+                  ref={reportRef}
+                  className="bg-background rounded-lg border p-5 sm:p-7"
+                >
                   <ReportContent value={result} />
                 </div>
               ) : (
