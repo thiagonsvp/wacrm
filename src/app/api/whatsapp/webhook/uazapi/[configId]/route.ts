@@ -219,6 +219,7 @@ function extractAcquisition(msg: UazapiMessage) {
     return {
       source: fromText.source ?? null,
       gclid: fromText.gclid ?? null,
+      clickIdType: fromText.clickIdType ?? null,
       campaign: fromText.campaign ?? null,
       sourceId: null,
       adText: null,

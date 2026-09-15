@@ -9,7 +9,7 @@ describe('parseAcquisitionFromText — Google', () => {
     const out = parseAcquisitionFromText(
       `[Home-Float][gclid:${GCLID}] Olá! Gostaria de um orçamento.`,
     )
-    expect(out).toEqual({ gclid: GCLID, source: 'Google' })
+    expect(out).toEqual({ gclid: GCLID, clickIdType: 'gclid', source: 'Google' })
   })
 
   it('reads the query-string form', () => {
@@ -18,6 +18,7 @@ describe('parseAcquisitionFromText — Google', () => {
     )
     expect(out).toEqual({
       gclid: GCLID,
+      clickIdType: 'gclid',
       campaign: 'institucional',
       source: 'Google',
     })
@@ -26,6 +27,8 @@ describe('parseAcquisitionFromText — Google', () => {
   it('accepts wbraid and gbraid, which replace gclid on iOS', () => {
     expect(parseAcquisitionFromText('[wbraid:AbC-123]').gclid).toBe('AbC-123')
     expect(parseAcquisitionFromText('[gbraid:AbC-123]').gclid).toBe('AbC-123')
+    expect(parseAcquisitionFromText('[wbraid:AbC-123]').clickIdType).toBe('wbraid')
+    expect(parseAcquisitionFromText('[gbraid:AbC-123]').clickIdType).toBe('gbraid')
     expect(parseAcquisitionFromText('[wbraid:AbC-123]').source).toBe('Google')
   })
 

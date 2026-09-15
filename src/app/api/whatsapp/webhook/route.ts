@@ -561,6 +561,7 @@ async function processMessage(
     } : textAcquisition?.gclid || textAcquisition?.source ? {
       source: textAcquisition.source ?? null,
       gclid: textAcquisition.gclid ?? null,
+      clickIdType: textAcquisition.clickIdType ?? null,
       campaign: textAcquisition.campaign ?? null,
     } : undefined
   )

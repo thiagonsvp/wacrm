@@ -119,6 +119,10 @@ export interface Contact {
   /** Google Ads click id (gclid / wbraid / gbraid). Meta leads carry
    *  `acquisition_ctwa_clid` instead; the two never coexist. */
   acquisition_gclid?: string | null;
+  acquisition_click_id_type?: 'gclid' | 'gbraid' | 'wbraid' | null;
+  acquisition_medium?: string | null;
+  acquisition_term?: string | null;
+  acquisition_content?: string | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the

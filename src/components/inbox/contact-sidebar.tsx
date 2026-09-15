@@ -311,10 +311,25 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 {/* Google's click id. Wraps because it is long and the
                     operator needs to copy it whole to reconcile a sale
                     in Google Ads. */}
-                gclid:{' '}
+                {contact.acquisition_click_id_type || 'gclid'}:{' '}
                 <span className="font-mono break-all">
                   {contact.acquisition_gclid}
                 </span>
+              </div>
+            )}
+            {(contact.acquisition_medium ||
+              contact.acquisition_term ||
+              contact.acquisition_content) && (
+              <div className="bg-muted/40 text-muted-foreground space-y-1 rounded-lg px-3 py-2 text-xs">
+                {contact.acquisition_medium && (
+                  <p>Meio: {contact.acquisition_medium}</p>
+                )}
+                {contact.acquisition_term && (
+                  <p>Termo: {contact.acquisition_term}</p>
+                )}
+                {contact.acquisition_content && (
+                  <p>Conteúdo: {contact.acquisition_content}</p>
+                )}
               </div>
             )}
             {contact.acquisition_url && (

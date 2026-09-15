@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useTheme } from '@/hooks/use-theme';
 import { SettingsRail } from '@/components/settings/settings-rail';
 import { MetaAdsConfig } from '@/components/settings/meta-ads-config';
+import { GoogleAdsConfig } from '@/components/settings/google-ads-config';
 import { WindsorConfig } from '@/components/settings/windsor-config';
 import { WindsorGlobalConfig } from '@/components/settings/windsor-global-config';
 import { useAuth } from '@/hooks/use-auth';
@@ -66,6 +67,7 @@ export default function SettingsPage() {
     members: <MembersTab />,
     direct: <MetaMessagingConfig />,
     'meta-ads': <MetaAdsConfig />,
+    'google-ads': <GoogleAdsConfig />,
     windsor: <WindsorConfig />,
     'windsor-global': isSuperAdmin ? <WindsorGlobalConfig /> : <WindsorConfig />,
     'meta-approvals': <MetaApprovals />,

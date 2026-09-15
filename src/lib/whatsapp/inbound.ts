@@ -42,6 +42,7 @@ export interface AcquisitionData {
    *  attribution structurally; Google has no such channel, so this
    *  arrives inside the first message's text — see acquisition-text.ts. */
   gclid?: string | null
+  clickIdType?: 'gclid' | 'gbraid' | 'wbraid' | null
 }
 
 export async function findOrCreateContact(
@@ -70,6 +71,9 @@ export async function findOrCreateContact(
             ? { acquisition_ctwa_clid: acquisition.ctwaClid }
             : {}),
           ...(acquisition?.gclid ? { acquisition_gclid: acquisition.gclid } : {}),
+          ...(acquisition?.clickIdType
+            ? { acquisition_click_id_type: acquisition.clickIdType }
+            : {}),
           ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
           updated_at: new Date().toISOString(),
         })
@@ -95,6 +99,9 @@ export async function findOrCreateContact(
         ? { acquisition_ctwa_clid: acquisition.ctwaClid }
         : {}),
       ...(acquisition?.gclid ? { acquisition_gclid: acquisition.gclid } : {}),
+      ...(acquisition?.clickIdType
+        ? { acquisition_click_id_type: acquisition.clickIdType }
+        : {}),
       ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
     })
     .select()

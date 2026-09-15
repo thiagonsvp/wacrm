@@ -25,6 +25,7 @@ import {
 } from '@/lib/deals/transition';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { dispatchDealConversions } from '@/lib/meta/dispatch';
+import { dispatchGoogleDealConversions } from '@/lib/google-ads/dispatch';
 import type { AiConfig } from './types';
 
 // ------------------------------------------------------------
@@ -541,6 +542,15 @@ export async function runDealPipelineForConversation(
       contactId,
       // Any card this pipeline writes is at least a qualified lead: it
       // is only ever created from a "qualified" signal or better.
+      qualified: true,
+      won: written.status === 'won',
+      value: written.value,
+      currency: written.currency,
+    });
+    await dispatchGoogleDealConversions(db, {
+      accountId,
+      dealId: written.dealId,
+      contactId,
       qualified: true,
       won: written.status === 'won',
       value: written.value,

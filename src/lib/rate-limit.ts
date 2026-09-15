@@ -160,6 +160,8 @@ export const RATE_LIMITS = {
    *  instance deploy needs the Redis swap described at the top of
    *  this file (the per-key call sites don't change). */
   publicApi: { limit: 120, windowMs: 60_000 },
+  /** Browser-side LP/form lead capture, isolated per endpoint and IP. */
+  leadWebhook: { limit: 30, windowMs: 60_000 },
   /** AI draft-reply generation, per user. 20/min is generous for an
    *  agent clicking "Draft with AI" while working a thread, and bounds
    *  spend on the account's own LLM key against an accidental

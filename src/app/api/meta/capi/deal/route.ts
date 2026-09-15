@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { dispatchDealConversions } from '@/lib/meta/dispatch'
+import { dispatchGoogleDealConversions } from '@/lib/google-ads/dispatch'
 
 /**
  * Report one deal's conversions to Meta.
@@ -53,6 +54,15 @@ export async function POST(request: Request) {
     }
 
     await dispatchDealConversions(db, {
+      accountId,
+      dealId: deal.id,
+      contactId: deal.contact_id as string,
+      qualified,
+      won,
+      value: deal.value == null ? null : Number(deal.value),
+      currency: (deal.currency as string | null) ?? null,
+    })
+    await dispatchGoogleDealConversions(db, {
       accountId,
       dealId: deal.id,
       contactId: deal.contact_id as string,

@@ -22,6 +22,7 @@
 export interface TextAcquisition {
   /** Google Ads click id — the whole point of this module. */
   gclid?: string
+  clickIdType?: 'gclid' | 'gbraid' | 'wbraid'
   /** utm_campaign, used as the campaign name when Google is the source. */
   campaign?: string
   /** Derived platform, only when the text actually says so. */
@@ -63,15 +64,18 @@ export function parseAcquisitionFromText(
 ): TextAcquisition {
   if (!text) return {}
 
-  const gclid =
-    matchParam(text, 'gclid') ??
-    matchParam(text, 'wbraid') ??
-    matchParam(text, 'gbraid')
+  const click = (['gclid', 'wbraid', 'gbraid'] as const)
+    .map((type) => ({ type, value: matchParam(text, type) }))
+    .find((candidate) => candidate.value)
+  const gclid = click?.value
   const campaign = matchParam(text, 'utm_campaign')
   const utmSource = matchParam(text, 'utm_source')?.toLowerCase()
 
   const out: TextAcquisition = {}
-  if (gclid) out.gclid = gclid
+  if (gclid) {
+    out.gclid = gclid
+    out.clickIdType = click?.type
+  }
   if (campaign) out.campaign = decodeURIComponent(campaign).replace(/\+/g, ' ')
 
   // A gclid is proof on its own; utm_source is only a hint, so it never
