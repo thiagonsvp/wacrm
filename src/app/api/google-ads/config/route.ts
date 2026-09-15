@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomBytes } from 'node:crypto';
 import {
   getCurrentAccount,
   requireRole,
@@ -113,12 +114,20 @@ export async function POST(request: Request) {
     if (!clientId) return bad('client_id is required');
     if (!validWebsiteUrl(websiteUrl))
       return bad('website_url must be a valid HTTPS URL');
-    if (body.send_qualified_lead !== false && !leadAction) {
+    if (
+      body.is_active === true &&
+      body.send_qualified_lead !== false &&
+      !leadAction
+    ) {
       return bad(
         'qualified_lead_conversion_action_id is required while qualified leads are enabled'
       );
     }
-    if (body.send_purchase === true && !purchaseAction) {
+    if (
+      body.is_active === true &&
+      body.send_purchase === true &&
+      !purchaseAction
+    ) {
       return bad(
         'purchase_conversion_action_id is required while purchases are enabled'
       );
@@ -213,6 +222,34 @@ export async function PUT() {
         'Stored credentials could not be decrypted; enter them again.'
       );
     }
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+/** Rotate the capability token after accidental disclosure or site changes. */
+export async function PATCH() {
+  try {
+    const { supabase, accountId, userId } = await requireRole('admin');
+    const limit = checkRateLimit(
+      `google-ads-webhook-rotate:${userId}`,
+      RATE_LIMITS.adminAction
+    );
+    if (!limit.success) return rateLimitResponse(limit);
+
+    const webhookToken = randomBytes(32).toString('hex');
+    const { error } = await supabase
+      .from('google_ads_configs')
+      .update({ webhook_token: webhookToken })
+      .eq('account_id', accountId);
+    if (error) {
+      console.error('[google-ads/config PATCH] rotate failed:', error);
+      return NextResponse.json(
+        { error: 'Failed to rotate the lead webhook' },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ webhook_token: webhookToken });
   } catch (error) {
     return toErrorResponse(error);
   }

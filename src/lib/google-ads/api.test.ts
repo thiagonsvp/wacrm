@@ -112,4 +112,43 @@ describe('Google Ads API', () => {
       '/customers/1234567890/googleAds:search'
     );
   });
+
+  it('surfaces the specific Google Ads error instead of the generic envelope', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'access' }), {
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 400,
+              message: 'Request contains an invalid argument.',
+              details: [
+                {
+                  errors: [
+                    {
+                      errorCode: {
+                        authorizationError:
+                          'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION',
+                      },
+                      message: 'The project is not approved for production.',
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+          { status: 400 }
+        )
+      );
+
+    expect(await testGoogleAdsConnection(CONFIG)).toEqual({
+      ok: false,
+      error:
+        'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION: The project is not approved for production.',
+    });
+  });
 });

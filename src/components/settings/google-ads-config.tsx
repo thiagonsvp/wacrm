@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Copy, ExternalLink, Loader2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  Loader2,
+  RotateCw,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
@@ -42,6 +48,7 @@ export function GoogleAdsConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [rotatingWebhook, setRotatingWebhook] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [migrationPending, setMigrationPending] = useState(false);
   const [origin, setOrigin] = useState('');
@@ -170,6 +177,26 @@ export function GoogleAdsConfig() {
       toast.success(t('copied'));
     } catch {
       toast.error(t('copyFailed'));
+    }
+  }
+
+  async function rotateWebhook() {
+    if (!confirm(t('rotateWebhookConfirm'))) return;
+    setRotatingWebhook(true);
+    try {
+      const response = await fetch('/api/google-ads/config', {
+        method: 'PATCH',
+      });
+      const data = await response.json();
+      if (!response.ok || !data.webhook_token) {
+        return toast.error(data.error ?? t('rotateWebhookFailed'));
+      }
+      setWebhookToken(data.webhook_token);
+      toast.success(t('rotateWebhookDone'));
+    } catch {
+      toast.error(t('rotateWebhookFailed'));
+    } finally {
+      setRotatingWebhook(false);
     }
   }
 
@@ -380,6 +407,21 @@ export function GoogleAdsConfig() {
                 </Button>
               </div>
             </Field>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={rotateWebhook}
+                disabled={rotatingWebhook}
+              >
+                {rotatingWebhook ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCw className="mr-2 h-4 w-4" />
+                )}
+                {t('rotateWebhook')}
+              </Button>
+            )}
             <Field
               id="google-snippet"
               label={t('snippet')}

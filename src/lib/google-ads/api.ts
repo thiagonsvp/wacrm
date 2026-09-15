@@ -37,7 +37,31 @@ function errorText(payload: unknown, fallback: string): string {
   const error = root.error;
   if (typeof error === 'string') return error;
   if (error && typeof error === 'object') {
-    const message = (error as Record<string, unknown>).message;
+    const errorRecord = error as Record<string, unknown>;
+    const details = errorRecord.details;
+    if (Array.isArray(details)) {
+      for (const detail of details) {
+        if (!detail || typeof detail !== 'object') continue;
+        const errors = (detail as Record<string, unknown>).errors;
+        if (!Array.isArray(errors)) continue;
+        for (const item of errors) {
+          if (!item || typeof item !== 'object') continue;
+          const itemRecord = item as Record<string, unknown>;
+          const detailMessage = itemRecord.message;
+          const errorCode = itemRecord.errorCode;
+          if (typeof detailMessage === 'string') {
+            const code =
+              errorCode && typeof errorCode === 'object'
+                ? Object.values(errorCode as Record<string, unknown>).find(
+                    (value): value is string => typeof value === 'string'
+                  )
+                : undefined;
+            return code ? `${code}: ${detailMessage}` : detailMessage;
+          }
+        }
+      }
+    }
+    const message = errorRecord.message;
     if (typeof message === 'string') return message;
   }
   const partial = root.partialFailureError;
