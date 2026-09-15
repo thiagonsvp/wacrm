@@ -111,6 +111,10 @@ describe('Google Ads API', () => {
     expect(String(fetchMock.mock.calls[1][0])).toContain(
       '/customers/1234567890/googleAds:search'
     );
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
+      query:
+        'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1',
+    });
   });
 
   it('surfaces the specific Google Ads error instead of the generic envelope', async () => {

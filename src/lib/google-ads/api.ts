@@ -138,7 +138,6 @@ export async function testGoogleAdsConnection(
         body: JSON.stringify({
           query:
             'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1',
-          pageSize: 1,
         }),
       }
     );
