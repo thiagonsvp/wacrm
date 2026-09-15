@@ -286,7 +286,7 @@ function ReportContent({ value }: { value: string }) {
       </div>
 
       {report.metrics.length ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2">
           {report.metrics.map((metric, index) => (
             <div
               key={`${metric.label}-${index}`}
@@ -305,12 +305,7 @@ function ReportContent({ value }: { value: string }) {
       ) : null}
 
       {report.charts.length ? (
-        <div
-          className={cn(
-            'grid gap-4',
-            report.charts.length > 1 && 'xl:grid-cols-2'
-          )}
-        >
+        <div className="grid gap-4">
           {report.charts.map((chart, index) => (
             <ReportChart key={`${chart.title}-${index}`} chart={chart} />
           ))}
@@ -457,13 +452,27 @@ export default function CustomReportsPage() {
 
   async function exportPdf() {
     if (!reportRef.current) return;
+    const reportElement = reportRef.current;
+    const previousInlineStyle = reportElement.getAttribute('style');
     setExportingPdf(true);
     try {
       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
         import('html2canvas-pro'),
         import('jspdf'),
       ]);
-      const canvas = await html2canvas(reportRef.current, {
+
+      // Render against the CSS width of an A4 portrait page (96 dpi), even
+      // when the user exports from a narrow screen or a very wide monitor.
+      // ResponsiveContainer needs two frames to resize its SVG charts first.
+      reportElement.style.width = '794px';
+      reportElement.style.maxWidth = 'none';
+      reportElement.style.marginInline = '0';
+      await document.fonts.ready;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+
+      const canvas = await html2canvas(reportElement, {
         backgroundColor: '#ffffff',
         scale: Math.min(window.devicePixelRatio || 1, 2),
         useCORS: true,
@@ -521,6 +530,8 @@ export default function CustomReportsPage() {
       console.error('[custom-report] PDF export failed:', error);
       toast.error('Não foi possível gerar o PDF. Tente novamente.');
     } finally {
+      if (previousInlineStyle === null) reportElement.removeAttribute('style');
+      else reportElement.setAttribute('style', previousInlineStyle);
       setExportingPdf(false);
     }
   }
@@ -713,7 +724,7 @@ export default function CustomReportsPage() {
               ) : result ? (
                 <div
                   ref={reportRef}
-                  className="bg-background rounded-lg border p-5 sm:p-7"
+                  className="bg-background mx-auto w-full max-w-[794px] rounded-lg border p-5 sm:p-7"
                 >
                   <ReportContent value={result} />
                 </div>
