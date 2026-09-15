@@ -42,7 +42,28 @@ function errorText(payload: unknown, fallback: string): string {
     if (Array.isArray(details)) {
       for (const detail of details) {
         if (!detail || typeof detail !== 'object') continue;
-        const errors = (detail as Record<string, unknown>).errors;
+        const detailRecord = detail as Record<string, unknown>;
+        const reason = detailRecord.reason;
+        if (typeof reason === 'string') {
+          const message = errorRecord.message;
+          return typeof message === 'string' ? `${reason}: ${message}` : reason;
+        }
+        const violations = detailRecord.fieldViolations;
+        if (Array.isArray(violations)) {
+          const violation = violations.find(
+            (item) => item && typeof item === 'object'
+          ) as Record<string, unknown> | undefined;
+          if (violation) {
+            const field = violation.field;
+            const violationReason = violation.reason;
+            if (typeof violationReason === 'string') {
+              return typeof field === 'string'
+                ? `${violationReason}: ${field}`
+                : violationReason;
+            }
+          }
+        }
+        const errors = detailRecord.errors;
         if (!Array.isArray(errors)) continue;
         for (const item of errors) {
           if (!item || typeof item !== 'object') continue;
@@ -159,13 +180,6 @@ export async function testGoogleAdsConnection(
   }
 }
 
-function googleDateTime(date: Date): string {
-  return date
-    .toISOString()
-    .replace('T', ' ')
-    .replace(/\.\d{3}Z$/, '+00:00');
-}
-
 export async function uploadGoogleClickConversion(
   event: GoogleClickConversion,
   config: GoogleAdsCredentials
@@ -173,24 +187,44 @@ export async function uploadGoogleClickConversion(
   const auth = await accessToken(config);
   if (!auth.ok || !auth.token) return auth;
   const customerId = digits(config.customerId);
-  const conversion = {
+  const loginCustomerId = digits(config.loginCustomerId || customerId);
+  const adIdentifiers = {
     [event.clickIdType]: event.clickId,
-    conversionAction: `customers/${customerId}/conversionActions/${digits(event.conversionActionId)}`,
-    conversionDateTime: googleDateTime(event.conversionDateTime),
+  };
+  const conversionEvent = {
+    adIdentifiers,
     conversionValue: event.value,
-    currencyCode: event.currency,
-    orderId: event.orderId,
+    currency: event.currency,
+    eventTimestamp: event.conversionDateTime.toISOString(),
+    transactionId: event.orderId,
+    eventSource: 'WEB',
   };
 
   try {
     const response = await fetch(
-      `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}:uploadClickConversions`,
+      'https://datamanager.googleapis.com/v1/events:ingest',
       {
         method: 'POST',
-        headers: headers(config, auth.token),
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          conversions: [conversion],
-          partialFailure: true,
+          destinations: [
+            {
+              operatingAccount: {
+                accountType: 'GOOGLE_ADS',
+                accountId: customerId,
+              },
+              loginAccount: {
+                accountType: 'GOOGLE_ADS',
+                accountId: loginCustomerId,
+              },
+              productDestinationId: digits(event.conversionActionId),
+            },
+          ],
+          encoding: 'HEX',
+          events: [conversionEvent],
         }),
       }
     );
@@ -205,12 +239,6 @@ export async function uploadGoogleClickConversion(
           payload,
           `Google Ads returned HTTP ${response.status}`
         ),
-      };
-    }
-    if (payload.partialFailureError) {
-      return {
-        ok: false,
-        error: errorText(payload, 'Google Ads rejected the conversion'),
       };
     }
     return { ok: true };

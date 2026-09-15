@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  GOOGLE_ADS_API_VERSION,
   testGoogleAdsConnection,
   uploadGoogleClickConversion,
 } from './api';
@@ -17,7 +16,7 @@ const CONFIG = {
 afterEach(() => vi.restoreAllMocks());
 
 describe('Google Ads API', () => {
-  it('refreshes OAuth and uploads the correct click-id field', async () => {
+  it('refreshes OAuth and ingests the conversion through Data Manager', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
@@ -45,28 +44,37 @@ describe('Google Ads API', () => {
     expect(result).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [url, options] = fetchMock.mock.calls[1];
-    expect(url).toBe(
-      `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/1234567890:uploadClickConversions`
-    );
+    expect(url).toBe('https://datamanager.googleapis.com/v1/events:ingest');
     expect(options?.headers).toMatchObject({
       Authorization: 'Bearer access',
-      'developer-token': 'developer',
-      'login-customer-id': '9998887777',
     });
     expect(JSON.parse(String(options?.body))).toMatchObject({
-      partialFailure: true,
-      conversions: [
+      destinations: [
         {
-          gbraid: 'GBRAID-1',
-          conversionAction: 'customers/1234567890/conversionActions/444555666',
-        conversionDateTime: '2026-09-15 12:00:00+00:00',
-          orderId: 'deal:QualifiedLead',
+          operatingAccount: {
+            accountType: 'GOOGLE_ADS',
+            accountId: '1234567890',
+          },
+          loginAccount: {
+            accountType: 'GOOGLE_ADS',
+            accountId: '9998887777',
+          },
+          productDestinationId: '444555666',
+        },
+      ],
+      encoding: 'HEX',
+      events: [
+        {
+          adIdentifiers: { gbraid: 'GBRAID-1' },
+          eventTimestamp: '2026-09-15T12:00:00.000Z',
+          transactionId: 'deal:QualifiedLead',
+          eventSource: 'WEB',
         },
       ],
     });
   });
 
-  it('surfaces a partial failure returned with HTTP 200', async () => {
+  it('surfaces a Data Manager ingestion error', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ access_token: 'access' }), {
@@ -76,9 +84,16 @@ describe('Google Ads API', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            partialFailureError: { message: 'Click not found' },
+            error: {
+              message: 'There was a problem with the request.',
+              details: [
+                {
+                  reason: 'DESTINATION_ACCOUNT_NOT_ENABLED',
+                },
+              ],
+            },
           }),
-          { status: 200 }
+          { status: 400 }
         )
       );
     const result = await uploadGoogleClickConversion(
@@ -93,7 +108,11 @@ describe('Google Ads API', () => {
       },
       CONFIG
     );
-    expect(result).toEqual({ ok: false, error: 'Click not found' });
+    expect(result).toEqual({
+      ok: false,
+      error:
+        'DESTINATION_ACCOUNT_NOT_ENABLED: There was a problem with the request.',
+    });
   });
 
   it('tests connectivity with a read-only customer query', async () => {
