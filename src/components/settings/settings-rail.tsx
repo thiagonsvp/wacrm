@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
@@ -24,17 +25,15 @@ const RAIL_DESKTOP_MIN_PX = 1024;
  */
 export function SettingsRail({
   active,
-  onSelect,
   hints,
   isSuperAdmin = false,
 }: {
   active: SettingsSection;
-  onSelect: (section: SettingsSection) => void;
   hints?: Partial<Record<SettingsSection, ReactNode>>;
   isSuperAdmin?: boolean;
 }) {
   const t = useTranslations('Settings');
-  const activeRef = useRef<HTMLButtonElement>(null);
+  const activeRef = useRef<HTMLAnchorElement>(null);
 
   // When horizontal (mobile), keep the active chip in view. On desktop
   // the rail is a static column, so skip.
@@ -78,11 +77,11 @@ export function SettingsRail({
               const Icon = meta.icon;
               const isActive = s === active;
               return (
-                <button
+                <Link
                   key={s}
                   ref={isActive ? activeRef : undefined}
-                  type="button"
-                  onClick={() => onSelect(s)}
+                  href={`/settings?tab=${encodeURIComponent(s)}`}
+                  scroll={false}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
                     'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition-colors',
@@ -104,7 +103,7 @@ export function SettingsRail({
                       {hints[s]}
                     </span>
                   ) : null}
-                </button>
+                </Link>
               );
             })}
           </div>

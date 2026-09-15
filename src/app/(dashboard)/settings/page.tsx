@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, type ReactNode } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { useTheme } from '@/hooks/use-theme';
@@ -30,7 +30,6 @@ import {
 } from '@/components/settings/settings-sections';
 
 export default function SettingsPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { mode } = useTheme();
   const t = useTranslations('Settings');
@@ -41,12 +40,6 @@ export default function SettingsPage() {
   // app sidebar/header working. Legacy tab values resolve onto their
   // new home; unknown/empty → the Profile landing.
   const section = resolveSection(searchParams.get('tab'));
-
-  const go = (next: SettingsSection) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', next);
-    router.replace(`/settings?${params.toString()}`, { scroll: false });
-  };
 
   // Cheap, fetch-free rail hint for the active local appearance mode.
   const hints: Partial<Record<SettingsSection, ReactNode>> = useMemo(
@@ -89,7 +82,6 @@ export default function SettingsPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
         <SettingsRail
           active={section}
-          onSelect={go}
           hints={hints}
           isSuperAdmin={isSuperAdmin}
         />
