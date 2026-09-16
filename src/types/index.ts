@@ -123,6 +123,10 @@ export interface Contact {
   acquisition_medium?: string | null;
   acquisition_term?: string | null;
   acquisition_content?: string | null;
+  /** WhatsApp direct-link protocol code (google_ads_click_protocols.code).
+   *  Kept even when the click carried no gclid and the lead is organic, so
+   *  the ad click that produced it can still be traced. */
+  acquisition_protocol?: string | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the

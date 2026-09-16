@@ -595,13 +595,15 @@ async function processMessage(
       : textAcquisition?.gclid ||
           textAcquisition?.source ||
           textAcquisition?.campaign ||
-          textAcquisition?.sourceId
+          textAcquisition?.sourceId ||
+          textAcquisition?.protocol
         ? {
             source: textAcquisition.source ?? null,
             sourceId: textAcquisition.sourceId ?? null,
             gclid: textAcquisition.gclid ?? null,
             clickIdType: textAcquisition.clickIdType ?? null,
             campaign: textAcquisition.campaign ?? null,
+            protocol: textAcquisition.protocol ?? null,
           }
         : undefined
   );

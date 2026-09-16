@@ -13,7 +13,7 @@ export function googleLeadTrackingSnippet(endpoint: string): string {
     var value = query.get(key);
     if (value) saved[key] = value;
   });
-  if (!saved.landing_url && (saved.gclid || saved.gbraid || saved.wbraid)) saved.landing_url = window.location.href;
+  if (!saved.landing_url) saved.landing_url = window.location.href;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (_) {}
 
   function value(form, names, selector) {

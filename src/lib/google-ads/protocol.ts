@@ -35,6 +35,7 @@ export function buildGoogleAdsWhatsAppMessage(
 }
 
 export function buildGoogleAdsProtocolAcquisition(
+  protocol: string,
   clickId: string | null,
   clickIdType: GoogleClickIdType | null,
   campaignId: string | null
@@ -49,6 +50,9 @@ export function buildGoogleAdsProtocolAcquisition(
     campaign: null,
     gclid: clickId,
     clickIdType: clickId ? clickIdType : null,
+    // Kept regardless of clickId so an organic lead from this flow still
+    // traces back to the click protocol row for support/debugging.
+    protocol,
   };
 }
 
@@ -89,6 +93,7 @@ export async function resolveGoogleAdsProtocol(
     id: data.id as string,
     code: data.code as string,
     acquisition: buildGoogleAdsProtocolAcquisition(
+      data.code as string,
       clickId,
       clickIdType,
       campaignId

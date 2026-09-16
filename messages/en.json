@@ -308,7 +308,10 @@
       "campaignId": "Campaign ID",
       "medium": "Medium",
       "term": "Term",
-      "content": "Content"
+      "content": "Content",
+      "protocol": "Protocol",
+      "openAd": "Open ad/campaign",
+      "openLandingPage": "Open landing page"
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",

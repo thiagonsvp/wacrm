@@ -17,4 +17,15 @@ describe('googleLeadTrackingSnippet', () => {
   it('does not render a script before an endpoint exists', () => {
     expect(googleLeadTrackingSnippet('')).toBe('');
   });
+
+  it('captures landing_url for every visit, not only paid clicks', () => {
+    // Organic form submissions need a landing page to show in the CRM too,
+    // so this must not be gated on gclid/gbraid/wbraid being present.
+    const code = googleLeadTrackingSnippet(
+      'https://crm.example/api/google-ads/leads/token'
+    );
+    expect(code).toContain(
+      "if (!saved.landing_url) saved.landing_url = window.location.href;"
+    );
+  });
 });

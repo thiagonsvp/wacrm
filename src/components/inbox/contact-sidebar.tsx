@@ -230,7 +230,8 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     contact.acquisition_gclid ||
     contact.acquisition_medium ||
     contact.acquisition_term ||
-    contact.acquisition_content
+    contact.acquisition_content ||
+    contact.acquisition_protocol
   );
 
   // Fills the width when opened as a mobile sheet; a fixed rail on
@@ -307,6 +308,14 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                       </span>
                     </p>
                   )}
+                  {contact.acquisition_protocol && (
+                    <p className="break-all">
+                      {tSidebar('protocol')}:{' '}
+                      <span className="text-foreground font-mono">
+                        {contact.acquisition_protocol}
+                      </span>
+                    </p>
+                  )}
                   {contact.acquisition_medium && (
                     <p>
                       {tSidebar('medium')}: {contact.acquisition_medium}
@@ -366,7 +375,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 className="bg-muted/40 text-primary flex items-center gap-2 rounded-lg px-3 py-2 text-xs hover:underline"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
-                <span className="truncate">Abrir anúncio/campanha</span>
+                <span className="truncate">
+                  {isOrganic ? tSidebar('openLandingPage') : tSidebar('openAd')}
+                </span>
               </a>
             )}
             {contact.acquisition_ad_image_url && (

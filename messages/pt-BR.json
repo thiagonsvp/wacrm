@@ -308,7 +308,10 @@
       "campaignId": "ID da campanha",
       "medium": "Meio",
       "term": "Termo",
-      "content": "Conteúdo"
+      "content": "Conteúdo",
+      "protocol": "Protocolo",
+      "openAd": "Abrir anúncio/campanha",
+      "openLandingPage": "Abrir página de origem"
     },
     "aiBanner": {
       "pausedTitle": "O assistente de IA está pausado aqui",

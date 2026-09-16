@@ -43,6 +43,9 @@ export interface AcquisitionData {
    *  arrives inside the first message's text — see acquisition-text.ts. */
   gclid?: string | null
   clickIdType?: 'gclid' | 'gbraid' | 'wbraid' | null
+  /** WhatsApp direct-link protocol code. Set even when the click carried no
+   *  gclid, so an organic lead from that flow still traces to the click. */
+  protocol?: string | null
 }
 
 export async function findOrCreateContact(
@@ -56,7 +59,7 @@ export async function findOrCreateContact(
   const existingContact = await findExistingContact(db, accountId, phone)
 
   if (existingContact) {
-    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url || acquisition?.ctwaClid || acquisition?.gclid) {
+    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url || acquisition?.ctwaClid || acquisition?.gclid || acquisition?.protocol) {
       await db
         .from('contacts')
         .update({
@@ -74,6 +77,7 @@ export async function findOrCreateContact(
           ...(acquisition?.clickIdType
             ? { acquisition_click_id_type: acquisition.clickIdType }
             : {}),
+          ...(acquisition?.protocol ? { acquisition_protocol: acquisition.protocol } : {}),
           ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
           updated_at: new Date().toISOString(),
         })
@@ -102,6 +106,7 @@ export async function findOrCreateContact(
       ...(acquisition?.clickIdType
         ? { acquisition_click_id_type: acquisition.clickIdType }
         : {}),
+      ...(acquisition?.protocol ? { acquisition_protocol: acquisition.protocol } : {}),
       ...(acquisition?.avatarUrl ? { avatar_url: acquisition.avatarUrl } : {}),
     })
     .select()

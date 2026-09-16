@@ -28,24 +28,37 @@ describe('Google Ads WhatsApp protocol', () => {
   });
 
   it('classifies Google traffic without a click id as organic', () => {
-    expect(buildGoogleAdsProtocolAcquisition(null, null, '7770317006')).toEqual(
-      {
-        source: null,
-        sourceId: '7770317006',
-        campaign: null,
-        gclid: null,
-        clickIdType: null,
-      }
-    );
+    expect(
+      buildGoogleAdsProtocolAcquisition('AB7K2', null, null, '7770317006')
+    ).toEqual({
+      source: null,
+      sourceId: '7770317006',
+      campaign: null,
+      gclid: null,
+      clickIdType: null,
+      protocol: 'AB7K2',
+    });
   });
 
   it('attributes the lead to Google when a click id exists', () => {
     expect(
-      buildGoogleAdsProtocolAcquisition('click-123', 'gclid', '7770317006')
+      buildGoogleAdsProtocolAcquisition(
+        'AB7K2',
+        'click-123',
+        'gclid',
+        '7770317006'
+      )
     ).toMatchObject({
       source: 'Google',
       gclid: 'click-123',
       clickIdType: 'gclid',
+      protocol: 'AB7K2',
     });
+  });
+
+  it('keeps the protocol code even without a campaign id, so an organic lead still traces to the click', () => {
+    expect(
+      buildGoogleAdsProtocolAcquisition('AB7K2', null, null, null)
+    ).toMatchObject({ source: null, protocol: 'AB7K2' });
   });
 });

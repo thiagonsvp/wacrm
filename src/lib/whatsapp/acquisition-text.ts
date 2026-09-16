@@ -29,6 +29,10 @@ export interface TextAcquisition {
   sourceId?: string;
   /** Derived platform, only when the text actually says so. */
   source?: 'Google' | 'Facebook' | 'Instagram';
+  /** Never set by this parser — declared so the webhook's
+   *  `protocolMatch?.acquisition ?? parseAcquisitionFromText(...)` union
+   *  can read `.protocol` without a type-narrowing check. */
+  protocol?: string;
 }
 
 /**
