@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  Link2,
   Loader2,
+  MessageCircle,
   RotateCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -51,6 +53,7 @@ export function GoogleAdsConfig() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [rotatingWebhook, setRotatingWebhook] = useState(false);
+  const [savingWhatsApp, setSavingWhatsApp] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [migrationPending, setMigrationPending] = useState(false);
   const [origin, setOrigin] = useState('');
@@ -64,6 +67,11 @@ export function GoogleAdsConfig() {
   const [purchaseAction, setPurchaseAction] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [webhookToken, setWebhookToken] = useState('');
+  const [whatsAppConfigured, setWhatsAppConfigured] = useState(false);
+  const [whatsAppMigrationPending, setWhatsAppMigrationPending] =
+    useState(false);
+  const [whatsAppPhone, setWhatsAppPhone] = useState('');
+  const [whatsAppMessage, setWhatsAppMessage] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [sendLead, setSendLead] = useState(true);
   const [sendPurchase, setSendPurchase] = useState(false);
@@ -96,6 +104,16 @@ export function GoogleAdsConfig() {
         setSendPurchase(!!data.send_purchase);
         setEdited({});
       }
+      const whatsAppResponse = await fetch('/api/google-ads/whatsapp', {
+        cache: 'no-store',
+      });
+      const whatsAppData = await whatsAppResponse.json();
+      if (whatsAppResponse.ok) {
+        setWhatsAppConfigured(!!whatsAppData.configured);
+        setWhatsAppMigrationPending(!!whatsAppData.migration_pending);
+        setWhatsAppPhone(whatsAppData.phone ?? '');
+        setWhatsAppMessage(whatsAppData.message ?? '');
+      }
     } catch {
       toast.error(t('loadFailed'));
     } finally {
@@ -118,6 +136,10 @@ export function GoogleAdsConfig() {
     () => googleLeadTrackingSnippet(endpoint),
     [endpoint]
   );
+  const directWhatsAppLink =
+    whatsAppConfigured && webhookToken && origin
+      ? `${origin}/go/google-ads/${webhookToken}?gclid={gclid}&campaignid={campaignid}`
+      : '';
   const secret = (key: string, value: string) =>
     edited[key] ? value.trim() : '';
   const editSecret =
@@ -170,6 +192,28 @@ export function GoogleAdsConfig() {
       else toast.error(data.error ?? t('testFailed'));
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function saveWhatsApp() {
+    setSavingWhatsApp(true);
+    try {
+      const response = await fetch('/api/google-ads/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: whatsAppPhone,
+          message: whatsAppMessage,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) return toast.error(data.error ?? t('directSaveFailed'));
+      setWhatsAppConfigured(true);
+      toast.success(t('directSaved'));
+    } catch {
+      toast.error(t('directSaveFailed'));
+    } finally {
+      setSavingWhatsApp(false);
     }
   }
 
@@ -376,6 +420,93 @@ export function GoogleAdsConfig() {
             />
           </Field>
         </div>
+      </Card>
+
+      <Card className="mt-4 space-y-4 p-5">
+        <div className="flex items-start gap-3">
+          <MessageCircle className="text-primary mt-0.5 size-5 shrink-0" />
+          <div>
+            <h3 className="text-sm font-medium">{t('directTitle')}</h3>
+            <p className="text-muted-foreground mt-1 text-xs">
+              {t('directDesc')}
+            </p>
+          </div>
+        </div>
+        {whatsAppMigrationPending && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
+            {t('directMigrationPending')}{' '}
+            <code>
+              supabase/migrations/074_google_ads_whatsapp_protocols.sql
+            </code>
+          </div>
+        )}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            id="google-whatsapp-phone"
+            label={t('directPhone')}
+            hint={t('directPhoneHint')}
+          >
+            <Input
+              id="google-whatsapp-phone"
+              value={whatsAppPhone}
+              onChange={(event) => setWhatsAppPhone(event.target.value)}
+              inputMode="tel"
+              placeholder="5521999999999"
+              disabled={disabled || whatsAppMigrationPending}
+            />
+          </Field>
+          <Field
+            id="google-whatsapp-message"
+            label={t('directMessage')}
+            hint={t('directMessageHint')}
+          >
+            <Textarea
+              id="google-whatsapp-message"
+              value={whatsAppMessage}
+              onChange={(event) => setWhatsAppMessage(event.target.value)}
+              rows={3}
+              disabled={disabled || whatsAppMigrationPending}
+            />
+          </Field>
+        </div>
+        {isAdmin && (
+          <Button
+            type="button"
+            onClick={saveWhatsApp}
+            disabled={savingWhatsApp || whatsAppMigrationPending}
+          >
+            {savingWhatsApp ? <Loader2 className="animate-spin" /> : <Link2 />}
+            {t('directGenerate')}
+          </Button>
+        )}
+        {directWhatsAppLink && (
+          <Field
+            id="google-direct-whatsapp-link"
+            label={t('directLink')}
+            hint={t('directLinkHint', {
+              gclid: '{gclid}',
+              campaignid: '{campaignid}',
+            })}
+          >
+            <div className="flex gap-2">
+              <Input
+                id="google-direct-whatsapp-link"
+                readOnly
+                value={directWhatsAppLink}
+                className="font-mono text-xs"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => copy(directWhatsAppLink)}
+                aria-label={t('copyDirectLink')}
+              >
+                <Copy />
+              </Button>
+            </div>
+          </Field>
+        )}
       </Card>
 
       <Card className="mt-4 space-y-4 p-5">

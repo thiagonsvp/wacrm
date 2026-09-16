@@ -4,6 +4,10 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { downloadMedia } from '@/lib/whatsapp/providers/uazapi';
 import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text';
+import {
+  claimGoogleAdsProtocol,
+  resolveGoogleAdsProtocol,
+} from '@/lib/google-ads/protocol';
 import { transcribeInboundAudio } from '@/lib/ai/transcription';
 import { extractInboundPdfText } from '@/lib/ai/pdf';
 import { dispatchInboundToDealPipeline } from '@/lib/ai/deal-pipeline';
@@ -158,6 +162,15 @@ interface UazapiWebhookPayload {
   token?: string;
 }
 
+interface UazapiStoredConfig {
+  id: string;
+  account_id: string;
+  user_id: string;
+  uazapi_base_url: string | null;
+  uazapi_instance_name: string | null;
+  uazapi_token: string;
+}
+
 const MEDIA_TYPE_MAP: Record<string, string> = {
   image: 'image',
   video: 'video',
@@ -177,10 +190,9 @@ function inferContentType(msg: UazapiMessage): string {
 const MEDIA_CONTENT_TYPES = new Set(['image', 'video', 'audio', 'document']);
 
 async function fetchFullProfilePhoto(
-  config: any,
+  config: UazapiStoredConfig,
   phone: string
 ): Promise<string | null> {
-  // eslint-disable-line @typescript-eslint/no-explicit-any
   if (
     !config.uazapi_base_url ||
     !config.uazapi_token ||
@@ -273,7 +285,7 @@ function extractAcquisition(msg: UazapiMessage) {
  */
 function warnOnInstanceMismatch(
   body: UazapiWebhookPayload & { token?: string; instanceName?: string },
-  config: any // eslint-disable-line @typescript-eslint/no-explicit-any
+  config: UazapiStoredConfig
 ): void {
   if (!body?.token) return;
   try {
@@ -295,11 +307,12 @@ function warnOnInstanceMismatch(
  * mediaUrl) if this fails, rather than dropping it.
  */
 async function resolveMediaUrl(
-  config: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  config: UazapiStoredConfig,
   contentType: string,
   messageId: string
 ): Promise<string | null> {
   if (!MEDIA_CONTENT_TYPES.has(contentType)) return null;
+  if (!config.uazapi_base_url) return null;
   try {
     const token = decrypt(config.uazapi_token);
     const result = await downloadMedia({
@@ -322,8 +335,10 @@ async function resolveMediaUrl(
   }
 }
 
-async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) {
-  // eslint-disable-line @typescript-eslint/no-explicit-any
+async function processUazapiWebhook(
+  body: UazapiWebhookPayload,
+  config: UazapiStoredConfig
+) {
   if (body.EventType !== 'messages') return;
 
   const msg = body.message;
@@ -453,7 +468,12 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) {
     body.chat?.lead_name ||
     msg.senderName ||
     phone;
-  const acquisition = extractAcquisition(msg);
+  const protocolMatch = await resolveGoogleAdsProtocol(
+    db,
+    config.account_id,
+    contentText
+  );
+  const acquisition = protocolMatch?.acquisition ?? extractAcquisition(msg);
   // `imagePreview` is a small thumbnail; prefer the full profile image.
   const avatarUrl =
     (await fetchFullProfilePhoto(config, phone)) ||
@@ -470,6 +490,13 @@ async function processUazapiWebhook(body: UazapiWebhookPayload, config: any) {
     { ...acquisition, avatarUrl }
   );
   if (!contactOutcome) return;
+  if (protocolMatch) {
+    await claimGoogleAdsProtocol(
+      db,
+      protocolMatch.id,
+      contactOutcome.contact.id
+    );
+  }
 
   const convResult = await findOrCreateConversation(
     db,

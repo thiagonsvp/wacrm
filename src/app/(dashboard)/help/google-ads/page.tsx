@@ -229,7 +229,27 @@ export default function GoogleAdsHelpPage() {
           </p>
         </Step>
 
-        <Step number={8} title="Autorize os sites e landing pages">
+        <Step number={8} title="Para anúncios que abrem o WhatsApp direto">
+          <ol className="list-decimal space-y-1 pl-5">
+            <li>
+              Em <strong>Campanhas direto para WhatsApp</strong>, informe o
+              telefone com DDI/DDD e a mensagem inicial.
+            </li>
+            <li>Clique em Salvar e gerar link.</li>
+            <li>
+              Copie a URL gerada como URL final do anúncio, preservando{' '}
+              <code>{'{gclid}'}</code> e <code>{'{campaignid}'}</code>.
+            </li>
+          </ol>
+          <p>
+            A cada clique, o CRM cria cinco caracteres, como <code>AB7K2</code>,
+            e abre o WhatsApp com esse protocolo. Quando a mensagem chega, o
+            telefone fornecido pelo WhatsApp é associado ao identificador do
+            clique armazenado no CRM.
+          </p>
+        </Step>
+
+        <Step number={9} title="Para anúncios que passam pelo site ou LP">
           <p>
             No campo <strong>Sites e LPs autorizados</strong>, informe uma URL
             HTTPS por linha. Páginas do mesmo domínio precisam ser cadastradas
@@ -243,7 +263,7 @@ export default function GoogleAdsHelpPage() {
           </code>
         </Step>
 
-        <Step number={9} title="Instale o código nas páginas HTML">
+        <Step number={10} title="Instale o código nas páginas HTML">
           <div className="flex gap-3">
             <MonitorUp className="text-primary mt-0.5 size-5 shrink-0" />
             <div>
@@ -260,7 +280,7 @@ export default function GoogleAdsHelpPage() {
           </div>
         </Step>
 
-        <Step number={10} title="Ative e confira o fluxo">
+        <Step number={11} title="Ative e confira o fluxo">
           <ol className="list-decimal space-y-1 pl-5">
             <li>
               Abra uma LP com um parâmetro de teste, como{' '}
