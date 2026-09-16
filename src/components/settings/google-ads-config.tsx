@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BookOpen,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -11,7 +13,7 @@ import {
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -211,7 +213,19 @@ export function GoogleAdsConfig() {
 
   return (
     <div>
-      <SettingsPanelHead title={t('title')} description={t('description')} />
+      <SettingsPanelHead
+        title={t('title')}
+        description={t('description')}
+        action={
+          <Link
+            href="/help/google-ads"
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            <BookOpen />
+            {t('openHelp')}
+          </Link>
+        }
+      />
       {migrationPending && (
         <Card className="mb-4 border-amber-500/30 bg-amber-500/10 p-4">
           <p className="text-sm">{t('migrationPending')}</p>
@@ -368,18 +382,19 @@ export function GoogleAdsConfig() {
         <div>
           <h3 className="text-sm font-medium">{t('siteTitle')}</h3>
           <p className="text-muted-foreground mt-1 text-xs">{t('siteDesc')}</p>
+          <p className="text-primary mt-2 text-xs">{t('companySnippetHint')}</p>
         </div>
         <Field
           id="google-site"
           label={t('websiteUrl')}
           hint={t('websiteUrlHint')}
         >
-          <Input
+          <Textarea
             id="google-site"
-            type="url"
             value={websiteUrl}
             onChange={(e) => setWebsiteUrl(e.target.value)}
-            placeholder="https://www.seusite.com.br"
+            placeholder={t('websiteUrlPlaceholder')}
+            rows={4}
             disabled={disabled}
           />
         </Field>

@@ -26,6 +26,7 @@ const pageTitles: Record<string, string> = {
   '/broadcasts': 'broadcasts',
   '/automations': 'automations',
   '/settings': 'settings',
+  '/help/google-ads': 'googleAdsHelp',
 };
 
 function getPageTitleKey(pathname: string): string {

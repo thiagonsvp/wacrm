@@ -7,6 +7,7 @@ import {
   RATE_LIMITS,
 } from '@/lib/rate-limit';
 import type { GoogleClickIdType } from '@/lib/google-ads/api';
+import { parseWebsiteOrigins } from '@/lib/google-ads/origins';
 
 const TEXT_LIMIT = 512;
 
@@ -18,15 +19,6 @@ function cors(origin: string | null): Record<string, string> {
 
 function clean(value: unknown, max = TEXT_LIMIT): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
-}
-
-function websiteOrigin(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    return new URL(value).origin;
-  } catch {
-    return null;
-  }
 }
 
 async function configFor(token: string) {
@@ -46,14 +38,15 @@ export async function OPTIONS(
   const { token } = await context.params;
   const config = await configFor(token);
   if (!config) return new NextResponse(null, { status: 404 });
-  const allowed = websiteOrigin(config.website_url);
+  const allowedOrigins = parseWebsiteOrigins(config.website_url).origins;
   const origin = request.headers.get('origin');
-  if (allowed && origin && origin !== allowed)
+  const allowed = origin && allowedOrigins.includes(origin) ? origin : null;
+  if (allowedOrigins.length && origin && !allowed)
     return new NextResponse(null, { status: 403 });
   return new NextResponse(null, {
     status: 204,
     headers: {
-      ...cors(allowed || origin),
+      ...cors(allowed || (allowedOrigins.length ? null : origin)),
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Access-Control-Max-Age': '86400',
@@ -69,9 +62,10 @@ export async function POST(
   const config = await configFor(token);
   if (!config)
     return NextResponse.json({ error: 'Unknown endpoint' }, { status: 404 });
-  const allowed = websiteOrigin(config.website_url);
+  const allowedOrigins = parseWebsiteOrigins(config.website_url).origins;
   const origin = request.headers.get('origin');
-  if (allowed && origin && origin !== allowed) {
+  const allowed = origin && allowedOrigins.includes(origin) ? origin : null;
+  if (allowedOrigins.length && origin && !allowed) {
     return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
   }
   const forwarded =
@@ -89,13 +83,19 @@ export async function POST(
   if (!body)
     return NextResponse.json(
       { error: 'Invalid JSON body' },
-      { status: 400, headers: cors(allowed || origin) }
+      {
+        status: 400,
+        headers: cors(allowed || (allowedOrigins.length ? null : origin)),
+      }
     );
   const phone = clean(body.phone, 40);
   if (!phone)
     return NextResponse.json(
       { error: 'phone is required' },
-      { status: 400, headers: cors(allowed || origin) }
+      {
+        status: 400,
+        headers: cors(allowed || (allowedOrigins.length ? null : origin)),
+      }
     );
 
   const candidates: Array<[GoogleClickIdType, string]> = [
@@ -159,7 +159,7 @@ export async function POST(
     if (error) throw error;
     return NextResponse.json(
       { success: true, contact_id: contact.id, created: contact.created },
-      { headers: cors(allowed || origin) }
+      { headers: cors(allowed || (allowedOrigins.length ? null : origin)) }
     );
   } catch (error) {
     const message =
@@ -170,7 +170,10 @@ export async function POST(
         : 500;
     return NextResponse.json(
       { error: status < 500 ? message : 'Failed to store lead' },
-      { status, headers: cors(allowed || origin) }
+      {
+        status,
+        headers: cors(allowed || (allowedOrigins.length ? null : origin)),
+      }
     );
   }
 }

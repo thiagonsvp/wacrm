@@ -12,6 +12,10 @@ import {
 } from '@/lib/rate-limit';
 import { decrypt, encrypt } from '@/lib/whatsapp/encryption';
 import { testGoogleAdsConnection } from '@/lib/google-ads/api';
+import {
+  parseWebsiteOrigins,
+  serializeWebsiteOrigins,
+} from '@/lib/google-ads/origins';
 
 const MISSING_TABLE = '42P01';
 const SECRET_FIELDS = [
@@ -30,20 +34,6 @@ function string(body: Record<string, unknown>, key: string): string {
 
 function onlyDigits(value: string): string {
   return value.replace(/\D/g, '');
-}
-
-function validWebsiteUrl(value: string): boolean {
-  if (!value) return true;
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' ||
-      (url.protocol === 'http:' &&
-        ['localhost', '127.0.0.1'].includes(url.hostname))
-    );
-  } catch {
-    return false;
-  }
 }
 
 export async function GET() {
@@ -106,14 +96,17 @@ export async function POST(request: Request) {
     const purchaseAction = onlyDigits(
       string(body, 'purchase_conversion_action_id')
     );
-    const websiteUrl = string(body, 'website_url').replace(/\/$/, '');
+    const parsedOrigins = parseWebsiteOrigins(string(body, 'website_url'));
+    const websiteUrl = serializeWebsiteOrigins(parsedOrigins.origins);
     if (!/^\d{10}$/.test(customerId))
       return bad('customer_id must contain 10 digits');
     if (loginCustomerId && !/^\d{10}$/.test(loginCustomerId))
       return bad('login_customer_id must contain 10 digits');
     if (!clientId) return bad('client_id is required');
-    if (!validWebsiteUrl(websiteUrl))
-      return bad('website_url must be a valid HTTPS URL');
+    if (parsedOrigins.invalid.length)
+      return bad(
+        `website_url contains invalid HTTPS URLs: ${parsedOrigins.invalid.join(', ')}`
+      );
     if (
       body.is_active === true &&
       body.send_qualified_lead !== false &&
