@@ -300,7 +300,15 @@
       "deals": "Negócios",
       "noTags": "Nenhuma tag",
       "noDeals": "Nenhum negócio",
-      "addNotePlaceholder": "Adicionar uma nota..."
+      "addNotePlaceholder": "Adicionar uma nota...",
+      "organicLead": "Lead orgânico",
+      "leadVia": "Lead via {source}",
+      "campaignData": "Dados da campanha",
+      "campaign": "Campanha",
+      "campaignId": "ID da campanha",
+      "medium": "Meio",
+      "term": "Termo",
+      "content": "Conteúdo"
     },
     "aiBanner": {
       "pausedTitle": "O assistente de IA está pausado aqui",

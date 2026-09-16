@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildGoogleAdsProtocolAcquisition,
   buildGoogleAdsWhatsAppMessage,
   generateGoogleAdsProtocol,
   parseGoogleAdsProtocol,
@@ -24,5 +25,27 @@ describe('Google Ads WhatsApp protocol', () => {
   it('does not mistake arbitrary five-letter words for protocols', () => {
     expect(parseGoogleAdsProtocol('Quero saber mais sobre preço')).toBeNull();
     expect(parseGoogleAdsProtocol('Protocolo: OI10I')).toBeNull();
+  });
+
+  it('classifies Google traffic without a click id as organic', () => {
+    expect(buildGoogleAdsProtocolAcquisition(null, null, '7770317006')).toEqual(
+      {
+        source: null,
+        sourceId: '7770317006',
+        campaign: null,
+        gclid: null,
+        clickIdType: null,
+      }
+    );
+  });
+
+  it('attributes the lead to Google when a click id exists', () => {
+    expect(
+      buildGoogleAdsProtocolAcquisition('click-123', 'gclid', '7770317006')
+    ).toMatchObject({
+      source: 'Google',
+      gclid: 'click-123',
+      clickIdType: 'gclid',
+    });
   });
 });

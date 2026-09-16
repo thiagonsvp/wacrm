@@ -21,12 +21,14 @@
 
 export interface TextAcquisition {
   /** Google Ads click id — the whole point of this module. */
-  gclid?: string
-  clickIdType?: 'gclid' | 'gbraid' | 'wbraid'
+  gclid?: string;
+  clickIdType?: 'gclid' | 'gbraid' | 'wbraid';
   /** utm_campaign, used as the campaign name when Google is the source. */
-  campaign?: string
+  campaign?: string;
+  /** Campaign id or external identifier when available */
+  sourceId?: string;
   /** Derived platform, only when the text actually says so. */
-  source?: 'Google' | 'Facebook' | 'Instagram'
+  source?: 'Google' | 'Facebook' | 'Instagram';
 }
 
 /**
@@ -35,21 +37,21 @@ export interface TextAcquisition {
  * the bracket/space characters keeps `[gclid:x] hello` from swallowing
  * the human part of the message.
  */
-const TOKEN = '[A-Za-z0-9._~%+-]+'
-const MAX_LEN = 512
+const TOKEN = '[A-Za-z0-9._~%+-]+';
+const MAX_LEN = 512;
 
 /** `[key:value]`, `[key=value]`, `key=value` and `key:value`. */
 function matchParam(text: string, key: string): string | undefined {
   const patterns = [
     new RegExp(`\\[\\s*${key}\\s*[:=]\\s*(${TOKEN})\\s*\\]`, 'i'),
     new RegExp(`(?:^|[?&\\s])${key}\\s*[:=]\\s*(${TOKEN})`, 'i'),
-  ]
+  ];
   for (const re of patterns) {
-    const m = re.exec(text)
-    const value = m?.[1]
-    if (value && value.length <= MAX_LEN) return value
+    const m = re.exec(text);
+    const value = m?.[1];
+    if (value && value.length <= MAX_LEN) return value;
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -60,32 +62,32 @@ function matchParam(text: string, key: string): string | undefined {
  * column, since they play the same role for offline conversion import.
  */
 export function parseAcquisitionFromText(
-  text: string | null | undefined,
+  text: string | null | undefined
 ): TextAcquisition {
-  if (!text) return {}
+  if (!text) return {};
 
   const click = (['gclid', 'wbraid', 'gbraid'] as const)
     .map((type) => ({ type, value: matchParam(text, type) }))
-    .find((candidate) => candidate.value)
-  const gclid = click?.value
-  const campaign = matchParam(text, 'utm_campaign')
-  const utmSource = matchParam(text, 'utm_source')?.toLowerCase()
+    .find((candidate) => candidate.value);
+  const gclid = click?.value;
+  const campaign = matchParam(text, 'utm_campaign');
+  const sourceId = matchParam(text, 'utm_id') || matchParam(text, 'source_id');
+  const utmSource = matchParam(text, 'utm_source')?.toLowerCase();
 
-  const out: TextAcquisition = {}
+  const out: TextAcquisition = {};
   if (gclid) {
-    out.gclid = gclid
-    out.clickIdType = click?.type
+    out.gclid = gclid;
+    out.clickIdType = click?.type;
   }
-  if (campaign) out.campaign = decodeURIComponent(campaign).replace(/\+/g, ' ')
+  if (campaign) out.campaign = decodeURIComponent(campaign).replace(/\+/g, ' ');
+  if (sourceId) out.sourceId = decodeURIComponent(sourceId);
 
-  // A gclid is proof on its own; utm_source is only a hint, so it never
-  // overrides one. Note `utm_source=qr` on a pasted Instagram profile
-  // link is NOT a campaign — matching only these three names keeps that
-  // out (it shows up in real traffic).
-  if (gclid) out.source = 'Google'
-  else if (utmSource === 'google') out.source = 'Google'
-  else if (utmSource === 'facebook') out.source = 'Facebook'
-  else if (utmSource === 'instagram') out.source = 'Instagram'
+  // A Google click id is required for paid Google attribution. A bare
+  // utm_source=google is only a hint and remains organic because it cannot be
+  // reconciled with Google Ads. Meta source hints keep their existing rule.
+  if (gclid) out.source = 'Google';
+  else if (utmSource === 'facebook') out.source = 'Facebook';
+  else if (utmSource === 'instagram') out.source = 'Instagram';
 
-  return out
+  return out;
 }

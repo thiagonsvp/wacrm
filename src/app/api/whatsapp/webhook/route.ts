@@ -592,9 +592,13 @@ async function processMessage(
           adImageUrl: message.referral.image_url,
           url: message.referral.source_url,
         }
-      : textAcquisition?.gclid || textAcquisition?.source
+      : textAcquisition?.gclid ||
+          textAcquisition?.source ||
+          textAcquisition?.campaign ||
+          textAcquisition?.sourceId
         ? {
             source: textAcquisition.source ?? null,
+            sourceId: textAcquisition.sourceId ?? null,
             gclid: textAcquisition.gclid ?? null,
             clickIdType: textAcquisition.clickIdType ?? null,
             campaign: textAcquisition.campaign ?? null,

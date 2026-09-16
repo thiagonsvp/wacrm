@@ -34,6 +34,24 @@ export function buildGoogleAdsWhatsAppMessage(
   return `${message.trim()}\n\nProtocolo: ${protocol}`;
 }
 
+export function buildGoogleAdsProtocolAcquisition(
+  clickId: string | null,
+  clickIdType: GoogleClickIdType | null,
+  campaignId: string | null
+): AcquisitionData {
+  return {
+    // A Google label without a click identifier cannot be attributed back to
+    // an ad. Keep the campaign metadata for context, but classify the lead as
+    // organic as requested by the reporting rule.
+    source: clickId ? 'Google' : null,
+    sourceId: campaignId,
+    // ValueTrack gives us the numeric campaign id, not its display name.
+    campaign: null,
+    gclid: clickId,
+    clickIdType: clickId ? clickIdType : null,
+  };
+}
+
 /** Resolve only unclaimed, non-expired protocols so forwarded messages cannot
  * steal another lead's click attribution. Webhook retries are harmless: after
  * the first claim the contact already owns the click id. */
@@ -65,16 +83,16 @@ export async function resolveGoogleAdsProtocol(
   if (!data) return null;
 
   const clickIdType = data.click_id_type as GoogleClickIdType | null;
+  const clickId = (data.click_id as string | null) ?? null;
+  const campaignId = (data.campaign_id as string | null) ?? null;
   return {
     id: data.id as string,
     code: data.code as string,
-    acquisition: {
-      source: 'Google',
-      sourceId: (data.campaign_id as string | null) ?? null,
-      campaign: (data.campaign_id as string | null) ?? null,
-      gclid: (data.click_id as string | null) ?? null,
+    acquisition: buildGoogleAdsProtocolAcquisition(
+      clickId,
       clickIdType,
-    },
+      campaignId
+    ),
   };
 }
 

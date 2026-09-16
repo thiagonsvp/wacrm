@@ -219,6 +219,19 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
   const displayName = contact.name || contact.phone;
   const initials = displayName.charAt(0).toUpperCase();
+  const attributedSource =
+    contact.acquisition_source === 'Google' && !contact.acquisition_gclid
+      ? null
+      : contact.acquisition_source;
+  const isOrganic = !attributedSource;
+  const hasCampaignData = Boolean(
+    contact.acquisition_campaign ||
+    contact.acquisition_source_id ||
+    contact.acquisition_gclid ||
+    contact.acquisition_medium ||
+    contact.acquisition_term ||
+    contact.acquisition_content
+  );
 
   // Fills the width when opened as a mobile sheet; a fixed rail on
   // desktop. The left border only makes sense beside the thread.
@@ -252,18 +265,65 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             {contact.company && (
               <p className="text-muted-foreground text-xs">{contact.company}</p>
             )}
-            {contact.acquisition_source && (
-              <span className="bg-primary/10 text-primary mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium">
-                Lead via {contact.acquisition_source}
-              </span>
-            )}
-            {contact.acquisition_campaign && (
-              <p
-                className="text-muted-foreground mt-1 max-w-full truncate text-[10px]"
-                title={contact.acquisition_campaign}
-              >
-                Campanha: {contact.acquisition_campaign}
-              </p>
+            <span
+              className={cn(
+                'mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+                isOrganic
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-primary/10 text-primary'
+              )}
+            >
+              {isOrganic
+                ? tSidebar('organicLead')
+                : tSidebar('leadVia', { source: attributedSource })}
+            </span>
+            {hasCampaignData && (
+              <div className="bg-muted/40 mt-3 w-full rounded-lg px-3 py-2 text-left text-xs">
+                <p className="text-foreground mb-1.5 font-medium">
+                  {tSidebar('campaignData')}
+                </p>
+                <div className="text-muted-foreground space-y-1">
+                  {contact.acquisition_campaign && (
+                    <p className="break-words">
+                      {tSidebar('campaign')}:{' '}
+                      <span className="text-foreground">
+                        {contact.acquisition_campaign}
+                      </span>
+                    </p>
+                  )}
+                  {contact.acquisition_source_id && (
+                    <p className="break-all">
+                      {tSidebar('campaignId')}:{' '}
+                      <span className="text-foreground font-mono">
+                        {contact.acquisition_source_id}
+                      </span>
+                    </p>
+                  )}
+                  {contact.acquisition_gclid && (
+                    <p className="break-all">
+                      {contact.acquisition_click_id_type || 'gclid'}:{' '}
+                      <span className="text-foreground font-mono">
+                        {contact.acquisition_gclid}
+                      </span>
+                    </p>
+                  )}
+                  {contact.acquisition_medium && (
+                    <p>
+                      {tSidebar('medium')}: {contact.acquisition_medium}
+                    </p>
+                  )}
+                  {contact.acquisition_term && (
+                    <p>
+                      {tSidebar('term')}: {contact.acquisition_term}
+                    </p>
+                  )}
+                  {contact.acquisition_content && (
+                    <p>
+                      {tSidebar('content')}: {contact.acquisition_content}
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
             {contact.acquisition_ad_text && (
               <p className="text-muted-foreground mt-1 max-w-full text-[10px]">
@@ -298,40 +358,6 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
           {/* Phone */}
           <div className="mt-4 space-y-2">
-            {contact.acquisition_source_id && (
-              <div className="bg-muted/40 text-muted-foreground rounded-lg px-3 py-2 text-xs">
-                Source ID:{' '}
-                <span className="font-mono">
-                  {contact.acquisition_source_id}
-                </span>
-              </div>
-            )}
-            {contact.acquisition_gclid && (
-              <div className="bg-muted/40 text-muted-foreground rounded-lg px-3 py-2 text-xs">
-                {/* Google's click id. Wraps because it is long and the
-                    operator needs to copy it whole to reconcile a sale
-                    in Google Ads. */}
-                {contact.acquisition_click_id_type || 'gclid'}:{' '}
-                <span className="font-mono break-all">
-                  {contact.acquisition_gclid}
-                </span>
-              </div>
-            )}
-            {(contact.acquisition_medium ||
-              contact.acquisition_term ||
-              contact.acquisition_content) && (
-              <div className="bg-muted/40 text-muted-foreground space-y-1 rounded-lg px-3 py-2 text-xs">
-                {contact.acquisition_medium && (
-                  <p>Meio: {contact.acquisition_medium}</p>
-                )}
-                {contact.acquisition_term && (
-                  <p>Termo: {contact.acquisition_term}</p>
-                )}
-                {contact.acquisition_content && (
-                  <p>Conteúdo: {contact.acquisition_content}</p>
-                )}
-              </div>
-            )}
             {contact.acquisition_url && (
               <a
                 href={contact.acquisition_url}
