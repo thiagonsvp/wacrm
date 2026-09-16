@@ -4,6 +4,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { downloadMedia } from '@/lib/whatsapp/providers/uazapi';
 import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text';
+import { parseUazapiChatIdentity } from '@/lib/whatsapp/uazapi-identity';
 import {
   claimGoogleAdsProtocol,
   resolveGoogleAdsProtocol,
@@ -116,8 +117,10 @@ interface UazapiMessage {
   fromMe?: boolean | string;
   from_me?: boolean | string;
   isFromMe?: boolean | string;
+  owner?: string;
   isGroup?: boolean;
   chatid?: string;
+  chatlid?: string;
   sender?: string;
   /** Phone-based JID for the sender — reliable even when `sender`/`chatid` use `@lid` addressing. */
   sender_pn?: string;
@@ -145,8 +148,10 @@ interface UazapiMessage {
 
 interface UazapiWebhookPayload {
   EventType?: string;
+  owner?: string;
   message?: UazapiMessage;
   chat?: {
+    owner?: string;
     wa_contactName?: string;
     lead_name?: string;
     name?: string;
@@ -160,6 +165,40 @@ interface UazapiWebhookPayload {
   instanceName?: string;
   /** The sending instance's own token — used to detect a config mismatch. */
   token?: string;
+}
+
+async function findPhoneByUazapiLid(
+  db: ReturnType<typeof supabaseAdmin>,
+  accountId: string,
+  lid: string
+): Promise<string | null> {
+  const { data, error } = await db
+    .from('contacts')
+    .select('phone')
+    .eq('account_id', accountId)
+    .eq('channel', 'whatsapp')
+    .eq('external_id', lid)
+    .maybeSingle();
+  if (error) {
+    console.error('[uazapi-webhook] LID lookup failed:', error);
+    return null;
+  }
+  return data?.phone ? normalizePhone(data.phone) : null;
+}
+
+async function rememberUazapiLid(
+  db: ReturnType<typeof supabaseAdmin>,
+  accountId: string,
+  contactId: string,
+  lid: string | null
+): Promise<void> {
+  if (!lid) return;
+  const { error } = await db
+    .from('contacts')
+    .update({ external_id: lid })
+    .eq('account_id', accountId)
+    .eq('id', contactId);
+  if (error) console.error('[uazapi-webhook] LID mapping failed:', error);
 }
 
 interface UazapiStoredConfig {
@@ -344,30 +383,25 @@ async function processUazapiWebhook(
   const msg = body.message;
   if (!msg || msg.isGroup) return;
 
-  // `chatid` identifies the CHAT (the lead), regardless of who sent
-  // this particular message — never the sender. It can be `@lid`
-  // (opaque linked-device id); `sender_pn` is a safe phone-based
-  // fallback ONLY for inbound (non-fromMe) messages, where the sender
-  // IS the chat partner. For an agent-device (fromMe) message the
-  // sender is the agent's own number, so no such fallback applies —
-  // skip rather than risk misattributing to the wrong contact.
-  const fromMe = [msg.fromMe, msg.from_me, msg.isFromMe].some(
-    (value) => value === true || value === 'true' || value === '1'
-  );
-  const chat = body.chat;
-  const chatIdentity =
-    msg.chatid ||
-    chat?.chatid ||
-    chat?.wa_chatid ||
-    chat?.phone ||
-    chat?.wa_phone;
-  const rawJid =
-    chatIdentity?.endsWith('@lid') && msg.sender_pn && !fromMe
-      ? msg.sender_pn
-      : chatIdentity;
-  if (!rawJid || rawJid.endsWith('@lid')) return;
-
-  const phone = normalizePhone(rawJid.replace(/@.*/, ''));
+  const db = supabaseAdmin();
+  const identity = parseUazapiChatIdentity(body);
+  const fromMe = identity.fromMe;
+  let phone = identity.phone;
+  let matchedByLid = false;
+  if (fromMe && !phone && identity.lid) {
+    phone = await findPhoneByUazapiLid(db, config.account_id, identity.lid);
+    matchedByLid = !!phone;
+  }
+  // Affected UAZAPI payloads put the connected business number in chatid.
+  // Never turn that number into a customer when the real peer is unresolved.
+  if (!phone || phone === identity.ownerPhone) {
+    console.warn('[uazapi-webhook] unresolved peer identity; event ignored', {
+      fromMe,
+      lid: identity.lid,
+      messageId: msg.messageid || msg.id,
+    });
+    return;
+  }
 
   let contentType = inferContentType(msg);
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) contentType = 'text';
@@ -377,7 +411,6 @@ async function processUazapiWebhook(
     : new Date();
   const externalMessageId = msg.messageid || msg.id || `uazapi-${Date.now()}`;
 
-  const db = supabaseAdmin();
   const mediaUrl = await resolveMediaUrl(
     config,
     contentType,
@@ -419,7 +452,9 @@ async function processUazapiWebhook(
     // the conversation from WhatsApp. Previously this returned early for
     // new leads, dropping the initial messages from the CRM entirely.
     const contactName =
-      body.chat?.wa_contactName || body.chat?.lead_name || phone;
+      body.chat?.wa_contactName ||
+      body.chat?.lead_name ||
+      (matchedByLid ? '' : phone);
     const contactOutcome = await findOrCreateContact(
       db,
       config.account_id,
@@ -429,6 +464,12 @@ async function processUazapiWebhook(
       { avatarUrl: body.chat?.image || body.chat?.imagePreview || null }
     );
     if (!contactOutcome) return;
+    await rememberUazapiLid(
+      db,
+      config.account_id,
+      contactOutcome.contact.id,
+      identity.lid
+    );
     const convResult = await findOrCreateConversation(
       db,
       config.account_id,
@@ -490,6 +531,12 @@ async function processUazapiWebhook(
     { ...acquisition, avatarUrl }
   );
   if (!contactOutcome) return;
+  await rememberUazapiLid(
+    db,
+    config.account_id,
+    contactOutcome.contact.id,
+    identity.lid
+  );
   if (protocolMatch) {
     await claimGoogleAdsProtocol(
       db,
