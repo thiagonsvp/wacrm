@@ -35,7 +35,7 @@ function unavailable(message: string, status = 503) {
 
 /**
  * Public Google Ads destination for direct-to-WhatsApp campaigns.
- * Stores the real click id behind an opaque five-character protocol and then
+ * Stores the real click id behind an opaque six-character protocol and then
  * redirects to WhatsApp. No credential or click identifier reaches the chat.
  */
 export async function GET(

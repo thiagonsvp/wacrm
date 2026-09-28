@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseAcquisitionFromText } from './acquisition-text';
+import {
+  parseAcquisitionFromText,
+  stripLeadingTrackingTags,
+} from './acquisition-text';
 
 const GCLID = 'Cj0KCQjw5ZKmBhCBARIsAOc7Rx0abc-_123';
 
@@ -108,5 +111,40 @@ describe('parseAcquisitionFromText — nothing to read', () => {
 
   it('ignores an absurdly long value rather than storing it', () => {
     expect(parseAcquisitionFromText(`[gclid:${'a'.repeat(600)}]`)).toEqual({});
+  });
+});
+
+describe('stripLeadingTrackingTags', () => {
+  it('strips a run of recognised tracking tags glued to the front', () => {
+    expect(
+      stripLeadingTrackingTags(
+        `[gclid:${GCLID}][gbraid:abc][wbraid:def][utm_source:google][utm_medium:cpc][utm_campaign:creative_fachadas][utm_content:fachada acm] Olá, vim pelo site e quero orçamento de Letreiros e Fachadas!`
+      )
+    ).toBe('Olá, vim pelo site e quero orçamento de Letreiros e Fachadas!');
+  });
+
+  it('strips a bare template label alongside a recognised tag', () => {
+    expect(
+      stripLeadingTrackingTags(
+        `[Home-Float][gclid:${GCLID}] Olá! Gostaria de um orçamento.`
+      )
+    ).toBe('Olá! Gostaria de um orçamento.');
+  });
+
+  it('leaves a bracket inside the human text alone', () => {
+    expect(stripLeadingTrackingTags('Preciso de 12 buchas [urgente]')).toBe(
+      'Preciso de 12 buchas [urgente]'
+    );
+  });
+
+  it('falls back to the original text when the message is only tags', () => {
+    const onlyTags = `[gclid:${GCLID}][utm_campaign:x]`;
+    expect(stripLeadingTrackingTags(onlyTags)).toBe(onlyTags);
+  });
+
+  it('handles null, undefined and plain text', () => {
+    expect(stripLeadingTrackingTags(null)).toBeNull();
+    expect(stripLeadingTrackingTags(undefined)).toBeNull();
+    expect(stripLeadingTrackingTags('bom dia')).toBe('bom dia');
   });
 });

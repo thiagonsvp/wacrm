@@ -95,3 +95,20 @@ export function parseAcquisitionFromText(
 
   return out;
 }
+
+/**
+ * Site button templates glue their tracking tags to the front of the
+ * pre-filled text — `[gclid:x][utm_campaign:y] Olá, quero orçamento` — so
+ * once those tags are parsed for attribution they'd otherwise sit in the
+ * conversation forever as visible clutter. This strips any run of leading
+ * `[...]` tags (recognised or not — a bare `[Home-Float]` template label
+ * counts too) so the inbox shows only what the lead actually typed. A
+ * bracket appearing later, inside the human text, is left alone.
+ */
+export function stripLeadingTrackingTags(
+  text: string | null | undefined
+): string | null {
+  if (!text) return text ?? null;
+  const stripped = text.replace(/^(?:\s*\[[^[\]]*\])+\s*/, '');
+  return stripped.length > 0 ? stripped : text;
+}

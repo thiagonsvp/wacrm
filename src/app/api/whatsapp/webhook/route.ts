@@ -4,7 +4,10 @@ import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api';
 import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature';
-import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text';
+import {
+  parseAcquisitionFromText,
+  stripLeadingTrackingTags,
+} from '@/lib/whatsapp/acquisition-text';
 import {
   claimGoogleAdsProtocol,
   resolveGoogleAdsProtocol,
@@ -574,6 +577,14 @@ async function processMessage(
     ? null
     : (protocolMatch?.acquisition ??
       parseAcquisitionFromText(message.text?.body));
+
+  // Tags are parsed above from the raw text; strip them now, before the
+  // text is used as message content, so the inbox shows only what the
+  // lead typed rather than the tracking markup the site glued to it.
+  if (message.text?.body) {
+    message.text.body =
+      stripLeadingTrackingTags(message.text.body) ?? message.text.body;
+  }
 
   // Find or create contact / conversation — shared with the Evolution
   // webhook via src/lib/whatsapp/inbound.ts.

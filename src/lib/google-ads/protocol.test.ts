@@ -7,22 +7,29 @@ import {
 } from './protocol';
 
 describe('Google Ads WhatsApp protocol', () => {
-  it('generates an unambiguous five-character code', () => {
+  it('generates an unambiguous six-character code', () => {
     for (let i = 0; i < 50; i += 1) {
-      expect(generateGoogleAdsProtocol()).toMatch(/^[A-Z2-9]{5}$/);
+      expect(generateGoogleAdsProtocol()).toMatch(/^[A-Z2-9]{6}$/);
     }
   });
 
   it('adds and parses the protocol without exposing the click id', () => {
     const message = buildGoogleAdsWhatsAppMessage(
       'Olá! Quero mais informações.',
-      'AB7K2'
+      'AB7K2M'
     );
-    expect(message).toBe('Olá! Quero mais informações.\n\nProtocolo: AB7K2');
-    expect(parseGoogleAdsProtocol(message)).toBe('AB7K2');
+    expect(message).toBe('Olá! Quero mais informações.\n\nProtocolo: AB7K2M');
+    expect(parseGoogleAdsProtocol(message)).toBe('AB7K2M');
   });
 
-  it('does not mistake arbitrary five-letter words for protocols', () => {
+  it('still parses a protocol issued under the old five-character format', () => {
+    // Redirects minted before the length bump remain resolvable for
+    // MAX_AGE_DAYS, so old messages already in a lead's inbox must keep
+    // parsing correctly during the rollout.
+    expect(parseGoogleAdsProtocol('Protocolo: AB7K2')).toBe('AB7K2');
+  });
+
+  it('does not mistake arbitrary five- or six-letter words for protocols', () => {
     expect(parseGoogleAdsProtocol('Quero saber mais sobre preço')).toBeNull();
     expect(parseGoogleAdsProtocol('Protocolo: OI10I')).toBeNull();
   });

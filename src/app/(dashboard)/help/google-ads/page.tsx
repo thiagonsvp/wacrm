@@ -242,7 +242,7 @@ export default function GoogleAdsHelpPage() {
             </li>
           </ol>
           <p>
-            A cada clique, o CRM cria cinco caracteres, como <code>AB7K2</code>,
+            A cada clique, o CRM cria seis caracteres, como <code>AB7K2M</code>,
             e abre o WhatsApp com esse protocolo. Quando a mensagem chega, o
             telefone fornecido pelo WhatsApp é associado ao identificador do
             clique armazenado no CRM.

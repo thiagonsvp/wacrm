@@ -4,7 +4,11 @@ import type { AcquisitionData } from '@/lib/whatsapp/inbound';
 import type { GoogleClickIdType } from './api';
 
 const PROTOCOL_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const PROTOCOL_PATTERN = /(?:^|\s)Protocolo:\s*([A-Z2-9]{5})(?=\s|$)/i;
+const PROTOCOL_LENGTH = 6;
+// Accepts 5 or 6 chars so protocols already redirected under the old
+// 5-character format (still resolvable for MAX_AGE_DAYS) keep parsing
+// correctly during the rollout of the new length.
+const PROTOCOL_PATTERN = /(?:^|\s)Protocolo:\s*([A-Z2-9]{5,6})(?=\s|$)/i;
 const MAX_AGE_DAYS = 90;
 
 export interface GoogleAdsProtocolMatch {
@@ -14,7 +18,7 @@ export interface GoogleAdsProtocolMatch {
 }
 
 export function generateGoogleAdsProtocol(): string {
-  const bytes = randomBytes(5);
+  const bytes = randomBytes(PROTOCOL_LENGTH);
   return Array.from(
     bytes,
     (byte) => PROTOCOL_ALPHABET[byte % PROTOCOL_ALPHABET.length]

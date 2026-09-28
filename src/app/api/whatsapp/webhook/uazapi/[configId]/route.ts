@@ -3,7 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { downloadMedia } from '@/lib/whatsapp/providers/uazapi';
-import { parseAcquisitionFromText } from '@/lib/whatsapp/acquisition-text';
+import {
+  parseAcquisitionFromText,
+  stripLeadingTrackingTags,
+} from '@/lib/whatsapp/acquisition-text';
 import { parseUazapiChatIdentity } from '@/lib/whatsapp/uazapi-identity';
 import {
   claimGoogleAdsProtocol,
@@ -405,7 +408,7 @@ async function processUazapiWebhook(
 
   let contentType = inferContentType(msg);
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) contentType = 'text';
-  let contentText = msg.text ?? null;
+  let contentText = stripLeadingTrackingTags(msg.text ?? null);
   const timestamp = msg.messageTimestamp
     ? new Date(msg.messageTimestamp)
     : new Date();
