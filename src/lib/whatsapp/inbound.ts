@@ -29,6 +29,9 @@ export interface AcquisitionData {
   source?: 'Facebook' | 'Instagram' | 'Google' | null
   sourceId?: string | null
   campaign?: string | null
+  medium?: string | null
+  term?: string | null
+  content?: string | null
   adText?: string | null
   adImageUrl?: string | null
   url?: string | null
@@ -59,7 +62,7 @@ export async function findOrCreateContact(
   const existingContact = await findExistingContact(db, accountId, phone)
 
   if (existingContact) {
-    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url || acquisition?.ctwaClid || acquisition?.gclid || acquisition?.protocol) {
+    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.medium || acquisition?.term || acquisition?.content || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url || acquisition?.ctwaClid || acquisition?.gclid || acquisition?.protocol) {
       await db
         .from('contacts')
         .update({
@@ -67,6 +70,9 @@ export async function findOrCreateContact(
           ...(acquisition?.source ? { acquisition_source: acquisition.source } : {}),
           ...(acquisition?.sourceId ? { acquisition_source_id: acquisition.sourceId } : {}),
           ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
+          ...(acquisition?.medium ? { acquisition_medium: acquisition.medium } : {}),
+          ...(acquisition?.term ? { acquisition_term: acquisition.term } : {}),
+          ...(acquisition?.content ? { acquisition_content: acquisition.content } : {}),
           ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
           ...(acquisition?.adImageUrl ? { acquisition_ad_image_url: acquisition.adImageUrl } : {}),
           ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
@@ -96,6 +102,9 @@ export async function findOrCreateContact(
       ...(acquisition?.source ? { acquisition_source: acquisition.source } : {}),
       ...(acquisition?.sourceId ? { acquisition_source_id: acquisition.sourceId } : {}),
       ...(acquisition?.campaign ? { acquisition_campaign: acquisition.campaign } : {}),
+      ...(acquisition?.medium ? { acquisition_medium: acquisition.medium } : {}),
+      ...(acquisition?.term ? { acquisition_term: acquisition.term } : {}),
+      ...(acquisition?.content ? { acquisition_content: acquisition.content } : {}),
       ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
       ...(acquisition?.adImageUrl ? { acquisition_ad_image_url: acquisition.adImageUrl } : {}),
       ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),

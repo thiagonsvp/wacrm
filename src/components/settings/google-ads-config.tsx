@@ -132,13 +132,19 @@ export function GoogleAdsConfig() {
     webhookToken && origin
       ? `${origin}/api/google-ads/leads/${webhookToken}`
       : '';
+  const goRedirectBase =
+    webhookToken && origin ? `${origin}/go/google-ads/${webhookToken}` : '';
   const snippet = useMemo(
-    () => googleLeadTrackingSnippet(endpoint),
-    [endpoint]
+    () =>
+      googleLeadTrackingSnippet(
+        endpoint,
+        whatsAppConfigured ? goRedirectBase : ''
+      ),
+    [endpoint, goRedirectBase, whatsAppConfigured]
   );
   const directWhatsAppLink =
-    whatsAppConfigured && webhookToken && origin
-      ? `${origin}/go/google-ads/${webhookToken}?gclid={gclid}&campaignid={campaignid}`
+    whatsAppConfigured && goRedirectBase
+      ? `${goRedirectBase}?gclid={gclid}&campaignid={campaignid}`
       : '';
   const secret = (key: string, value: string) =>
     edited[key] ? value.trim() : '';

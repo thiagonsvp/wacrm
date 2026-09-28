@@ -41,6 +41,9 @@ describe('Google Ads WhatsApp protocol', () => {
       source: null,
       sourceId: '7770317006',
       campaign: null,
+      medium: null,
+      term: null,
+      content: null,
       gclid: null,
       clickIdType: null,
       protocol: 'AB7K2',
@@ -67,5 +70,43 @@ describe('Google Ads WhatsApp protocol', () => {
     expect(
       buildGoogleAdsProtocolAcquisition('AB7K2', null, null, null)
     ).toMatchObject({ source: null, protocol: 'AB7K2' });
+  });
+
+  it('carries utm_campaign/medium/content/term through even without a click id', () => {
+    expect(
+      buildGoogleAdsProtocolAcquisition('AB7K2', null, null, null, {
+        campaign: 'creative_fachadas',
+        medium: 'cpc',
+        content: 'fachada acm',
+        term: 'letreiros',
+      })
+    ).toMatchObject({
+      source: null,
+      campaign: 'creative_fachadas',
+      medium: 'cpc',
+      content: 'fachada acm',
+      term: 'letreiros',
+    });
+  });
+
+  it('a Google click id always wins over a conflicting utm_source', () => {
+    expect(
+      buildGoogleAdsProtocolAcquisition('AB7K2', 'click-123', 'gclid', null, {
+        source: 'facebook',
+      })
+    ).toMatchObject({ source: 'Google', gclid: 'click-123' });
+  });
+
+  it('falls back to utm_source for Facebook/Instagram when there is no click id', () => {
+    expect(
+      buildGoogleAdsProtocolAcquisition('AB7K2', null, null, null, {
+        source: 'Facebook',
+      })
+    ).toMatchObject({ source: 'Facebook' });
+    expect(
+      buildGoogleAdsProtocolAcquisition('AB7K2', null, null, null, {
+        source: 'instagram',
+      })
+    ).toMatchObject({ source: 'Instagram' });
   });
 });

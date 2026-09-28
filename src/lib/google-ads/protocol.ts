@@ -38,20 +38,42 @@ export function buildGoogleAdsWhatsAppMessage(
   return `${message.trim()}\n\nProtocolo: ${protocol}`;
 }
 
+export interface GoogleAdsProtocolUtm {
+  source?: string | null;
+  medium?: string | null;
+  campaign?: string | null;
+  content?: string | null;
+  term?: string | null;
+}
+
 export function buildGoogleAdsProtocolAcquisition(
   protocol: string,
   clickId: string | null,
   clickIdType: GoogleClickIdType | null,
-  campaignId: string | null
+  campaignId: string | null,
+  utm?: GoogleAdsProtocolUtm
 ): AcquisitionData {
+  const utmSource = utm?.source?.toLowerCase() ?? null;
+  // A Google click id always wins the attribution — it is the only signal
+  // that can be reconciled with an actual ad spend row. Without one, fall
+  // back to whatever generic utm_source the landing page carried; the
+  // reporting rule still classifies a bare utm_source as organic otherwise.
+  const source = clickId
+    ? ('Google' as const)
+    : utmSource === 'facebook'
+      ? ('Facebook' as const)
+      : utmSource === 'instagram'
+        ? ('Instagram' as const)
+        : null;
   return {
-    // A Google label without a click identifier cannot be attributed back to
-    // an ad. Keep the campaign metadata for context, but classify the lead as
-    // organic as requested by the reporting rule.
-    source: clickId ? 'Google' : null,
+    source,
+    // ValueTrack gives us the numeric campaign id, not its display name —
+    // utm_campaign (below) carries the human-readable one when present.
     sourceId: campaignId,
-    // ValueTrack gives us the numeric campaign id, not its display name.
-    campaign: null,
+    campaign: utm?.campaign || null,
+    medium: utm?.medium || null,
+    term: utm?.term || null,
+    content: utm?.content || null,
     gclid: clickId,
     clickIdType: clickId ? clickIdType : null,
     // Kept regardless of clickId so an organic lead from this flow still
@@ -76,7 +98,9 @@ export async function resolveGoogleAdsProtocol(
   ).toISOString();
   const { data, error } = await db
     .from('google_ads_click_protocols')
-    .select('id, code, click_id, click_id_type, campaign_id')
+    .select(
+      'id, code, click_id, click_id_type, campaign_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term'
+    )
     .eq('account_id', accountId)
     .eq('code', code)
     .is('contact_id', null)
@@ -100,7 +124,14 @@ export async function resolveGoogleAdsProtocol(
       data.code as string,
       clickId,
       clickIdType,
-      campaignId
+      campaignId,
+      {
+        source: data.utm_source as string | null,
+        medium: data.utm_medium as string | null,
+        campaign: data.utm_campaign as string | null,
+        content: data.utm_content as string | null,
+        term: data.utm_term as string | null,
+      }
     ),
   };
 }

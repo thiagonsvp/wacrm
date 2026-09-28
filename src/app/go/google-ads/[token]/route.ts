@@ -8,12 +8,21 @@ import type { GoogleClickIdType } from '@/lib/google-ads/api';
 
 const MAX_CLICK_ID = 512;
 const MAX_CAMPAIGN_ID = 128;
+const MAX_UTM = 256;
+const MAX_TEXT = 512;
 
 function value(params: URLSearchParams, key: string, max: number): string {
   const raw = params.get(key)?.trim() ?? '';
   // Google Ads preview/test requests can leave ValueTrack macros literal.
   if (!raw || raw.includes('{') || raw.includes('}')) return '';
   return raw.slice(0, max);
+}
+
+/** Like `value`, but for the pre-filled message text — free-form human
+ * copy from the site's own WhatsApp button, not a ValueTrack macro, so
+ * braces are legitimate content rather than a sign of an unexpanded one. */
+function freeText(params: URLSearchParams, key: string, max: number): string {
+  return params.get(key)?.trim().slice(0, max) ?? '';
 }
 
 function clickIdentifier(
@@ -64,8 +73,20 @@ export async function GET(
   const url = new URL(request.url);
   const click = clickIdentifier(url.searchParams);
   const campaignId = value(url.searchParams, 'campaignid', MAX_CAMPAIGN_ID);
+  const utmSource = value(url.searchParams, 'utm_source', MAX_UTM);
+  const utmMedium = value(url.searchParams, 'utm_medium', MAX_UTM);
+  const utmCampaign = value(url.searchParams, 'utm_campaign', MAX_UTM);
+  const utmContent = value(url.searchParams, 'utm_content', MAX_UTM);
+  const utmTerm = value(url.searchParams, 'utm_term', MAX_UTM);
+  // The landing page's own button already has a pre-filled message tailored
+  // to that page (e.g. "Quero orçamento de Fachadas"); fall back to the
+  // account's generic message only when the link brought none.
+  const customText = freeText(url.searchParams, 'text', MAX_TEXT);
 
   let protocol = '';
+  // Degrades to click-id-only if the utm_* columns (migration 077) are not
+  // live yet in this environment, rather than failing a real ad click.
+  let utmColumnsMissing = false;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const candidate = generateGoogleAdsProtocol();
     const { error } = await db.from('google_ads_click_protocols').insert({
@@ -74,10 +95,24 @@ export async function GET(
       click_id: click?.value || null,
       click_id_type: click?.type || null,
       campaign_id: campaignId || null,
+      ...(utmColumnsMissing
+        ? {}
+        : {
+            utm_source: utmSource || null,
+            utm_medium: utmMedium || null,
+            utm_campaign: utmCampaign || null,
+            utm_content: utmContent || null,
+            utm_term: utmTerm || null,
+          }),
     });
     if (!error) {
       protocol = candidate;
       break;
+    }
+    if (error.code === '42703' && !utmColumnsMissing) {
+      utmColumnsMissing = true;
+      attempt -= 1;
+      continue;
     }
     if (error.code !== '23505') {
       console.error('[google ads] protocol creation failed:', error);
@@ -92,7 +127,7 @@ export async function GET(
   const whatsapp = new URL(`https://wa.me/${settings.phone}`);
   whatsapp.searchParams.set(
     'text',
-    buildGoogleAdsWhatsAppMessage(settings.message, protocol)
+    buildGoogleAdsWhatsAppMessage(customText || settings.message, protocol)
   );
   const response = NextResponse.redirect(whatsapp, 302);
   response.headers.set('Cache-Control', 'no-store');

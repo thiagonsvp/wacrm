@@ -28,4 +28,24 @@ describe('googleLeadTrackingSnippet', () => {
       "if (!saved.landing_url) saved.landing_url = window.location.href;"
     );
   });
+
+  it('without a redirect base, still tags the pre-filled text (old behavior)', () => {
+    const code = googleLeadTrackingSnippet(
+      'https://crm.example/api/google-ads/leads/token'
+    );
+    expect(code).toContain('var REDIRECT_BASE = "";');
+    expect(code).toContain("url.searchParams.set('text', tracking + ' ' + current)");
+  });
+
+  it('with a redirect base, rewrites WhatsApp links to go through it instead of tagging the text', () => {
+    const code = googleLeadTrackingSnippet(
+      'https://crm.example/api/google-ads/leads/token',
+      'https://crm.example/go/google-ads/token'
+    );
+    expect(code).toContain(
+      'var REDIRECT_BASE = "https://crm.example/go/google-ads/token";'
+    );
+    expect(code).toContain('if (REDIRECT_BASE)');
+    expect(code).toContain("redirect.searchParams.set(key, saved[key])");
+  });
 });
