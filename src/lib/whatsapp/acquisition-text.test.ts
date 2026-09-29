@@ -66,6 +66,23 @@ describe('parseAcquisitionFromText — Google', () => {
   it('tolerates spacing and the equals form inside brackets', () => {
     expect(parseAcquisitionFromText('[ gclid = abc123 ]').gclid).toBe('abc123');
   });
+
+  it('reads utm_medium, utm_term and a multi-word utm_content from the bracket form', () => {
+    // Real traffic: ad-creative names in utm_content are often several
+    // words, e.g. "fachada de loja" — no dashes/underscores standing in
+    // for spaces the way utm_campaign slugs usually do.
+    const out = parseAcquisitionFromText(
+      `[gclid:${GCLID}][utm_source:google][utm_medium:cpc][utm_campaign:creative_fachadas][utm_content:fachada de loja][utm_term:letreiros] Olá, vim pelo site e quero orçamento de Letreiros e Fachadas!`
+    );
+    expect(out).toMatchObject({
+      gclid: GCLID,
+      source: 'Google',
+      campaign: 'creative_fachadas',
+      medium: 'cpc',
+      content: 'fachada de loja',
+      term: 'letreiros',
+    });
+  });
 });
 
 describe('parseAcquisitionFromText — utm_source', () => {

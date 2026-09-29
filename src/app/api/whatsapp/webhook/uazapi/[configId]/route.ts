@@ -269,12 +269,23 @@ function extractAcquisition(msg: UazapiMessage) {
     // gclid only reaches WhatsApp if the advertiser's site wrote it into
     // the pre-filled text — so that is the one place left to look.
     const fromText = parseAcquisitionFromText(msg.text);
-    if (!fromText.gclid && !fromText.source) return undefined;
+    if (
+      !fromText.gclid &&
+      !fromText.source &&
+      !fromText.campaign &&
+      !fromText.medium &&
+      !fromText.term &&
+      !fromText.content
+    )
+      return undefined;
     return {
       source: fromText.source ?? null,
       gclid: fromText.gclid ?? null,
       clickIdType: fromText.clickIdType ?? null,
       campaign: fromText.campaign ?? null,
+      medium: fromText.medium ?? null,
+      term: fromText.term ?? null,
+      content: fromText.content ?? null,
       sourceId: null,
       adText: null,
       url: null,

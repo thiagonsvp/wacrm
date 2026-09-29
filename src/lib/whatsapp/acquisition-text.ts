@@ -25,6 +25,12 @@ export interface TextAcquisition {
   clickIdType?: 'gclid' | 'gbraid' | 'wbraid';
   /** utm_campaign, used as the campaign name when Google is the source. */
   campaign?: string;
+  /** utm_medium — e.g. "cpc", "social". */
+  medium?: string;
+  /** utm_term — search-ads keyword, when present. */
+  term?: string;
+  /** utm_content — distinguishes the specific ad/creative within a campaign. */
+  content?: string;
   /** Campaign id or external identifier when available */
   sourceId?: string;
   /** Derived platform, only when the text actually says so. */
@@ -36,18 +42,22 @@ export interface TextAcquisition {
 }
 
 /**
- * Click ids and utm values are URL-safe tokens. Bounding the length
- * stops a pasted essay from being stored as a "campaign", and excluding
- * the bracket/space characters keeps `[gclid:x] hello` from swallowing
- * the human part of the message.
+ * A bare `key=value` has no closing delimiter, so its value is bounded to
+ * URL-safe characters — otherwise it would swallow the rest of the message
+ * as "value". A bracketed `[key:value]` already has an unambiguous end (the
+ * `]`), so its value may contain anything up to it, including spaces —
+ * ad-creative names in `utm_content`/`utm_campaign` are often multiple
+ * words (e.g. `[utm_content:fachada de loja]`). Bounding the length either
+ * way stops a pasted essay from being stored as a "campaign".
  */
 const TOKEN = '[A-Za-z0-9._~%+-]+';
+const BRACKET_VALUE = '[^[\\]]+?';
 const MAX_LEN = 512;
 
 /** `[key:value]`, `[key=value]`, `key=value` and `key:value`. */
 function matchParam(text: string, key: string): string | undefined {
   const patterns = [
-    new RegExp(`\\[\\s*${key}\\s*[:=]\\s*(${TOKEN})\\s*\\]`, 'i'),
+    new RegExp(`\\[\\s*${key}\\s*[:=]\\s*(${BRACKET_VALUE})\\s*\\]`, 'i'),
     new RegExp(`(?:^|[?&\\s])${key}\\s*[:=]\\s*(${TOKEN})`, 'i'),
   ];
   for (const re of patterns) {
@@ -75,15 +85,29 @@ export function parseAcquisitionFromText(
     .find((candidate) => candidate.value);
   const gclid = click?.value;
   const campaign = matchParam(text, 'utm_campaign');
+  const medium = matchParam(text, 'utm_medium');
+  const term = matchParam(text, 'utm_term');
+  const content = matchParam(text, 'utm_content');
   const sourceId = matchParam(text, 'utm_id') || matchParam(text, 'source_id');
   const utmSource = matchParam(text, 'utm_source')?.toLowerCase();
+
+  const decode = (value: string) => {
+    try {
+      return decodeURIComponent(value).replace(/\+/g, ' ');
+    } catch {
+      return value.replace(/\+/g, ' ');
+    }
+  };
 
   const out: TextAcquisition = {};
   if (gclid) {
     out.gclid = gclid;
     out.clickIdType = click?.type;
   }
-  if (campaign) out.campaign = decodeURIComponent(campaign).replace(/\+/g, ' ');
+  if (campaign) out.campaign = decode(campaign);
+  if (medium) out.medium = decode(medium);
+  if (term) out.term = decode(term);
+  if (content) out.content = decode(content);
   if (sourceId) out.sourceId = decodeURIComponent(sourceId);
 
   // A Google click id is required for paid Google attribution. A bare

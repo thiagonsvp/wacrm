@@ -224,10 +224,14 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
       ? null
       : contact.acquisition_source;
   const isOrganic = !attributedSource;
+  // gclid itself is intentionally not shown here — it's a long opaque
+  // token useful for Google Ads offline-conversion upload, not for a
+  // salesperson reading the sidebar. The "Lead via Google" pill above
+  // already says the source; this card is for human-readable campaign
+  // context (utm_campaign/medium/term/content).
   const hasCampaignData = Boolean(
     contact.acquisition_campaign ||
     contact.acquisition_source_id ||
-    contact.acquisition_gclid ||
     contact.acquisition_medium ||
     contact.acquisition_term ||
     contact.acquisition_content ||
@@ -297,14 +301,6 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                       {tSidebar('campaignId')}:{' '}
                       <span className="text-foreground font-mono">
                         {contact.acquisition_source_id}
-                      </span>
-                    </p>
-                  )}
-                  {contact.acquisition_gclid && (
-                    <p className="break-all">
-                      {contact.acquisition_click_id_type || 'gclid'}:{' '}
-                      <span className="text-foreground font-mono">
-                        {contact.acquisition_gclid}
                       </span>
                     </p>
                   )}
