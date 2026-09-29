@@ -76,8 +76,17 @@ export async function GET(
   const utmSource = value(url.searchParams, 'utm_source', MAX_UTM);
   const utmMedium = value(url.searchParams, 'utm_medium', MAX_UTM);
   const utmCampaign = value(url.searchParams, 'utm_campaign', MAX_UTM);
-  const utmContent = value(url.searchParams, 'utm_content', MAX_UTM);
-  const utmTerm = value(url.searchParams, 'utm_term', MAX_UTM);
+  // A click-to-WhatsApp ad extension has no utm_content/utm_term of its
+  // own — no landing page sits in between to set them — but Google Ads'
+  // tracking-template ValueTrack macros play the same role: {creative} is
+  // the ad/creative id, {keyword} is the matched search term. Prefer an
+  // explicit utm_* (the landing-page-script path) when both are present.
+  const utmContent =
+    value(url.searchParams, 'utm_content', MAX_UTM) ||
+    value(url.searchParams, 'creative', MAX_UTM);
+  const utmTerm =
+    value(url.searchParams, 'utm_term', MAX_UTM) ||
+    value(url.searchParams, 'keyword', MAX_UTM);
   // The landing page's own button already has a pre-filled message tailored
   // to that page (e.g. "Quero orçamento de Fachadas"); fall back to the
   // account's generic message only when the link brought none.
