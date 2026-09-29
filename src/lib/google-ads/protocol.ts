@@ -44,6 +44,14 @@ export interface GoogleAdsProtocolUtm {
   campaign?: string | null;
   content?: string | null;
   term?: string | null;
+  /** ValueTrack-only fields with no generic utm_* equivalent — only ever
+   *  come from the account's Google Ads tracking template, never from a
+   *  landing page. */
+  adGroupId?: string | null;
+  matchType?: string | null;
+  network?: string | null;
+  device?: string | null;
+  placement?: string | null;
 }
 
 export function buildGoogleAdsProtocolAcquisition(
@@ -74,6 +82,11 @@ export function buildGoogleAdsProtocolAcquisition(
     medium: utm?.medium || null,
     term: utm?.term || null,
     content: utm?.content || null,
+    adGroupId: utm?.adGroupId || null,
+    matchType: utm?.matchType || null,
+    network: utm?.network || null,
+    device: utm?.device || null,
+    placement: utm?.placement || null,
     gclid: clickId,
     clickIdType: clickId ? clickIdType : null,
     // Kept regardless of clickId so an organic lead from this flow still
@@ -96,16 +109,30 @@ export async function resolveGoogleAdsProtocol(
   const oldest = new Date(
     Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
-  const { data, error } = await db
+  const baseColumns =
+    'id, code, click_id, click_id_type, campaign_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term';
+  let { data, error } = await db
     .from('google_ads_click_protocols')
-    .select(
-      'id, code, click_id, click_id_type, campaign_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term'
-    )
+    .select(`${baseColumns}, adgroup_id, match_type, network, device, placement`)
     .eq('account_id', accountId)
     .eq('code', code)
     .is('contact_id', null)
     .gte('created_at', oldest)
     .maybeSingle();
+
+  if (error?.code === '42703') {
+    // Migration 079 (adgroup_id/match_type/network/device/placement) not
+    // applied yet in this environment — degrade instead of breaking every
+    // protocol resolution over columns nothing has written to yet.
+    ({ data, error } = await db
+      .from('google_ads_click_protocols')
+      .select(baseColumns)
+      .eq('account_id', accountId)
+      .eq('code', code)
+      .is('contact_id', null)
+      .gte('created_at', oldest)
+      .maybeSingle());
+  }
 
   if (error) {
     if (error.code !== '42P01')
@@ -131,6 +158,11 @@ export async function resolveGoogleAdsProtocol(
         campaign: data.utm_campaign as string | null,
         content: data.utm_content as string | null,
         term: data.utm_term as string | null,
+        adGroupId: (data.adgroup_id as string | null) ?? null,
+        matchType: (data.match_type as string | null) ?? null,
+        network: (data.network as string | null) ?? null,
+        device: (data.device as string | null) ?? null,
+        placement: (data.placement as string | null) ?? null,
       }
     ),
   };

@@ -32,6 +32,14 @@ export interface AcquisitionData {
   medium?: string | null
   term?: string | null
   content?: string | null
+  /** ValueTrack-only fields with no generic utm_* equivalent — only ever
+   *  set from the Google Ads account-level tracking template, via the
+   *  /go/google-ads/[token] redirect. */
+  adGroupId?: string | null
+  matchType?: string | null
+  network?: string | null
+  device?: string | null
+  placement?: string | null
   adText?: string | null
   adImageUrl?: string | null
   url?: string | null
@@ -62,7 +70,7 @@ export async function findOrCreateContact(
   const existingContact = await findExistingContact(db, accountId, phone)
 
   if (existingContact) {
-    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.medium || acquisition?.term || acquisition?.content || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url || acquisition?.ctwaClid || acquisition?.gclid || acquisition?.protocol) {
+    if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.medium || acquisition?.term || acquisition?.content || acquisition?.adGroupId || acquisition?.matchType || acquisition?.network || acquisition?.device || acquisition?.placement || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url || acquisition?.ctwaClid || acquisition?.gclid || acquisition?.protocol) {
       await db
         .from('contacts')
         .update({
@@ -73,6 +81,11 @@ export async function findOrCreateContact(
           ...(acquisition?.medium ? { acquisition_medium: acquisition.medium } : {}),
           ...(acquisition?.term ? { acquisition_term: acquisition.term } : {}),
           ...(acquisition?.content ? { acquisition_content: acquisition.content } : {}),
+          ...(acquisition?.adGroupId ? { acquisition_adgroup_id: acquisition.adGroupId } : {}),
+          ...(acquisition?.matchType ? { acquisition_match_type: acquisition.matchType } : {}),
+          ...(acquisition?.network ? { acquisition_network: acquisition.network } : {}),
+          ...(acquisition?.device ? { acquisition_device: acquisition.device } : {}),
+          ...(acquisition?.placement ? { acquisition_placement: acquisition.placement } : {}),
           ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
           ...(acquisition?.adImageUrl ? { acquisition_ad_image_url: acquisition.adImageUrl } : {}),
           ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),
@@ -105,6 +118,11 @@ export async function findOrCreateContact(
       ...(acquisition?.medium ? { acquisition_medium: acquisition.medium } : {}),
       ...(acquisition?.term ? { acquisition_term: acquisition.term } : {}),
       ...(acquisition?.content ? { acquisition_content: acquisition.content } : {}),
+      ...(acquisition?.adGroupId ? { acquisition_adgroup_id: acquisition.adGroupId } : {}),
+      ...(acquisition?.matchType ? { acquisition_match_type: acquisition.matchType } : {}),
+      ...(acquisition?.network ? { acquisition_network: acquisition.network } : {}),
+      ...(acquisition?.device ? { acquisition_device: acquisition.device } : {}),
+      ...(acquisition?.placement ? { acquisition_placement: acquisition.placement } : {}),
       ...(acquisition?.adText ? { acquisition_ad_text: acquisition.adText } : {}),
       ...(acquisition?.adImageUrl ? { acquisition_ad_image_url: acquisition.adImageUrl } : {}),
       ...(acquisition?.url ? { acquisition_url: acquisition.url } : {}),

@@ -123,6 +123,13 @@ export interface Contact {
   acquisition_medium?: string | null;
   acquisition_term?: string | null;
   acquisition_content?: string | null;
+  /** ValueTrack-only fields with no generic utm_* equivalent — only ever
+   *  set from the Google Ads account-level tracking template. */
+  acquisition_adgroup_id?: string | null;
+  acquisition_match_type?: string | null;
+  acquisition_network?: string | null;
+  acquisition_device?: string | null;
+  acquisition_placement?: string | null;
   /** WhatsApp direct-link protocol code (google_ads_click_protocols.code).
    *  Kept even when the click carried no gclid and the lead is organic, so
    *  the ad click that produced it can still be traced. */

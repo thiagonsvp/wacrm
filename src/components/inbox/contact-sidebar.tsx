@@ -235,6 +235,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     contact.acquisition_medium ||
     contact.acquisition_term ||
     contact.acquisition_content ||
+    contact.acquisition_adgroup_id ||
+    contact.acquisition_match_type ||
+    contact.acquisition_network ||
+    contact.acquisition_device ||
+    contact.acquisition_placement ||
     contact.acquisition_protocol
   );
 
@@ -304,6 +309,14 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                       </span>
                     </p>
                   )}
+                  {contact.acquisition_adgroup_id && (
+                    <p className="break-all">
+                      {tSidebar('adGroupId')}:{' '}
+                      <span className="text-foreground font-mono">
+                        {contact.acquisition_adgroup_id}
+                      </span>
+                    </p>
+                  )}
                   {contact.acquisition_protocol && (
                     <p className="break-all">
                       {tSidebar('protocol')}:{' '}
@@ -325,6 +338,26 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   {contact.acquisition_content && (
                     <p>
                       {tSidebar('content')}: {contact.acquisition_content}
+                    </p>
+                  )}
+                  {contact.acquisition_match_type && (
+                    <p>
+                      {tSidebar('matchType')}: {contact.acquisition_match_type}
+                    </p>
+                  )}
+                  {contact.acquisition_network && (
+                    <p>
+                      {tSidebar('network')}: {contact.acquisition_network}
+                    </p>
+                  )}
+                  {contact.acquisition_device && (
+                    <p>
+                      {tSidebar('device')}: {contact.acquisition_device}
+                    </p>
+                  )}
+                  {contact.acquisition_placement && (
+                    <p className="break-words">
+                      {tSidebar('placement')}: {contact.acquisition_placement}
                     </p>
                   )}
                 </div>

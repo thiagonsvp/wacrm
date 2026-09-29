@@ -87,15 +87,25 @@ export async function GET(
   const utmTerm =
     value(url.searchParams, 'utm_term', MAX_UTM) ||
     value(url.searchParams, 'keyword', MAX_UTM);
+  // ValueTrack-only fields with no generic utm_* equivalent — only ever
+  // present when the account's Google Ads tracking template set them.
+  const adGroupId = value(url.searchParams, 'adgroupid', MAX_CAMPAIGN_ID);
+  const matchType = value(url.searchParams, 'matchtype', MAX_UTM);
+  const network = value(url.searchParams, 'network', MAX_UTM);
+  const device = value(url.searchParams, 'device', MAX_UTM);
+  const placement = value(url.searchParams, 'placement', MAX_UTM);
   // The landing page's own button already has a pre-filled message tailored
   // to that page (e.g. "Quero orçamento de Fachadas"); fall back to the
   // account's generic message only when the link brought none.
   const customText = freeText(url.searchParams, 'text', MAX_TEXT);
 
   let protocol = '';
-  // Degrades to click-id-only if the utm_* columns (migration 077) are not
+  // Degrades one migration generation at a time if a column set is not
   // live yet in this environment, rather than failing a real ad click.
+  // Two independent flags so a missing migration 079 (adgroup_id etc.)
+  // doesn't also drop the already-live utm_* columns from 077.
   let utmColumnsMissing = false;
+  let valueTrackColumnsMissing = false;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const candidate = generateGoogleAdsProtocol();
     const { error } = await db.from('google_ads_click_protocols').insert({
@@ -113,13 +123,25 @@ export async function GET(
             utm_content: utmContent || null,
             utm_term: utmTerm || null,
           }),
+      ...(valueTrackColumnsMissing
+        ? {}
+        : {
+            adgroup_id: adGroupId || null,
+            match_type: matchType || null,
+            network: network || null,
+            device: device || null,
+            placement: placement || null,
+          }),
     });
     if (!error) {
       protocol = candidate;
       break;
     }
-    if (error.code === '42703' && !utmColumnsMissing) {
-      utmColumnsMissing = true;
+    if (error.code === '42703' && !(utmColumnsMissing && valueTrackColumnsMissing)) {
+      // Drop the newer column set first (079); only fall back further to
+      // utm_* (077) if the error persists with those already gone.
+      if (!valueTrackColumnsMissing) valueTrackColumnsMissing = true;
+      else utmColumnsMissing = true;
       attempt -= 1;
       continue;
     }

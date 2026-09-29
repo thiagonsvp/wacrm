@@ -39,6 +39,14 @@ export interface TextAcquisition {
    *  `protocolMatch?.acquisition ?? parseAcquisitionFromText(...)` union
    *  can read `.protocol` without a type-narrowing check. */
   protocol?: string;
+  /** Never set by this parser either — ValueTrack-only fields that only
+   *  ever come from the Google Ads tracking template, via a resolved
+   *  protocol. Declared for the same union-read reason as `protocol`. */
+  adGroupId?: string;
+  matchType?: string;
+  network?: string;
+  device?: string;
+  placement?: string;
 }
 
 /**

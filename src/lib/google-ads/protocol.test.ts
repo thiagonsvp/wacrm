@@ -44,6 +44,11 @@ describe('Google Ads WhatsApp protocol', () => {
       medium: null,
       term: null,
       content: null,
+      adGroupId: null,
+      matchType: null,
+      network: null,
+      device: null,
+      placement: null,
       gclid: null,
       clickIdType: null,
       protocol: 'AB7K2',
@@ -86,6 +91,24 @@ describe('Google Ads WhatsApp protocol', () => {
       medium: 'cpc',
       content: 'fachada acm',
       term: 'letreiros',
+    });
+  });
+
+  it('carries the tracking-template ValueTrack fields through (adgroup, match type, network, device, placement)', () => {
+    expect(
+      buildGoogleAdsProtocolAcquisition('AB7K2', 'click-123', 'gclid', '7770317006', {
+        adGroupId: '123456',
+        matchType: 'e',
+        network: 'g',
+        device: 'm',
+        placement: '',
+      })
+    ).toMatchObject({
+      adGroupId: '123456',
+      matchType: 'e',
+      network: 'g',
+      device: 'm',
+      placement: null,
     });
   });
 

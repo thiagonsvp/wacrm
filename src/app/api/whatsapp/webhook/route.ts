@@ -620,6 +620,11 @@ async function processMessage(
             medium: textAcquisition.medium ?? null,
             term: textAcquisition.term ?? null,
             content: textAcquisition.content ?? null,
+            adGroupId: textAcquisition.adGroupId ?? null,
+            matchType: textAcquisition.matchType ?? null,
+            network: textAcquisition.network ?? null,
+            device: textAcquisition.device ?? null,
+            placement: textAcquisition.placement ?? null,
             protocol: textAcquisition.protocol ?? null,
           }
         : undefined
