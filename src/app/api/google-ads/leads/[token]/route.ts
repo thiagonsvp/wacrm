@@ -8,8 +8,41 @@ import {
 } from '@/lib/rate-limit';
 import type { GoogleClickIdType } from '@/lib/google-ads/api';
 import { parseWebsiteOrigins } from '@/lib/google-ads/origins';
+import { isDeliverableUrl } from '@/lib/webhooks/ssrf';
 
 const TEXT_LIMIT = 512;
+const FORWARD_TIMEOUT_MS = 5000;
+
+/**
+ * Best-effort mirror of the captured lead to a second URL (n8n, Zapier,
+ * a legacy system, ...) an account configured in Settings > Google Ads.
+ * Never throws — a dead or slow sink must never affect the response the
+ * site's own form-submit handler is waiting on.
+ */
+async function forwardLead(url: string, payload: unknown): Promise<void> {
+  try {
+    if (!(await isDeliverableUrl(url))) {
+      console.warn('[google-ads/leads] refusing non-public forward target');
+      return;
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      // A public URL could 3xx-bounce to an internal one — same SSRF
+      // concern as src/lib/webhooks/deliver.ts.
+      redirect: 'manual',
+      signal: AbortSignal.timeout(FORWARD_TIMEOUT_MS),
+    });
+    if (!res.ok)
+      console.warn(`[google-ads/leads] forward responded ${res.status}`);
+  } catch (err) {
+    console.warn(
+      '[google-ads/leads] forward failed:',
+      err instanceof Error ? err.message : err
+    );
+  }
+}
 
 function cors(origin: string | null): Record<string, string> {
   return origin
@@ -23,11 +56,23 @@ function clean(value: unknown, max = TEXT_LIMIT): string {
 
 async function configFor(token: string) {
   const db = supabaseAdmin();
-  const { data } = await db
+  const { data, error } = await db
     .from('google_ads_configs')
-    .select('account_id, website_url')
+    .select('account_id, website_url, lead_forward_webhook_url')
     .eq('webhook_token', token)
     .maybeSingle();
+  if (error?.code === '42703') {
+    // Migration 078 (lead_forward_webhook_url) not applied yet in this
+    // environment — degrade instead of breaking every lead submission.
+    const fallback = await db
+      .from('google_ads_configs')
+      .select('account_id, website_url')
+      .eq('webhook_token', token)
+      .maybeSingle();
+    return fallback.data
+      ? { ...fallback.data, lead_forward_webhook_url: null }
+      : null;
+  }
   return data;
 }
 
@@ -157,6 +202,16 @@ export async function POST(
       .eq('id', contact.id)
       .eq('account_id', config.account_id);
     if (error) throw error;
+    if (config.lead_forward_webhook_url) {
+      // Awaited (not detached) so the delivery attempt actually runs before
+      // the serverless instance may be frozen right after this response —
+      // see the `after()` hazard noted in src/lib/whatsapp/inbound.ts.
+      await forwardLead(config.lead_forward_webhook_url, {
+        ...body,
+        contact_id: contact.id,
+        created: contact.created,
+      });
+    }
     return NextResponse.json(
       { success: true, contact_id: contact.id, created: contact.created },
       { headers: cors(allowed || (allowedOrigins.length ? null : origin)) }

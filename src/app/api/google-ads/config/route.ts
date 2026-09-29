@@ -16,6 +16,7 @@ import {
   parseWebsiteOrigins,
   serializeWebsiteOrigins,
 } from '@/lib/google-ads/origins';
+import { isDeliverableUrl } from '@/lib/webhooks/ssrf';
 
 const MISSING_TABLE = '42P01';
 const SECRET_FIELDS = [
@@ -36,16 +37,29 @@ function onlyDigits(value: string): string {
   return value.replace(/\D/g, '');
 }
 
+const MISSING_COLUMN = '42703';
+
 export async function GET() {
   try {
     const { supabase, accountId } = await getCurrentAccount();
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('google_ads_configs')
       .select(
-        'customer_id, login_customer_id, client_id, client_secret, refresh_token, developer_token, qualified_lead_conversion_action_id, purchase_conversion_action_id, website_url, webhook_token, is_active, send_qualified_lead, send_purchase'
+        'customer_id, login_customer_id, client_id, client_secret, refresh_token, developer_token, qualified_lead_conversion_action_id, purchase_conversion_action_id, website_url, webhook_token, lead_forward_webhook_url, is_active, send_qualified_lead, send_purchase'
       )
       .eq('account_id', accountId)
       .maybeSingle();
+    if (error?.code === MISSING_COLUMN) {
+      // Migration 078 (lead_forward_webhook_url) not applied yet in this
+      // environment — degrade instead of breaking the whole settings page.
+      ({ data, error } = await supabase
+        .from('google_ads_configs')
+        .select(
+          'customer_id, login_customer_id, client_id, client_secret, refresh_token, developer_token, qualified_lead_conversion_action_id, purchase_conversion_action_id, website_url, webhook_token, is_active, send_qualified_lead, send_purchase'
+        )
+        .eq('account_id', accountId)
+        .maybeSingle());
+    }
     if (error) {
       if (error.code === MISSING_TABLE) {
         return NextResponse.json({
@@ -98,6 +112,15 @@ export async function POST(request: Request) {
     );
     const parsedOrigins = parseWebsiteOrigins(string(body, 'website_url'));
     const websiteUrl = serializeWebsiteOrigins(parsedOrigins.origins);
+    const forwardWebhookUrl = string(body, 'lead_forward_webhook_url');
+    if (forwardWebhookUrl) {
+      if (!/^https:\/\//i.test(forwardWebhookUrl))
+        return bad('lead_forward_webhook_url must be an HTTPS URL');
+      if (!(await isDeliverableUrl(forwardWebhookUrl)))
+        return bad(
+          'lead_forward_webhook_url must resolve to a public address'
+        );
+    }
     if (!/^\d{10}$/.test(customerId))
       return bad('customer_id must contain 10 digits');
     if (loginCustomerId && !/^\d{10}$/.test(loginCustomerId))
@@ -144,6 +167,7 @@ export async function POST(request: Request) {
       qualified_lead_conversion_action_id: leadAction || null,
       purchase_conversion_action_id: purchaseAction || null,
       website_url: websiteUrl || null,
+      lead_forward_webhook_url: forwardWebhookUrl || null,
       is_active: body.is_active === true,
       send_qualified_lead: body.send_qualified_lead !== false,
       send_purchase: body.send_purchase === true,
@@ -156,7 +180,7 @@ export async function POST(request: Request) {
         return bad(`${field} is required`);
     }
 
-    const result = existing
+    let result = existing
       ? await supabase
           .from('google_ads_configs')
           .update(payload)
@@ -167,6 +191,24 @@ export async function POST(request: Request) {
           developer_token: null,
           ...payload,
         });
+    if (result.error?.code === MISSING_COLUMN) {
+      // Migration 078 not applied yet — save everything else rather than
+      // failing the whole form over one field.
+      const { lead_forward_webhook_url: _drop, ...withoutForwardUrl } =
+        payload;
+      void _drop;
+      result = existing
+        ? await supabase
+            .from('google_ads_configs')
+            .update(withoutForwardUrl)
+            .eq('account_id', accountId)
+        : await supabase.from('google_ads_configs').insert({
+            account_id: accountId,
+            created_by: userId,
+            developer_token: null,
+            ...withoutForwardUrl,
+          });
+    }
     if (result.error) {
       console.error('[google-ads/config POST] save failed:', result.error);
       return NextResponse.json(

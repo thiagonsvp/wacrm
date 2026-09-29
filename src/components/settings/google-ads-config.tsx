@@ -66,6 +66,7 @@ export function GoogleAdsConfig() {
   const [leadAction, setLeadAction] = useState('');
   const [purchaseAction, setPurchaseAction] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
+  const [leadForwardWebhookUrl, setLeadForwardWebhookUrl] = useState('');
   const [webhookToken, setWebhookToken] = useState('');
   const [whatsAppConfigured, setWhatsAppConfigured] = useState(false);
   const [whatsAppMigrationPending, setWhatsAppMigrationPending] =
@@ -98,6 +99,7 @@ export function GoogleAdsConfig() {
         setLeadAction(data.qualified_lead_conversion_action_id ?? '');
         setPurchaseAction(data.purchase_conversion_action_id ?? '');
         setWebsiteUrl(data.website_url ?? '');
+        setLeadForwardWebhookUrl(data.lead_forward_webhook_url ?? '');
         setWebhookToken(data.webhook_token ?? '');
         setIsActive(!!data.is_active);
         setSendLead(data.send_qualified_lead !== false);
@@ -175,6 +177,7 @@ export function GoogleAdsConfig() {
           qualified_lead_conversion_action_id: leadAction,
           purchase_conversion_action_id: purchaseAction,
           website_url: websiteUrl,
+          lead_forward_webhook_url: leadForwardWebhookUrl,
           is_active: isActive,
           send_qualified_lead: sendLead,
           send_purchase: sendPurchase,
@@ -558,6 +561,20 @@ export function GoogleAdsConfig() {
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
+            </Field>
+            <Field
+              id="google-lead-forward"
+              label={t('leadForwardWebhookUrl')}
+              hint={t('leadForwardWebhookUrlHint')}
+            >
+              <Input
+                id="google-lead-forward"
+                value={leadForwardWebhookUrl}
+                onChange={(e) => setLeadForwardWebhookUrl(e.target.value)}
+                placeholder={t('leadForwardWebhookUrlPlaceholder')}
+                className="font-mono text-xs"
+                disabled={disabled}
+              />
             </Field>
             {isAdmin && (
               <Button
