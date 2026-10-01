@@ -68,7 +68,7 @@ function SignupPageInner() {
       ? `${window.location.origin}/join/${encodeURIComponent(inviteToken)}`
       : undefined;
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -82,6 +82,20 @@ function SignupPageInner() {
     if (error) {
       setError(error.message);
       setLoading(false);
+      return;
+    }
+
+    // When the project has email confirmation turned off, signUp()
+    // already returns a live session — no confirmation email is ever
+    // sent, so the "verifique seu e-mail" screen below would wait
+    // forever for a link that doesn't exist. Skip straight to
+    // redeeming the invite (or the dashboard) instead. A full
+    // navigation, not router.push, so middleware sees the cookies
+    // supabase-js just set — same reasoning as /login.
+    if (data.session) {
+      window.location.assign(
+        inviteToken ? `/join/${encodeURIComponent(inviteToken)}` : "/dashboard",
+      );
       return;
     }
 
