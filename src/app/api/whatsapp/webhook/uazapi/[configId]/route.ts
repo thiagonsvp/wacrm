@@ -16,6 +16,10 @@ import { transcribeInboundAudio } from '@/lib/ai/transcription';
 import { extractInboundPdfText } from '@/lib/ai/pdf';
 import { dispatchInboundToDealPipeline } from '@/lib/ai/deal-pipeline';
 import {
+  persistInboundMedia,
+  swapToPersistedMedia,
+} from '@/lib/storage/inbound-media';
+import {
   findOrCreateContact,
   findOrCreateConversation,
   persistInboundMessage,
@@ -430,6 +434,13 @@ async function processUazapiWebhook(
     contentType,
     externalMessageId
   );
+  // UAZAPI purges its copy after ~2 days. Start copying into our own
+  // Storage now, in parallel with the rest of the pipeline; the message
+  // is saved with the UAZAPI URL and swapped to the copy at the end, so
+  // nothing here waits on the download.
+  const persistedMedia = mediaUrl
+    ? persistInboundMedia(db, config.account_id, mediaUrl)
+    : null;
 
   // Proposals are commonly sent from the linked WhatsApp device. Extract
   // their text before the fromMe branch so the persisted seller message
@@ -500,6 +511,12 @@ async function processUazapiWebhook(
       externalMessageId,
       timestamp,
     });
+    await swapToPersistedMedia(
+      db,
+      convResult.conversation.id,
+      externalMessageId,
+      persistedMedia
+    );
     if (contentType === 'document' && contentText?.trim()) {
       await dispatchInboundToDealPipeline({
         accountId: config.account_id,
@@ -581,4 +598,10 @@ async function processUazapiWebhook(
     externalMessageId,
     timestamp,
   });
+  await swapToPersistedMedia(
+    db,
+    convResult.conversation.id,
+    externalMessageId,
+    persistedMedia
+  );
 }
