@@ -10,8 +10,10 @@ export const maxDuration = 300;
 
 /**
  * Daily sweep of inbound attachment copies older than the retention
- * window (60 days). Hit on a schedule like the other cron endpoints, with
- * the shared `AUTOMATION_CRON_SECRET` in `x-cron-secret`.
+ * window (60 days). Scheduled by Vercel Cron (vercel.json), which sends
+ * `Authorization: Bearer $CRON_SECRET`; an external pinger can instead
+ * send the shared `AUTOMATION_CRON_SECRET` in `x-cron-secret` like the
+ * other cron endpoints.
  *
  * `?dry=1` lists what would be deleted without deleting.
  * `?backfill_days=N` also copies provider-hosted attachments from the
@@ -19,11 +21,16 @@ export const maxDuration = 300;
  * messages received before copying existed.
  */
 export async function GET(request: Request) {
-  const expected = process.env.AUTOMATION_CRON_SECRET;
-  if (!expected) {
+  const pingerSecret = process.env.AUTOMATION_CRON_SECRET;
+  const vercelSecret = process.env.CRON_SECRET;
+  if (!pingerSecret && !vercelSecret) {
     return NextResponse.json({ error: 'cron not configured' }, { status: 503 });
   }
-  if (request.headers.get('x-cron-secret') !== expected) {
+  const authorized =
+    (!!pingerSecret && request.headers.get('x-cron-secret') === pingerSecret) ||
+    (!!vercelSecret &&
+      request.headers.get('authorization') === `Bearer ${vercelSecret}`);
+  if (!authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

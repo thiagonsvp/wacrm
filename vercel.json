@@ -2,5 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "env": {
     "NEXT_PUBLIC_SITE_URL": "https://crm.natividadedigital.com.br"
-  }
+  },
+  "crons": [
+    { "path": "/api/media/retention", "schedule": "0 6 * * *" }
+  ]
 }
