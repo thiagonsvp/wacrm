@@ -1,10 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   daysAgoStart,
-  DOW_SHORT_MON_FIRST,
   lastNDayKeys,
   localDayKey,
-  mondayIndex,
   startOfLocalDay,
 } from './date-utils'
 import type {
@@ -266,97 +264,37 @@ export async function loadPipelineDonut(db: DB): Promise<PipelineDonutData> {
 
 // --- 4. Response time by day of week ----------------------------------
 
+/**
+ * Median HUMAN first-response time per weekday over the last 4 weeks,
+ * computed in SQL (migration 081, dashboard_response_time): that is
+ * where the turn pairing, the bot-message exclusion and the Sao Paulo
+ * weekday boundaries live. Doing it here meant pulling every message
+ * into the browser, which PostgREST silently truncated at 1000 rows.
+ */
 export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
-  // Pull the last 14 days of messages in one shot, then walk per
-  // conversation to find each "first inbound" → "first subsequent
-  // outbound" pair. 14 days gives us both "this week" + "last week"
-  // with enough overlap if the user opens the dashboard late on a
-  // Monday.
-  const fourteenDaysAgo = daysAgoStart(13).toISOString()
-  const { data, error } = await db
-    .from('messages')
-    .select('conversation_id, sender_type, created_at')
-    .gte('created_at', fourteenDaysAgo)
-    .order('conversation_id', { ascending: true })
-    .order('created_at', { ascending: true })
+  const { data, error } = await db.rpc('dashboard_response_time', {
+    p_days: 28,
+    p_tz: 'America/Sao_Paulo',
+  })
   if (error) throw error
 
-  const rows = (data ?? []) as {
-    conversation_id: string
-    sender_type: string
-    created_at: string
-  }[]
-
-  // Group per conversation, pair unreplied customer messages with the
-  // next outbound message from the agent/bot. A single customer message
-  // can only count once (avoids inflating averages if the customer
-  // double-messages while the agent takes time to reply).
-  interface Sample {
-    customerAt: Date
-    responseAt: Date
+  const raw = (data ?? {}) as {
+    buckets?: { dow: number; median_minutes: number | null; samples: number }[]
+    this_week?: number | null
+    last_week?: number | null
   }
-  const samples: Sample[] = []
-
-  let currentConv = ''
-  let pendingCustomer: Date | null = null
-  for (const row of rows) {
-    if (row.conversation_id !== currentConv) {
-      currentConv = row.conversation_id
-      pendingCustomer = null
-    }
-    const ts = new Date(row.created_at)
-    if (row.sender_type === 'customer') {
-      if (!pendingCustomer) pendingCustomer = ts
-    } else if (pendingCustomer) {
-      samples.push({ customerAt: pendingCustomer, responseAt: ts })
-      pendingCustomer = null
-    }
-  }
-
-  const now = new Date()
-  const thisWeekStart = daysAgoStart(mondayIndex(now))
-  const lastWeekStart = daysAgoStart(mondayIndex(now) + 7)
-
-  // Per-day-of-week buckets, averaged over both weeks' worth of data
-  // so each bar has more samples to stand on. If a day has no samples
-  // its avgMinutes stays null and the chart renders the bar muted.
-  const byDow = new Map<number, number[]>()
-  for (let i = 0; i < 7; i++) byDow.set(i, [])
-  const thisWeekMins: number[] = []
-  const lastWeekMins: number[] = []
-
-  for (const s of samples) {
-    const diffMin = (s.responseAt.getTime() - s.customerAt.getTime()) / 60_000
-    if (diffMin < 0) continue
-    const dow = mondayIndex(s.customerAt)
-    byDow.get(dow)!.push(diffMin)
-    if (s.customerAt >= thisWeekStart) {
-      thisWeekMins.push(diffMin)
-    } else if (s.customerAt >= lastWeekStart && s.customerAt < thisWeekStart) {
-      lastWeekMins.push(diffMin)
-    }
-  }
-
-  const avg = (arr: number[]) =>
-    arr.length === 0 ? null : arr.reduce((a, b) => a + b, 0) / arr.length
-
   const buckets: ResponseTimeBucket[] = Array.from({ length: 7 }, (_, dow) => {
-    const samples = byDow.get(dow) ?? []
+    const b = raw.buckets?.find((x) => x.dow === dow)
     return {
       dow,
-      avgMinutes: avg(samples),
-      samples: samples.length,
+      medianMinutes: b?.median_minutes ?? null,
+      samples: b?.samples ?? 0,
     }
   })
-
-  // Silence unused-label warnings — keep the arrays explicitly named
-  // for readability above.
-  void DOW_SHORT_MON_FIRST
-
   return {
     buckets,
-    thisWeekAvg: avg(thisWeekMins),
-    lastWeekAvg: avg(lastWeekMins),
+    thisWeekMedian: raw.this_week ?? null,
+    lastWeekMedian: raw.last_week ?? null,
   }
 }
 

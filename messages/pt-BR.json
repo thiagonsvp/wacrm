@@ -122,8 +122,8 @@
       "ariaLabel": "Valor do pipeline por etapa"
     },
     "responseTimeChart": {
-      "title": "Tempo médio de primeira resposta",
-      "description": "Minutos para responder à primeira mensagem não respondida de um cliente, por dia da semana",
+      "title": "Tempo de resposta por dia da semana",
+      "description": "Mediana do tempo até a equipe responder um cliente, nas últimas 4 semanas (respostas automáticas e da IA não contam)",
       "target": "meta {minutes}min",
       "thisWeek": "Esta semana:",
       "lastWeek": "Semana passada:",

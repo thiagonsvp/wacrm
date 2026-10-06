@@ -122,8 +122,8 @@
       "ariaLabel": "Pipeline value by stage"
     },
     "responseTimeChart": {
-      "title": "Average First Response Time",
-      "description": "Minutes to reply to a customer's first unreplied message, by weekday",
+      "title": "Response time by weekday",
+      "description": "Median time for the team to reply to a customer over the last 4 weeks (automated and AI replies excluded)",
       "target": "target {minutes}m",
       "thisWeek": "This week:",
       "lastWeek": "Last week:",

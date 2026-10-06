@@ -12,6 +12,7 @@ import {
   loadMetrics,
   loadPipelineDonut,
   loadLeadStats,
+  loadResponseTime,
 } from '@/lib/dashboard/queries';
 import type {
   ActivityItem,
@@ -19,6 +20,7 @@ import type {
   MetricsBundle,
   PipelineDonutData,
   LeadStats,
+  ResponseTimeSummary,
 } from '@/lib/dashboard/types';
 
 import { MetricCard } from '@/components/dashboard/metric-card';
@@ -27,6 +29,7 @@ import { QuickActions } from '@/components/dashboard/quick-actions';
 import { ConversationsChart } from '@/components/dashboard/conversations-chart';
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut';
 import { LeadStats as LeadStatsPanel } from '@/components/dashboard/lead-stats';
+import { ResponseTimeChart } from '@/components/dashboard/response-time-chart';
 import { ActivityFeed } from '@/components/dashboard/activity-feed';
 
 import { useTranslations } from 'next-intl';
@@ -58,6 +61,11 @@ export default function DashboardPage() {
   const [leadStats, setLeadStats] = useState<LeadStats | null>(null);
   const [leadStatsLoading, setLeadStatsLoading] = useState(true);
 
+  const [responseTime, setResponseTime] = useState<ResponseTimeSummary | null>(
+    null
+  );
+  const [responseTimeLoading, setResponseTimeLoading] = useState(true);
+
   const [activity, setActivity] = useState<ActivityItem[] | null>(null);
   const [activityLoading, setActivityLoading] = useState(true);
 
@@ -86,6 +94,11 @@ export default function DashboardPage() {
       .then((r) => setLeadStats(r))
       .catch((err) => console.error('[dashboard] lead stats failed:', err))
       .finally(() => setLeadStatsLoading(false));
+
+    void loadResponseTime(db)
+      .then((r) => setResponseTime(r))
+      .catch((err) => console.error('[dashboard] response time failed:', err))
+      .finally(() => setResponseTimeLoading(false));
 
     // Fetch up to 50 so the biggest page-size option in the feed
     // (50 rows) is already in memory — switching sizes then becomes
@@ -214,6 +227,8 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
 
       <LeadStatsPanel data={leadStats} loading={leadStatsLoading} />
 

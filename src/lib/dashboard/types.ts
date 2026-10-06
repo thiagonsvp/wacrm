@@ -44,17 +44,17 @@ export interface PipelineDonutData {
 }
 
 export interface ResponseTimeBucket {
-  /** 0 = Mon … 6 = Sun (Monday-first). */
+  /** 0 = Mon … 6 = Sun (Monday-first), in the business timezone. */
   dow: number
-  /** Average first-response time in minutes. Null means no samples. */
-  avgMinutes: number | null
+  /** Median human first-response time in minutes. Null means no samples. */
+  medianMinutes: number | null
   samples: number
 }
 
 export interface ResponseTimeSummary {
   buckets: ResponseTimeBucket[]
-  thisWeekAvg: number | null
-  lastWeekAvg: number | null
+  thisWeekMedian: number | null
+  lastWeekMedian: number | null
 }
 
 export type ActivityKind =
