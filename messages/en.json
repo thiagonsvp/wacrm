@@ -129,6 +129,8 @@
       "lastWeek": "Last week:",
       "noReplies": "No replies recorded yet",
       "noRepliesHint": "This chart fills in as you reply to customer messages.",
+      "loadFailed": "Couldn't load response time",
+      "loadFailedHint": "Refresh the page. If it keeps happening, the calculation may be taking too long.",
       "day0": "Mon",
       "day1": "Tue",
       "day2": "Wed",

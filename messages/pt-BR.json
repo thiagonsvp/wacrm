@@ -129,6 +129,8 @@
       "lastWeek": "Semana passada:",
       "noReplies": "Nenhuma resposta registrada ainda",
       "noRepliesHint": "Este gráfico se preenche conforme você responde mensagens de clientes.",
+      "loadFailed": "Não foi possível carregar o tempo de resposta",
+      "loadFailedHint": "Atualize a página. Se continuar, o cálculo pode estar demorando demais.",
       "day0": "Seg",
       "day1": "Ter",
       "day2": "Qua",

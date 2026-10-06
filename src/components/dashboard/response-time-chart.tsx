@@ -1,6 +1,6 @@
 "use client"
 
-import { Clock } from 'lucide-react'
+import { AlertTriangle, Clock } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { ResponseTimeSummary } from '@/lib/dashboard/types'
 import { BarChart } from '@/components/tremor/bar-chart'
@@ -10,21 +10,31 @@ import { Skeleton } from './skeleton'
 interface ResponseTimeChartProps {
   data: ResponseTimeSummary | null
   loading: boolean
+  /** The load failed — shown instead of an endless skeleton. */
+  failed?: boolean
 }
 
 // Tremor takes categories as row keys, so each bucket becomes
 // `{ day: 'Seg', minutes: 4.2 }`.
 const CATEGORY = 'minutes'
+// Sunday (dow 6) is off: there is no shift, so a Sunday message is only
+// answered on Monday and its bar is just "time until the week starts",
+// which dwarfs every working day on the shared axis.
+const CLOSED_DOWS = new Set([6])
 
-export function ResponseTimeChart({ data, loading }: ResponseTimeChartProps) {
+export function ResponseTimeChart({
+  data,
+  loading,
+  failed = false,
+}: ResponseTimeChartProps) {
   const t = useTranslations('Dashboard.responseTimeChart')
-  const hasData = data?.buckets.some((b) => b.medianMinutes != null) ?? false
+  const openBuckets = data?.buckets.filter((b) => !CLOSED_DOWS.has(b.dow)) ?? []
+  const hasData = openBuckets.some((b) => b.medianMinutes != null)
 
-  const chartData =
-    data?.buckets.map((b, i) => ({
-      day: t(`day${i}`),
-      [CATEGORY]: b.medianMinutes ?? 0,
-    })) ?? []
+  const chartData = openBuckets.map((b) => ({
+    day: t(`day${b.dow}`),
+    [CATEGORY]: b.medianMinutes ?? 0,
+  }))
 
   return (
     <section className="h-full rounded-xl border border-border bg-card">
@@ -56,7 +66,13 @@ export function ResponseTimeChart({ data, loading }: ResponseTimeChartProps) {
       </header>
 
       <div className="p-5">
-        {loading || !data ? (
+        {failed ? (
+          <EmptyState
+            icon={AlertTriangle}
+            title={t('loadFailed')}
+            hint={t('loadFailedHint')}
+          />
+        ) : loading || !data ? (
           <Skeleton className="h-[260px] w-full" />
         ) : !hasData ? (
           <EmptyState

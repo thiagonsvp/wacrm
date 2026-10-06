@@ -65,6 +65,7 @@ export default function DashboardPage() {
     null
   );
   const [responseTimeLoading, setResponseTimeLoading] = useState(true);
+  const [responseTimeFailed, setResponseTimeFailed] = useState(false);
 
   const [activity, setActivity] = useState<ActivityItem[] | null>(null);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -97,7 +98,10 @@ export default function DashboardPage() {
 
     void loadResponseTime(db)
       .then((r) => setResponseTime(r))
-      .catch((err) => console.error('[dashboard] response time failed:', err))
+      .catch((err) => {
+        console.error('[dashboard] response time failed:', err);
+        setResponseTimeFailed(true);
+      })
       .finally(() => setResponseTimeLoading(false));
 
     // Fetch up to 50 so the biggest page-size option in the feed
@@ -228,7 +232,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
+      <ResponseTimeChart
+        data={responseTime}
+        loading={responseTimeLoading}
+        failed={responseTimeFailed}
+      />
 
       <LeadStatsPanel data={leadStats} loading={leadStatsLoading} />
 
