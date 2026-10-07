@@ -205,6 +205,25 @@ describe("validateStepsForActivation", () => {
       "steps[0].subject",
     ]);
   });
+
+  it("message_content needs the text to match, not an operand", () => {
+    expect(
+      validateStepsForActivation([
+        {
+          step_type: "condition",
+          step_config: { subject: "message_content", operand: "", value: "alugar" },
+        },
+      ]),
+    ).toEqual([]);
+    expect(
+      validateStepsForActivation([
+        {
+          step_type: "condition",
+          step_config: { subject: "message_content", operand: "x", value: "" },
+        },
+      ]).map((i) => i.path),
+    ).toEqual(["steps[0].value"]);
+  });
 });
 
 describe("validateTriggerForActivation", () => {

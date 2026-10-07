@@ -1035,14 +1035,17 @@ interface StepListProps {
 
 function StepList(props: StepListProps) {
   const { steps, parentPath, ...rest } = props
+  const last = parentPath[parentPath.length - 1]
   const parentScope: ParentScope =
-    parentPath.length === 0
-      ? { kind: "root" }
-      : (() => {
-          const last = parentPath[parentPath.length - 1]
-          if (last.kind !== "branch") return { kind: "root" } as const
-          return { kind: "branch", parentCid: last.parentCid, branch: last.branch } as const
-        })()
+    last?.kind === "branch"
+      ? { kind: "branch", parentCid: last.parentCid, branch: last.branch }
+      : { kind: "root" }
+  // A branch list's parentPath ends in a scope marker (see
+  // ConditionBranches). StepRenderer appends each child's own branch
+  // entry, so the marker must be dropped here — keeping it gave branch
+  // children a path one level too deep, and every edit, delete or move
+  // on them silently matched nothing.
+  const basePath = last?.kind === "branch" ? parentPath.slice(0, -1) : parentPath
 
   return (
     <div className="flex flex-col items-center">
@@ -1054,7 +1057,7 @@ function StepList(props: StepListProps) {
           index={idx}
           total={steps.length}
           parentScope={parentScope}
-          parentPath={parentPath}
+          parentPath={basePath}
           {...rest}
         />
       ))}
@@ -1156,7 +1159,7 @@ function StepRenderer({
                   onClick={() => props.deleteStepAt(path)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  {t("delete", { defaultValue: "Excluir" })}
+                  {t("delete")}
                 </Button>
               </div>
             </div>
@@ -1436,29 +1439,52 @@ function StepEditor({
               <option value="time_of_day">{t("config.subjects.time_of_day")}</option>
             </select>
           </FieldBlock>
-          <FieldBlock label={t("config.operandLabel")}>
-            <Input
-              placeholder={
-                cfg.subject === "time_of_day"
-                  ? t("config.placeholderTime")
-                  : cfg.subject === "contact_field"
-                  ? t("config.placeholderContact")
-                  : cfg.subject === "tag_presence"
-                  ? t("config.placeholderTag")
-                  : ""
-              }
-              value={(cfg.operand as string) ?? ""}
-              onChange={(e) => set({ operand: e.target.value })}
-              className="bg-muted text-foreground"
-            />
-          </FieldBlock>
-          {(cfg.subject === "contact_field" || cfg.subject === "message_content") && (
-            <FieldBlock label="Value">
+          {/* The engine reads `operand` differently per subject (a tag id,
+              a contact column, an "HH:mm-HH:mm" window) and ignores it
+              for message_content, which only matches on `value`. */}
+          {(cfg.subject ?? "tag_presence") === "tag_presence" && (
+            <FieldBlock label={t("config.tagLabel")}>
+              <TagSelect
+                value={(cfg.operand as string) ?? ""}
+                onChange={(v) => set({ operand: v })}
+                t={t}
+              />
+            </FieldBlock>
+          )}
+          {(cfg.subject === "contact_field" || cfg.subject === "time_of_day") && (
+            <FieldBlock label={t("config.operandLabel")}>
+              <Input
+                placeholder={
+                  cfg.subject === "time_of_day"
+                    ? t("config.placeholderTime")
+                    : t("config.placeholderContact")
+                }
+                value={(cfg.operand as string) ?? ""}
+                onChange={(e) => set({ operand: e.target.value })}
+                className="bg-muted text-foreground"
+              />
+            </FieldBlock>
+          )}
+          {cfg.subject === "contact_field" && (
+            <FieldBlock label={t("config.valueLabel")}>
               <Input
                 value={(cfg.value as string) ?? ""}
                 onChange={(e) => set({ value: e.target.value })}
                 className="bg-muted text-foreground"
               />
+            </FieldBlock>
+          )}
+          {cfg.subject === "message_content" && (
+            <FieldBlock label={t("config.containsLabel")}>
+              <Input
+                value={(cfg.value as string) ?? ""}
+                onChange={(e) => set({ value: e.target.value })}
+                placeholder={t("config.containsPlaceholder")}
+                className="bg-muted text-foreground"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {t("config.containsHint")}
+              </p>
             </FieldBlock>
           )}
         </>
@@ -1543,8 +1569,19 @@ function insertAt(
     copy.splice(index, 0, node)
     return copy
   }
+  // The target condition may itself sit inside a branch, so search the
+  // whole tree rather than only the top level.
   return steps.map((s) => {
-    if (s.cid !== parent.parentCid || !s.branches) return s
+    if (!s.branches) return s
+    if (s.cid !== parent.parentCid) {
+      return {
+        ...s,
+        branches: {
+          yes: insertAt(s.branches.yes, parent, index, node),
+          no: insertAt(s.branches.no, parent, index, node),
+        },
+      }
+    }
     const list = [...s.branches[parent.branch]]
     list.splice(index, 0, node)
     return { ...s, branches: { ...s.branches, [parent.branch]: list } }

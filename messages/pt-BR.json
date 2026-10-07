@@ -932,6 +932,7 @@
       },
       "trigger": "Gatilho",
       "triggerType": "Tipo de gatilho",
+      "delete": "Excluir",
       "keywords": "Palavras-chave",
       "keywordsHint": "Lista separada por vírgulas (ex.: olá, ajuda, comprar)",
       "replyIds": "IDs de resposta",
@@ -1020,6 +1021,9 @@
           "time_of_day": "Horário do dia"
         },
         "operandLabel": "Operando",
+        "containsLabel": "A mensagem contém",
+        "containsPlaceholder": "ex.: alugar",
+        "containsHint": "Verdadeiro se a mensagem tiver este trecho em qualquer posição, sem diferenciar maiúsculas. Prefira um trecho curto, como \"alugar\", em vez da frase inteira.",
         "placeholderTime": "HH:mm-HH:mm",
         "placeholderContact": "nome / e-mail / empresa",
         "placeholderTag": "id da tag",

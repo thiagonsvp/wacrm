@@ -932,6 +932,7 @@
       },
       "trigger": "Trigger",
       "triggerType": "Trigger type",
+      "delete": "Delete",
       "keywords": "Keywords",
       "keywordsHint": "Comma-separated list (e.g. hello, help, buy)",
       "replyIds": "Reply IDs",
@@ -1020,6 +1021,9 @@
           "time_of_day": "Time of day"
         },
         "operandLabel": "Operand",
+        "containsLabel": "Message contains",
+        "containsPlaceholder": "e.g. rent",
+        "containsHint": "True when the message contains this text anywhere, case-insensitive. Prefer a short fragment like \"rent\" over the whole sentence.",
         "placeholderTime": "HH:mm-HH:mm",
         "placeholderContact": "name / email / company",
         "placeholderTag": "tag id",
