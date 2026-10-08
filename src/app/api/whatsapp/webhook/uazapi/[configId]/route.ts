@@ -72,17 +72,6 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // TEMP DIAGNOSTIC — remove once the UAZAPI inbound payload shape is
-  // confirmed against real traffic. Best-effort, must never break the
-  // main processing path below.
-  try {
-    await supabaseAdmin()
-      .from('whatsapp_webhook_debug')
-      .insert({ provider: 'uazapi', raw_body: body });
-  } catch (err) {
-    console.error('[uazapi-webhook] TEMP DIAGNOSTIC insert failed:', err);
-  }
-
   const { data: config, error: configError } = await supabaseAdmin()
     .from('whatsapp_config')
     .select('*')
@@ -253,6 +242,8 @@ async function fetchFullProfilePhoto(
         method: 'POST',
         headers: { token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ number: phone }),
+        // A photo is cosmetic; a slow UAZAPI must not hold the run open.
+        signal: AbortSignal.timeout(8_000),
       }
     );
     if (!response.ok) return null;
@@ -546,22 +537,41 @@ async function processUazapiWebhook(
     contentText
   );
   const acquisition = protocolMatch?.acquisition ?? extractAcquisition(msg);
-  // `imagePreview` is a small thumbnail; prefer the full profile image.
-  const avatarUrl =
-    (await fetchFullProfilePhoto(config, phone)) ||
-    body.chat?.image ||
-    body.chat?.imagePreview ||
-    null;
 
+  // Attribution (acquisition) is written here, BEFORE the message is
+  // persisted: the "Tag de origem" automation that runs inside
+  // persistInboundMessage keys off acquisition_source. The profile photo
+  // is NOT — it used to be fetched from UAZAPI right here, on every
+  // message, with no timeout, delaying every message's insert.
   const contactOutcome = await findOrCreateContact(
     db,
     config.account_id,
     config.user_id,
     phone,
     contactName,
-    { ...acquisition, avatarUrl }
+    acquisition
   );
   if (!contactOutcome) return;
+
+  // Photo refresh runs in parallel with persistence instead of before it.
+  // Still on every message, as before: WhatsApp's profile-picture URLs
+  // expire, so a stored one goes stale. `imagePreview` is a small
+  // thumbnail; prefer the full profile image.
+  const contactId = contactOutcome.contact.id as string;
+  const currentAvatar = (contactOutcome.contact.avatar_url as string | null) ?? null;
+  const avatarTask = (async () => {
+    const avatarUrl =
+      (await fetchFullProfilePhoto(config, phone)) ||
+      body.chat?.image ||
+      body.chat?.imagePreview ||
+      null;
+    if (!avatarUrl || avatarUrl === currentAvatar) return;
+    const { error } = await db
+      .from('contacts')
+      .update({ avatar_url: avatarUrl })
+      .eq('id', contactId);
+    if (error) console.warn('[uazapi-webhook] avatar update failed:', error);
+  })();
   await rememberUazapiLid(
     db,
     config.account_id,
@@ -582,7 +592,10 @@ async function processUazapiWebhook(
     config.user_id,
     contactOutcome.contact.id
   );
-  if (!convResult) return;
+  if (!convResult) {
+    await avatarTask;
+    return;
+  }
 
   await persistInboundMessage({
     db,
@@ -604,4 +617,7 @@ async function processUazapiWebhook(
     externalMessageId,
     persistedMedia
   );
+  // Awaited (not floating) so the instance isn't frozen mid-update — see
+  // the after() note on maxDuration above.
+  await avatarTask;
 }
