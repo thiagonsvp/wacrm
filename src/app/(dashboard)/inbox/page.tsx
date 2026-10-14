@@ -499,6 +499,24 @@ export default function InboxPage() {
   // Mobile "back" — deselect the conversation so the list pane comes
   // back. Also clears the ?c= param so a refresh lands on the list
   // instead of re-opening the thread the user just backed out of.
+  // A rename or a refreshed photo from the contact panel: mirror it in
+  // the open contact and in every list row for that contact.
+  const handleContactUpdated = useCallback(
+    (contactId: string, patch: Partial<Contact>) => {
+      setActiveContact((prev) =>
+        prev && prev.id === contactId ? { ...prev, ...patch } : prev
+      );
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.contact?.id === contactId
+            ? { ...c, contact: { ...c.contact, ...patch } }
+            : c
+        )
+      );
+    },
+    []
+  );
+
   const handleCloseConversation = useCallback(() => {
     setActiveConversation(null);
     setActiveContact(null);
@@ -650,7 +668,7 @@ export default function InboxPage() {
             reaches the same panel through the sheet below instead. */}
         {contactPanelOpen && (
           <div className="hidden lg:block">
-            <ContactSidebar contact={activeContact} />
+            <ContactSidebar contact={activeContact} onContactUpdated={handleContactUpdated} />
           </div>
         )}
       </div>
@@ -678,7 +696,7 @@ export default function InboxPage() {
             </span>
           </div>
           <div className="min-h-0 flex-1">
-            <ContactSidebar contact={activeContact} />
+            <ContactSidebar contact={activeContact} onContactUpdated={handleContactUpdated} />
           </div>
         </div>
       )}

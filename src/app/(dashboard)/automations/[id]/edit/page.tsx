@@ -42,6 +42,7 @@ export default function EditAutomationPage({
         trigger_config: body.automation.trigger_config ?? {},
         is_active: !!body.automation.is_active,
         steps: fromServerSteps((body.steps ?? []) as ServerStepNode[]),
+        trigger_position: body.automation.canvas_trigger_position ?? null,
       })
     }
     load()

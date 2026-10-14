@@ -70,6 +70,9 @@ export async function findOrCreateContact(
   const existingContact = await findExistingContact(db, accountId, phone)
 
   if (existingContact) {
+    // A name an agent typed in the inbox wins over the one WhatsApp
+    // reports on every message (migration 085).
+    if (existingContact.name_locked_at) name = ''
     if (name || acquisition?.source || acquisition?.sourceId || acquisition?.campaign || acquisition?.medium || acquisition?.term || acquisition?.content || acquisition?.adGroupId || acquisition?.matchType || acquisition?.network || acquisition?.device || acquisition?.placement || acquisition?.adText || acquisition?.adImageUrl || acquisition?.url || acquisition?.ctwaClid || acquisition?.gclid || acquisition?.protocol) {
       await db
         .from('contacts')

@@ -12,6 +12,9 @@ export interface BuilderStepInput {
   id?: string
   step_type: string
   step_config: Record<string, unknown>
+  /** Canvas position (top-left). Presentational only. */
+  position_x?: number | null
+  position_y?: number | null
   branches?: { yes?: BuilderStepInput[]; no?: BuilderStepInput[] }
   // Legacy flat form (from template seeds):
   branch?: 'yes' | 'no' | null
@@ -26,12 +29,39 @@ interface InsertRow {
   step_type: string
   step_config: Record<string, unknown>
   position: number
+  position_x?: number | null
+  position_y?: number | null
 }
+
+const coord = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36)
+
+/**
+ * Persist where the trigger card sits on the builder canvas. Best-effort
+ * and presentational: a malformed value or a missing column (migration
+ * 083 not applied) is ignored rather than failing the save.
+ */
+export async function saveTriggerPosition(
+  admin: ReturnType<typeof supabaseAdmin>,
+  automationId: string,
+  value: unknown,
+): Promise<void> {
+  const v = value as { x?: unknown; y?: unknown } | null
+  const x = coord(v?.x)
+  const y = coord(v?.y)
+  const { error } = await admin
+    .from('automations')
+    .update({ canvas_trigger_position: x == null || y == null ? null : { x, y } })
+    .eq('id', automationId)
+  if (error && error.code !== '42703') {
+    console.warn('[automations] trigger position not saved:', error.message)
+  }
+}
 
 export async function replaceSteps(
   automationId: string,
@@ -73,6 +103,8 @@ export async function insertSteps(
         step_type: s.step_type,
         step_config: s.step_config ?? {},
         position: idx,
+        position_x: coord(s.position_x),
+        position_y: coord(s.position_y),
       })
       if (s.step_type === 'condition' && s.branches) {
         if (s.branches.yes) walk(s.branches.yes, id, 'yes')
@@ -84,6 +116,19 @@ export async function insertSteps(
 
   if (rows.length === 0) return null
   const { error } = await supabaseAdmin().from('automation_steps').insert(rows)
+  if (error?.code === '42703') {
+    // Migration 083 (position_x/position_y) not applied yet. replaceSteps
+    // has already deleted the old rows, so failing here would lose the
+    // automation's steps — save them without positions instead.
+    const bare = rows.map((r) => {
+      const copy = { ...r }
+      delete copy.position_x
+      delete copy.position_y
+      return copy
+    })
+    const retry = await supabaseAdmin().from('automation_steps').insert(bare)
+    return retry.error?.message ?? null
+  }
   return error?.message ?? null
 }
 
@@ -123,6 +168,8 @@ interface DbStep {
   step_type: string
   step_config: Record<string, unknown>
   position: number
+  position_x?: number | null
+  position_y?: number | null
 }
 
 export async function loadStepsTree(automationId: string): Promise<BuilderStepNode[]> {
@@ -141,6 +188,8 @@ export async function loadStepsTree(automationId: string): Promise<BuilderStepNo
       id: row.id,
       step_type: row.step_type,
       step_config: row.step_config ?? {},
+      position_x: row.position_x ?? null,
+      position_y: row.position_y ?? null,
       branches: { yes: [], no: [] },
     })
   }

@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { getTemplate } from '@/lib/automations/templates'
-import { insertSteps, type BuilderStepInput } from '@/lib/automations/steps-tree'
+import {
+  insertSteps,
+  saveTriggerPosition,
+  type BuilderStepInput,
+} from '@/lib/automations/steps-tree'
 import {
   validateStepsForActivation,
   validateTriggerForActivation,
@@ -129,6 +133,10 @@ export async function POST(request: Request) {
   if (effectiveSteps && effectiveSteps.length > 0) {
     const err = await insertSteps(automation.id, effectiveSteps)
     if (err) return NextResponse.json({ error: err }, { status: 500 })
+  }
+
+  if (body.canvas_trigger_position) {
+    await saveTriggerPosition(admin, automation.id, body.canvas_trigger_position)
   }
 
   return NextResponse.json({ automation }, { status: 201 })

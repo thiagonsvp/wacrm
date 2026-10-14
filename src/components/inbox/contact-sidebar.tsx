@@ -17,8 +17,13 @@ import {
   StickyNote,
   Plus,
   ExternalLink,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
+import { ContactAvatar } from './contact-avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { useTranslations } from 'next-intl';
@@ -26,9 +31,12 @@ import { formatCurrency } from '@/lib/currency';
 
 interface ContactSidebarProps {
   contact: Contact | null;
+  /** Lets the inbox mirror a rename / new photo in the list and header
+   *  without a refetch (contacts have no realtime subscription). */
+  onContactUpdated?: (contactId: string, patch: Partial<Contact>) => void;
 }
 
-export function ContactSidebar({ contact }: ContactSidebarProps) {
+export function ContactSidebar({ contact, onContactUpdated }: ContactSidebarProps) {
   const tSidebar = useTranslations('Inbox.sidebar');
   const tThread = useTranslations('Inbox.messageThread');
 
@@ -47,6 +55,44 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [addingDeal, setAddingDeal] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [dealStages, setDealStages] = useState<PipelineStage[]>([]);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  // Leaving a contact mid-edit must not carry the editor to the next one.
+  const [editingFor, setEditingFor] = useState(contact?.id);
+  if (editingFor !== contact?.id) {
+    setEditingFor(contact?.id);
+    setEditingName(false);
+  }
+
+  // Only the name changes: same contact row, so conversations, messages,
+  // deals and tags stay attached. Empty hands the name back to WhatsApp.
+  const handleSaveName = useCallback(async () => {
+    if (!contact) return;
+    const next = nameDraft.replace(/\s+/g, ' ').trim();
+    if (next === (contact.name ?? '')) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      const res = await fetch(`/api/contacts/${contact.id}/name`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || 'Não foi possível salvar o nome.');
+        return;
+      }
+      onContactUpdated?.(contact.id, { name: data.name });
+      toast.success(next ? 'Nome atualizado.' : 'O nome volta a vir do WhatsApp.');
+      setEditingName(false);
+    } finally {
+      setSavingName(false);
+    }
+  }, [contact, nameDraft, onContactUpdated]);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -218,7 +264,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   }
 
   const displayName = contact.name || contact.phone;
-  const initials = displayName.charAt(0).toUpperCase();
+  const photoUrl = contact.avatar_url ?? null;
   const attributedSource =
     contact.acquisition_source === 'Google' && !contact.acquisition_gclid
       ? null
@@ -251,27 +297,76 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         <div className="p-4">
           {/* Contact Info */}
           <div className="flex flex-col items-center text-center">
-            <div className="bg-muted text-foreground flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold">
-              {contact.avatar_url ? (
-                <button
+            {/* Upgrades an old WhatsApp thumbnail to the full-size copy as
+                soon as the contact is opened, so the enlarged photo is sharp. */}
+            <button
+              type="button"
+              onClick={() => photoUrl && setPhotoOpen(true)}
+              disabled={!photoUrl}
+              className="cursor-zoom-in rounded-full disabled:cursor-default"
+              aria-label={`Ampliar foto de ${displayName}`}
+            >
+              <ContactAvatar
+                key={contact.id}
+                contactId={contact.id}
+                url={contact.avatar_url}
+                name={displayName}
+                upgrade
+                onResolved={(url) => onContactUpdated?.(contact.id, { avatar_url: url })}
+                className="h-16 w-16 text-lg font-semibold"
+              />
+            </button>
+            {editingName ? (
+              <form
+                className="mt-3 flex w-full items-center gap-1"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleSaveName();
+                }}
+              >
+                <Input
+                  id="contact-name-input"
+                  autoFocus
+                  value={nameDraft}
+                  maxLength={100}
+                  disabled={savingName}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setEditingName(false);
+                  }}
+                  placeholder={contact.phone}
+                  aria-label="Nome do contato"
+                  className="h-8 text-center text-sm"
+                />
+                <Button type="submit" size="icon" variant="ghost" disabled={savingName} className="h-8 w-8 shrink-0" aria-label="Salvar nome">
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
                   type="button"
-                  onClick={() => setPhotoOpen(true)}
-                  className="cursor-zoom-in rounded-full"
-                  aria-label={`Ampliar foto de ${displayName}`}
+                  size="icon"
+                  variant="ghost"
+                  disabled={savingName}
+                  onClick={() => setEditingName(false)}
+                  className="h-8 w-8 shrink-0"
+                  aria-label="Cancelar"
                 >
-                  <img
-                    src={contact.avatar_url}
-                    alt={displayName}
-                    className="h-16 w-16 rounded-full object-cover"
-                  />
-                </button>
-              ) : (
-                initials
-              )}
-            </div>
-            <h3 className="text-foreground mt-3 text-sm font-semibold">
-              {displayName}
-            </h3>
+                  <X className="h-4 w-4" />
+                </Button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setNameDraft(contact.name && contact.name !== contact.phone ? contact.name : '');
+                  setEditingName(true);
+                }}
+                title="Clique para editar o nome"
+                className="group hover:bg-muted mt-3 inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-0.5"
+              >
+                <span className="text-foreground truncate text-sm font-semibold">{displayName}</span>
+                <Pencil className="text-muted-foreground h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100" />
+              </button>
+            )}
             {contact.company && (
               <p className="text-muted-foreground text-xs">{contact.company}</p>
             )}
@@ -370,7 +465,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             )}
           </div>
 
-          {photoOpen && contact.avatar_url && (
+          {photoOpen && photoUrl && (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
               onClick={() => setPhotoOpen(false)}
@@ -385,7 +480,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               </button>
               <div className="flex h-[85vh] w-[min(90vw,800px)] items-center justify-center">
                 <img
-                  src={contact.avatar_url}
+                  src={photoUrl}
                   alt={displayName}
                   className="h-full w-full rounded-lg object-contain"
                   onClick={(event) => event.stopPropagation()}

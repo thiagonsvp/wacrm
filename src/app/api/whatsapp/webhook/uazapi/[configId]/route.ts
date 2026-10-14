@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { downloadMedia } from '@/lib/whatsapp/providers/uazapi';
+import { refreshContactAvatar } from '@/lib/whatsapp/contact-avatar';
 import {
   parseAcquisitionFromText,
   stripLeadingTrackingTags,
@@ -227,39 +228,6 @@ function inferContentType(msg: UazapiMessage): string {
 
 const MEDIA_CONTENT_TYPES = new Set(['image', 'video', 'audio', 'document']);
 
-async function fetchFullProfilePhoto(
-  config: UazapiStoredConfig,
-  phone: string
-): Promise<string | null> {
-  if (
-    !config.uazapi_base_url ||
-    !config.uazapi_token ||
-    !config.uazapi_instance_name
-  )
-    return null;
-  try {
-    const token = decrypt(config.uazapi_token);
-    const response = await fetch(
-      `${config.uazapi_base_url.replace(/\/+$/, '')}/chat/fetchProfilePictureUrl/${encodeURIComponent(config.uazapi_instance_name)}`,
-      {
-        method: 'POST',
-        headers: { token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: phone }),
-        // A photo is cosmetic; a slow UAZAPI must not hold the run open.
-        signal: AbortSignal.timeout(8_000),
-      }
-    );
-    if (!response.ok) return null;
-    const data = await response.json();
-    return (
-      data?.profilePictureUrl || data?.profile_picture_url || data?.url || null
-    );
-  } catch (error) {
-    console.warn('[uazapi-webhook] full profile photo lookup failed:', error);
-    return null;
-  }
-}
-
 function extractAcquisition(msg: UazapiMessage) {
   const ad = msg.content?.contextInfo?.externalAdReply;
   if (!ad) {
@@ -479,8 +447,7 @@ async function processUazapiWebhook(
       config.account_id,
       config.user_id,
       phone,
-      contactName,
-      { avatarUrl: body.chat?.image || body.chat?.imagePreview || null }
+      contactName
     );
     if (!contactOutcome) return;
     await rememberUazapiLid(
@@ -563,24 +530,18 @@ async function processUazapiWebhook(
   if (!contactOutcome) return;
 
   // Photo refresh runs in parallel with persistence instead of before it.
-  // Still on every message, as before: WhatsApp's profile-picture URLs
-  // expire, so a stored one goes stale. `imagePreview` is a small
-  // thumbnail; prefer the full profile image.
-  const contactId = contactOutcome.contact.id as string;
-  const currentAvatar = (contactOutcome.contact.avatar_url as string | null) ?? null;
-  const avatarTask = (async () => {
-    const avatarUrl =
-      (await fetchFullProfilePhoto(config, phone)) ||
-      body.chat?.image ||
-      body.chat?.imagePreview ||
-      null;
-    if (!avatarUrl || avatarUrl === currentAvatar) return;
-    const { error } = await db
-      .from('contacts')
-      .update({ avatar_url: avatarUrl })
-      .eq('id', contactId);
-    if (error) console.warn('[uazapi-webhook] avatar update failed:', error);
-  })();
+  // WhatsApp photo URLs expire and the payload only carries a 96px
+  // thumbnail, so we keep our own full-size copy (lib/whatsapp/
+  // contact-avatar.ts); a fresh copy short-circuits without a UAZAPI call.
+  const avatarTask = refreshContactAvatar(db, config, {
+    id: contactOutcome.contact.id as string,
+    account_id: config.account_id,
+    phone,
+    avatar_url: (contactOutcome.contact.avatar_url as string | null) ?? null,
+  }).catch((error) => {
+    console.warn('[uazapi-webhook] avatar refresh failed:', error);
+    return null;
+  });
   await rememberUazapiLid(
     db,
     config.account_id,

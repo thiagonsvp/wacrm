@@ -2,21 +2,38 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react"
+import {
+  applyNodeChanges,
+  Background,
+  BackgroundVariant,
+  Controls,
+  Handle,
+  MiniMap,
+  Panel,
+  Position,
+  ReactFlow,
+  type Edge as RfEdge,
+  type Node as RfNode,
+  type NodeChange,
+  type NodeProps,
+  type OnNodeDrag,
+} from "@xyflow/react"
+import "@xyflow/react/dist/style.css"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
 import {
   ArrowLeft,
-  ChevronDown,
   Plus,
   Trash2,
-  GripVertical,
   MessageSquare,
   FileText,
   Tag,
@@ -26,6 +43,7 @@ import {
   Briefcase,
   Hourglass,
   GitBranch,
+  LayoutGrid,
   Webhook,
   CircleSlash,
   Zap,
@@ -64,6 +82,24 @@ import {
 import { interactivePayloadPreviewText } from "@/lib/whatsapp/interactive"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import {
+  flattenSteps,
+  layoutAll,
+  nodeSize,
+  resolvePositions,
+  TRIGGER_NODE_ID,
+  withPositions,
+  type CanvasPos,
+  type ParentScope,
+  type StepPath,
+} from "@/lib/automations/canvas"
 
 // ------------------------------------------------------------
 // Types (builder-local — mirror the flattened rows we POST)
@@ -74,6 +110,8 @@ export interface BuilderStep {
   cid: string
   step_type: AutomationStepType
   step_config: Record<string, unknown>
+  /** Canvas position (top-left). Null = never placed; laid out on load. */
+  pos?: CanvasPos | null
   branches?: { yes: BuilderStep[]; no: BuilderStep[] }
 }
 
@@ -85,6 +123,7 @@ export interface BuilderInitial {
   trigger_config: Record<string, unknown>
   is_active: boolean
   steps: BuilderStep[]
+  trigger_position?: CanvasPos | null
 }
 
 // ------------------------------------------------------------
@@ -631,7 +670,9 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
   const isEditing = !!initial.id
   const [state, setState] = useState<BuilderInitial>(initial)
   const [saving, setSaving] = useState(false)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  // Canvas node whose editor is open in the side sheet (a step cid or
+  // TRIGGER_NODE_ID).
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   function patchTop<K extends keyof BuilderInitial>(key: K, value: BuilderInitial[K]) {
     setState((s) => ({ ...s, [key]: value }))
@@ -643,24 +684,38 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
     setState((s) => ({ ...s, steps: mapAtPath(s.steps, path, updater) }))
   }
 
-  function addStepAt(parent: ParentScope, index: number, type: AutomationStepType) {
-    const node: BuilderStep = {
-      cid: cid(),
-      step_type: type,
-      step_config: blankConfig(type),
-      branches: type === "condition" ? { yes: [], no: [] } : undefined,
-    }
-    setState((s) => ({ ...s, steps: insertAt(s.steps, parent, index, node) }))
-    setExpandedId(node.cid)
-  }
+  // Stable: canvas nodes hold it in their data.
+  const addStepAt = useCallback(
+    (parent: ParentScope, index: number, type: AutomationStepType) => {
+      const node: BuilderStep = {
+        cid: cid(),
+        step_type: type,
+        step_config: blankConfig(type),
+        branches: type === "condition" ? { yes: [], no: [] } : undefined,
+      }
+      setState((s) => ({ ...s, steps: insertAt(s.steps, parent, index, node) }))
+      setSelectedId(node.cid)
+    },
+    [],
+  )
 
   function deleteStepAt(path: StepPath) {
     setState((s) => ({ ...s, steps: removeAt(s.steps, path) }))
+    setSelectedId(null)
   }
 
   function moveStepAt(path: StepPath, direction: -1 | 1) {
     setState((s) => ({ ...s, steps: moveAt(s.steps, path, direction) }))
   }
+
+  // Stable so the canvas can call it from an effect without looping.
+  const setPositions = useCallback((positions: Map<string, CanvasPos>) => {
+    setState((s) => ({
+      ...s,
+      steps: withPositions(s.steps, positions),
+      trigger_position: positions.get(TRIGGER_NODE_ID) ?? s.trigger_position ?? null,
+    }))
+  }, [])
 
   async function save() {
     setSaving(true)
@@ -672,6 +727,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
         trigger_config: state.trigger_config,
         is_active: state.is_active,
         steps: toApiSteps(state.steps),
+        canvas_trigger_position: state.trigger_position ?? null,
       }
 
       const res = isEditing
@@ -749,40 +805,36 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
         </Button>
       </header>
 
-      {/* Canvas */}
-      <div className="relative flex-1 overflow-y-auto">
-        <div className="absolute inset-0 bg-[radial-gradient(circle,var(--border)_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none" />
-        <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-0 px-4 py-10">
-          <ResourcesProvider>
-            <TriggerCard
-              type={state.trigger_type}
-              config={state.trigger_config}
-              onTypeChange={(tVal) => patchTop("trigger_type", tVal)}
-              onConfigChange={(c) => patchTop("trigger_config", c)}
-              t={t}
-            />
-            <StepList
-              steps={state.steps}
-              parentPath={[]}
-              expandedId={expandedId}
-              setExpandedId={setExpandedId}
-              updateStep={updateStep}
-              addStepAt={addStepAt}
-              deleteStepAt={deleteStepAt}
-              moveStepAt={moveStepAt}
-            />
-          </ResourcesProvider>
-        </div>
+      <div className="relative min-h-0 flex-1">
+        <ResourcesProvider>
+          <AutomationCanvas
+            state={state}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onPositions={setPositions}
+            addStepAt={addStepAt}
+          />
+          <NodeSheet
+            state={state}
+            selectedId={selectedId}
+            onClose={() => setSelectedId(null)}
+            onTriggerTypeChange={(v) => patchTop("trigger_type", v)}
+            onTriggerConfigChange={(c) => patchTop("trigger_config", c)}
+            updateStep={updateStep}
+            deleteStepAt={deleteStepAt}
+            moveStepAt={moveStepAt}
+          />
+        </ResourcesProvider>
       </div>
     </div>
   )
 }
 
 // ------------------------------------------------------------
-// Trigger card
+// Trigger editor (shown in the side sheet)
 // ------------------------------------------------------------
 
-function TriggerCard({
+function TriggerEditor({
   type,
   config,
   onTypeChange,
@@ -795,94 +847,65 @@ function TriggerCard({
   onConfigChange: (c: Record<string, unknown>) => void
   t: ReturnType<typeof useTranslations>
 }) {
-  const [open, setOpen] = useState(false)
   return (
-    // Card width: full on mobile, fixed 320px on sm+. The canvas wrapper
-    // (max-w-2xl + px-4) keeps this tidy on tablet/desktop.
-    <div className="z-10 w-full max-w-[320px] sm:w-80">
-      <div className="rounded-lg border border-border border-l-4 border-l-blue-500 bg-card shadow-lg">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+    <div className="space-y-3">
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          {t("triggerType")}
+        </label>
+        <select
+          value={type}
+          onChange={(e) => onTypeChange(e.target.value as AutomationTriggerType)}
+          className="w-full rounded-md border border-border bg-muted px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-500/10 text-blue-400">
-            <Zap className="h-4 w-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] uppercase tracking-wide text-blue-300">{t("trigger")}</div>
-            <div className="truncate text-sm font-medium text-foreground">
-              {t(`triggers.${type}.label`)}
-            </div>
-          </div>
-          <ChevronDown
-            className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")}
-          />
-        </button>
-        {open && (
-          <div className="space-y-3 border-t border-border px-4 py-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                {t("triggerType")}
-              </label>
-              <select
-                value={type}
-                onChange={(e) => onTypeChange(e.target.value as AutomationTriggerType)}
-                className="w-full rounded-md border border-border bg-muted px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
-              >
-                {TRIGGER_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {t(`triggers.${o.value}.label`)}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {t(`triggers.${type}.hint`)}
-              </p>
-            </div>
-            {type === "keyword_match" && (
-              <KeywordMatchConfig
-                config={config as unknown as KeywordMatchTriggerConfig}
-                onChange={onConfigChange}
-                t={t}
-              />
-            )}
-            {type === "interactive_reply" && (
-              <InteractiveReplyConfig config={config} onChange={onConfigChange} t={t} />
-            )}
-            {type === "tag_added" && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Tag
-                </label>
-                <TagSelect
-                  value={(config.tag_id as string) ?? ""}
-                  onChange={(v) => onConfigChange({ ...config, tag_id: v })}
-                  t={t}
-                />
-              </div>
-            )}
-            {type === "time_based" && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  {t("schedule")}
-                </label>
-                <Input
-                placeholder="Expressão cron ou HH:mm"
-                  value={(config.schedule as string) ?? ""}
-                  onChange={(e) =>
-                    onConfigChange({ ...config, schedule: e.target.value })
-                  }
-                  className="bg-muted text-foreground"
-                />
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {t("scheduleHint")}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+          {TRIGGER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {t(`triggers.${o.value}.label`)}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {t(`triggers.${type}.hint`)}
+        </p>
       </div>
+      {type === "keyword_match" && (
+        <KeywordMatchConfig
+          config={config as unknown as KeywordMatchTriggerConfig}
+          onChange={onConfigChange}
+          t={t}
+        />
+      )}
+      {type === "interactive_reply" && (
+        <InteractiveReplyConfig config={config} onChange={onConfigChange} t={t} />
+      )}
+      {type === "tag_added" && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            {t("config.tagLabel")}
+          </label>
+          <TagSelect
+            value={(config.tag_id as string) ?? ""}
+            onChange={(v) => onConfigChange({ ...config, tag_id: v })}
+            t={t}
+          />
+        </div>
+      )}
+      {type === "time_based" && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            {t("schedule")}
+          </label>
+          <Input
+            placeholder="Expressão cron ou HH:mm"
+            value={(config.schedule as string) ?? ""}
+            onChange={(e) => onConfigChange({ ...config, schedule: e.target.value })}
+            className="bg-muted text-foreground"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {t("scheduleHint")}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -1010,262 +1033,432 @@ function InteractiveReplyConfig({
 }
 
 // ------------------------------------------------------------
-// Step list + card + connectors
+// Canvas (React Flow): draggable nodes, pan/zoom, auto-arrange.
+//
+// The tree in `state.steps` stays the source of truth — nodes and edges
+// are derived from it on every render (src/lib/automations/canvas.ts),
+// and the only thing the canvas writes back is each node's position.
 // ------------------------------------------------------------
 
-type ParentScope =
-  | { kind: "root" }
-  | { kind: "branch"; parentCid: string; branch: "yes" | "no" }
-
-type StepPath = (
-  | { kind: "root"; index: number }
-  | { kind: "branch"; parentCid: string; branch: "yes" | "no"; index: number }
-)[]
-
-interface StepListProps {
-  steps: BuilderStep[]
-  parentPath: StepPath
-  expandedId: string | null
-  setExpandedId: (id: string | null) => void
-  updateStep: (path: StepPath, updater: (s: BuilderStep) => BuilderStep) => void
-  addStepAt: (parent: ParentScope, index: number, type: AutomationStepType) => void
-  deleteStepAt: (path: StepPath) => void
-  moveStepAt: (path: StepPath, direction: -1 | 1) => void
+interface AutoNodeData extends Record<string, unknown> {
+  isTrigger: boolean
+  isCondition: boolean
+  category: string
+  title: string
+  preview: string
+  icon: typeof Zap
+  accent: string
+  yesLabel: string
+  noLabel: string
+  /** Insert after this node (or at the start, for the trigger). */
+  onAdd?: (type: AutomationStepType) => void
+  onAddYes?: (type: AutomationStepType) => void
+  onAddNo?: (type: AutomationStepType) => void
 }
 
-function StepList(props: StepListProps) {
-  const { steps, parentPath, ...rest } = props
-  const last = parentPath[parentPath.length - 1]
-  const parentScope: ParentScope =
-    last?.kind === "branch"
-      ? { kind: "branch", parentCid: last.parentCid, branch: last.branch }
-      : { kind: "root" }
-  // A branch list's parentPath ends in a scope marker (see
-  // ConditionBranches). StepRenderer appends each child's own branch
-  // entry, so the marker must be dropped here — keeping it gave branch
-  // children a path one level too deep, and every edit, delete or move
-  // on them silently matched nothing.
-  const basePath = last?.kind === "branch" ? parentPath.slice(0, -1) : parentPath
+type AutoRfNode = RfNode<AutoNodeData, "auto">
+
+const NODE_TYPES = { auto: AutomationNodeCard }
+
+function AutomationCanvas({
+  state,
+  selectedId,
+  onSelect,
+  onPositions,
+  addStepAt,
+}: {
+  state: BuilderInitial
+  selectedId: string | null
+  onSelect: (id: string) => void
+  onPositions: (positions: Map<string, CanvasPos>) => void
+  addStepAt: (parent: ParentScope, index: number, type: AutomationStepType) => void
+}) {
+  const t = useTranslations("Automations.builder")
+  const { nodes, edges } = useMemo(() => flattenSteps(state.steps), [state.steps])
+  const resolved = useMemo(
+    () => resolvePositions(nodes, edges, state.trigger_position),
+    [nodes, edges, state.trigger_position],
+  )
+
+  // Write generated positions (first open, or a newly added node) back to
+  // state so they are saved and a later drag doesn't snap anything back.
+  // Once written, resolvePositions finds them all placed and stops.
+  useEffect(() => {
+    if (resolved.generated) onPositions(resolved.positions)
+  }, [resolved, onPositions])
+
+  const derivedNodes = useMemo<AutoRfNode[]>(() => {
+    const yesLabel = t("branches.yes")
+    const noLabel = t("branches.no")
+    const trigger: AutoRfNode = {
+      id: TRIGGER_NODE_ID,
+      type: "auto",
+      position: resolved.positions.get(TRIGGER_NODE_ID) ?? { x: 0, y: 0 },
+      selected: selectedId === TRIGGER_NODE_ID,
+      data: {
+        isTrigger: true,
+        isCondition: false,
+        category: t("trigger"),
+        title: t(`triggers.${state.trigger_type}.label`),
+        preview: "",
+        icon: Zap,
+        accent: "border-l-blue-500",
+        yesLabel,
+        noLabel,
+        onAdd: (tp) => addStepAt({ kind: "root" }, 0, tp),
+      },
+    }
+    const steps = nodes.map<AutoRfNode>((n) => {
+      const meta = STEP_META[n.step.step_type as AutomationStepType]
+      const isCondition = n.step.step_type === "condition"
+      return {
+        id: n.id,
+        type: "auto",
+        position: resolved.positions.get(n.id) ?? { x: 0, y: 0 },
+        selected: selectedId === n.id,
+        data: {
+          isTrigger: false,
+          isCondition,
+          category: isCondition
+            ? "Condição"
+            : n.step.step_type === "wait"
+              ? "Espera"
+              : "Ação",
+          title: t(`steps.${meta.label}`),
+          preview: previewFor(n.step as BuilderStep),
+          icon: meta.icon,
+          accent: meta.border,
+          yesLabel,
+          noLabel,
+          onAdd: isCondition
+            ? undefined
+            : (tp) => addStepAt(n.scope, n.index + 1, tp),
+          onAddYes: isCondition
+            ? (tp) => addStepAt({ kind: "branch", parentCid: n.id, branch: "yes" }, 0, tp)
+            : undefined,
+          onAddNo: isCondition
+            ? (tp) => addStepAt({ kind: "branch", parentCid: n.id, branch: "no" }, 0, tp)
+            : undefined,
+        },
+      }
+    })
+    return [trigger, ...steps]
+  }, [nodes, resolved, selectedId, state.trigger_type, t, addStepAt])
+
+  // React Flow needs to own node positions while a drag is in flight;
+  // the committed position goes back to the tree on drag stop.
+  const [rfNodes, setRfNodes] = useState<AutoRfNode[]>(derivedNodes)
+  useEffect(() => {
+    setRfNodes(derivedNodes)
+  }, [derivedNodes])
+
+  const rfEdges = useMemo<RfEdge[]>(
+    () =>
+      edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle ?? undefined,
+        type: "smoothstep",
+        label:
+          e.sourceHandle === "yes"
+            ? t("branches.yes")
+            : e.sourceHandle === "no"
+              ? t("branches.no")
+              : undefined,
+        labelStyle: { fill: "var(--muted-foreground)", fontSize: 11 },
+        labelBgStyle: { fill: "var(--card)" },
+        labelBgPadding: [4, 2] as [number, number],
+        labelBgBorderRadius: 4,
+        style: { stroke: "var(--border)", strokeWidth: 1.5 },
+      })),
+    [edges, t],
+  )
+
+  const handleNodesChange = useCallback((changes: NodeChange<AutoRfNode>[]) => {
+    setRfNodes((cur) => applyNodeChanges(changes, cur))
+  }, [])
+
+  const handleDragStop = useCallback<OnNodeDrag<AutoRfNode>>(
+    (_e, node) => {
+      onPositions(new Map([[node.id, node.position]]))
+    },
+    [onPositions],
+  )
+
+  function arrange() {
+    onPositions(layoutAll(nodes, edges))
+  }
 
   return (
-    <div className="flex flex-col items-center">
-      <AddButton onPick={(t) => props.addStepAt(parentScope, 0, t)} />
-      {steps.map((step, idx) => (
-        <StepRenderer
-          key={step.cid}
-          step={step}
-          index={idx}
-          total={steps.length}
-          parentScope={parentScope}
-          parentPath={basePath}
-          {...rest}
+    <div className="h-full w-full">
+      <ReactFlow
+        nodes={rfNodes}
+        edges={rfEdges}
+        nodeTypes={NODE_TYPES}
+        onNodesChange={handleNodesChange}
+        onNodeDragStop={handleDragStop}
+        onNodeClick={(_e, node) => onSelect(node.id)}
+        nodesConnectable={false}
+        // The tree is edited through the sheet and the "+" buttons, not
+        // by keyboard-deleting canvas elements.
+        deleteKeyCode={null}
+        fitView
+        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
+        minZoom={0.2}
+        maxZoom={1.5}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="var(--border)" />
+        <Controls
+          className="!border-border !bg-card [&_button]:!border-border [&_button]:!bg-card [&_button:hover]:!bg-muted [&_button_svg]:!fill-foreground !overflow-hidden !rounded-xl !border !shadow-[0_6px_20px_-8px_rgba(0,0,0,0.5)]"
+          showInteractive={false}
         />
-      ))}
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor={(n) =>
+            (n.data as AutoNodeData).isTrigger
+              ? "#3b82f6"
+              : (n.data as AutoNodeData).isCondition
+                ? "#f59e0b"
+                : "#7c3aed"
+          }
+          nodeStrokeWidth={0}
+          nodeBorderRadius={3}
+          maskColor="color-mix(in oklch, var(--background) 70%, transparent)"
+          className="!border-border !bg-card !rounded-xl !border !shadow-[0_6px_20px_-8px_rgba(0,0,0,0.5)]"
+        />
+        <Panel position="top-left" className="!top-4 !left-4">
+          <Button variant="outline" size="sm" onClick={arrange} className="bg-card">
+            <LayoutGrid className="h-4 w-4" />
+            {t("arrange")}
+          </Button>
+        </Panel>
+      </ReactFlow>
     </div>
   )
 }
 
-function StepRenderer({
-  step,
-  index,
-  total,
-  parentScope,
-  parentPath,
-  ...props
-}: {
-  step: BuilderStep
-  index: number
-  total: number
-  parentScope: ParentScope
-  parentPath: StepPath
-} & Omit<StepListProps, "steps" | "parentPath">) {
-  const t = useTranslations("Automations.builder")
-  const path: StepPath = [
-    ...parentPath,
-    parentScope.kind === "root"
-      ? { kind: "root", index }
-      : { kind: "branch", parentCid: parentScope.parentCid, branch: parentScope.branch, index },
-  ]
-  const meta = STEP_META[step.step_type]
-  const Icon = meta.icon
-  const expanded = props.expandedId === step.cid
-  const isCondition = step.step_type === "condition"
-  // Card widths on mobile fill the full canvas column (max-w-2xl px-4
-  // still keeps them reasonable). On sm+ the original fixed widths
-  // come back so the flow visual stays recognisable.
-  const width = isCondition
-    ? "w-full max-w-[400px] sm:w-[400px]"
-    : "w-full max-w-[320px] sm:w-80"
-
+function AutomationNodeCard({ data, selected }: NodeProps<AutoRfNode>) {
+  const Icon = data.icon
+  const size = nodeSize(data.isTrigger ? null : data.isCondition ? "condition" : "step")
   return (
-    <>
-      <div className={cn("z-10 flex flex-col", width)}>
+    <div style={{ width: size.width }} className="relative">
+      {!data.isTrigger && (
+        <Handle type="target" position={Position.Top} className="!h-2 !w-2 !border-0 !bg-border" />
+      )}
+      <div
+        style={{ minHeight: size.height }}
+        className={cn(
+          "flex items-center gap-3 rounded-lg border border-border border-l-4 bg-card px-4 py-3 shadow-lg transition-shadow",
+          data.accent,
+          selected && "ring-2 ring-primary/60",
+        )}
+      >
         <div
           className={cn(
-            "rounded-lg border border-border border-l-4 bg-card shadow-lg",
-            meta.border,
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+            data.isTrigger ? "bg-blue-500/10 text-blue-400" : "bg-muted text-muted-foreground",
           )}
         >
-          <button
-            type="button"
-            onClick={() => props.setExpandedId(expanded ? null : step.cid)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left"
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div
+            className={cn(
+              "text-[11px] uppercase tracking-wide",
+              data.isTrigger ? "text-blue-300" : "text-muted-foreground",
+            )}
           >
-            <GripVertical className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden />
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
-              <Icon className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                {isCondition ? "Condição" : step.step_type === "wait" ? "Espera" : "Ação"}
-              </div>
-              <div className="truncate text-sm font-medium text-foreground">{t(`steps.${meta.label}`)}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{previewFor(step)}</div>
-            </div>
-            <ChevronDown
-              className={cn("h-4 w-4 text-muted-foreground transition-transform", expanded && "rotate-180")}
-            />
-          </button>
-          {expanded && (
-            <div className="border-t border-border px-4 py-3">
-              <StepEditor
-                step={step}
-                onChange={(next) => props.updateStep(path, () => next)}
-              />
-              <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    disabled={index === 0}
-                    aria-label="Mover para cima"
-                    onClick={() => props.moveStepAt(path, -1)}
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    disabled={index === total - 1}
-                    aria-label="Mover para baixo"
-                    onClick={() => props.moveStepAt(path, 1)}
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => props.deleteStepAt(path)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {t("delete")}
-                </Button>
-              </div>
-            </div>
+            {data.category}
+          </div>
+          <div className="truncate text-sm font-medium text-foreground">{data.title}</div>
+          {data.preview && (
+            <div className="truncate text-[11px] text-muted-foreground">{data.preview}</div>
           )}
         </div>
-
-        {isCondition && (
-          <ConditionBranches step={step} parentPath={path} {...props} />
-        )}
       </div>
 
-      {/* A condition branches into Yes/No (rendered above by
-          ConditionBranches), so it has no linear "continue" path — adding
-          the trailing connector here would produce a spurious third output. */}
-      {!isCondition && (
-        <AddButton
-          onPick={(t) => props.addStepAt(parentScope, index + 1, t)}
-        />
+      {data.isCondition ? (
+        <>
+          <Handle
+            id="yes"
+            type="source"
+            position={Position.Bottom}
+            style={{ left: "25%" }}
+            className="!h-2 !w-2 !border-0 !bg-primary"
+          />
+          <Handle
+            id="no"
+            type="source"
+            position={Position.Bottom}
+            style={{ left: "75%" }}
+            className="!h-2 !w-2 !border-0 !bg-rose-400"
+          />
+          <div className="absolute -bottom-5 left-[25%] -translate-x-1/2">
+            <NodeAddButton onPick={data.onAddYes!} label={data.yesLabel} tone="yes" />
+          </div>
+          <div className="absolute -bottom-5 left-[75%] -translate-x-1/2">
+            <NodeAddButton onPick={data.onAddNo!} label={data.noLabel} tone="no" />
+          </div>
+        </>
+      ) : (
+        <>
+          <Handle type="source" position={Position.Bottom} className="!h-2 !w-2 !border-0 !bg-border" />
+          {data.onAdd && (
+            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2">
+              <NodeAddButton onPick={data.onAdd} />
+            </div>
+          )}
+        </>
       )}
-    </>
-  )
-}
-
-function ConditionBranches({
-  step,
-  parentPath,
-  ...props
-}: {
-  step: BuilderStep
-  parentPath: StepPath
-} & Omit<StepListProps, "steps" | "parentPath">) {
-  const t = useTranslations("Automations.builder")
-  const yes = step.branches?.yes ?? []
-  const no = step.branches?.no ?? []
-  // Build the child scope by appending a branch marker. The scope the
-  // StepList uses is driven by the LAST element of parentPath, so the
-  // tail's `index` doesn't matter — it's replaced per child during walks.
-  const yesPath: StepPath = [
-    ...parentPath,
-    { kind: "branch", parentCid: step.cid, branch: "yes", index: 0 },
-  ]
-  const noPath: StepPath = [
-    ...parentPath,
-    { kind: "branch", parentCid: step.cid, branch: "no", index: 0 },
-  ]
-  return (
-    // Stack Yes/No vertically on mobile — two columns at 375px would
-    // cram each branch to ~170px which is too narrow for the nested
-    // cards. Two-column grid returns on sm+.
-    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <BranchColumn label={t("branches.yes")} color="text-primary">
-        <StepList {...props} steps={yes} parentPath={yesPath} />
-      </BranchColumn>
-      <BranchColumn label={t("branches.no")} color="text-rose-400">
-        <StepList {...props} steps={no} parentPath={noPath} />
-      </BranchColumn>
     </div>
   )
 }
 
-function BranchColumn({
+function NodeAddButton({
+  onPick,
   label,
-  color,
-  children,
+  tone,
 }: {
-  label: string
-  color: string
-  children: React.ReactNode
+  onPick: (t: AutomationStepType) => void
+  label?: string
+  tone?: "yes" | "no"
 }) {
+  const t = useTranslations("Automations.builder")
   return (
-    <div className="flex flex-col items-center">
-      <div className={cn("mb-2 text-[11px] font-semibold uppercase", color)}>{label}</div>
-      {children}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        // nodrag/nopan: let the click reach the menu instead of starting a
+        // canvas drag; stopPropagation keeps it from also opening the
+        // node's editor sheet.
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "nodrag nopan flex h-6 items-center justify-center gap-1 rounded-full border border-dashed border-border bg-background px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary hover:bg-primary/10 hover:text-primary data-[popup-open]:border-primary data-[popup-open]:text-primary",
+          tone === "yes" && "text-primary",
+          tone === "no" && "text-rose-400",
+        )}
+        aria-label={label ? `${t("addStep")} (${label})` : t("addStep")}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {label}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="max-h-80 min-w-56 overflow-y-auto border-border bg-popover">
+        {ADDABLE_STEPS.map((tp) => {
+          const Icon = STEP_META[tp].icon
+          return (
+            <DropdownMenuItem key={tp} onClick={() => onPick(tp)}>
+              <Icon className="h-4 w-4" />
+              {t(`steps.${STEP_META[tp].label}`)}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
-function AddButton({ onPick }: { onPick: (t: AutomationStepType) => void }) {
+function NodeSheet({
+  state,
+  selectedId,
+  onClose,
+  onTriggerTypeChange,
+  onTriggerConfigChange,
+  updateStep,
+  deleteStepAt,
+  moveStepAt,
+}: {
+  state: BuilderInitial
+  selectedId: string | null
+  onClose: () => void
+  onTriggerTypeChange: (t: AutomationTriggerType) => void
+  onTriggerConfigChange: (c: Record<string, unknown>) => void
+  updateStep: (path: StepPath, updater: (s: BuilderStep) => BuilderStep) => void
+  deleteStepAt: (path: StepPath) => void
+  moveStepAt: (path: StepPath, direction: -1 | 1) => void
+}) {
   const t = useTranslations("Automations.builder")
+  const isTrigger = selectedId === TRIGGER_NODE_ID
+  const info = useMemo(
+    () =>
+      selectedId && !isTrigger
+        ? flattenSteps(state.steps).nodes.find((n) => n.id === selectedId) ?? null
+        : null,
+    [selectedId, isTrigger, state.steps],
+  )
+  const open = isTrigger || !!info
+
+  // Sibling count for enabling the move buttons.
+  const siblings = info
+    ? info.scope.kind === "root"
+      ? state.steps.length
+      : flattenSteps(state.steps).nodes.find((n) => n.id === (info.scope as { parentCid: string }).parentCid)
+          ?.step.branches?.[(info.scope as { branch: "yes" | "no" }).branch].length ?? 0
+    : 0
+
+  const step = info?.step as BuilderStep | undefined
+  const meta = step ? STEP_META[step.step_type] : null
+
   return (
-    <div className="relative flex flex-col items-center">
-      <div className="h-4 w-[2px] bg-border" aria-hidden />
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:bg-primary/10 hover:text-primary data-[popup-open]:border-primary data-[popup-open]:bg-primary/20 data-[popup-open]:text-primary"
-          aria-label={t("addStep")}
-        >
-          <Plus className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="max-h-80 min-w-56 overflow-y-auto border-border bg-popover"
-        >
-          {ADDABLE_STEPS.map((tp) => {
-            const Icon = STEP_META[tp].icon
-            return (
-              <DropdownMenuItem key={tp} onClick={() => onPick(tp)}>
-                <Icon className="h-4 w-4" />
-                {t(`steps.${STEP_META[tp].label}`)}
-              </DropdownMenuItem>
-            )
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <div className="h-4 w-[2px] bg-border" aria-hidden />
-    </div>
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent
+        side="right"
+        className="border-border bg-popover flex w-full flex-col gap-0 border-l p-0 sm:max-w-md"
+      >
+        <SheetHeader className="border-border border-b px-5 py-4">
+          <SheetTitle className="text-sm font-semibold">
+            {isTrigger ? t("trigger") : meta ? t(`steps.${meta.label}`) : ""}
+          </SheetTitle>
+          <SheetDescription className="text-muted-foreground text-xs">
+            {isTrigger ? t(`triggers.${state.trigger_type}.hint`) : step ? previewFor(step) : ""}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
+          {isTrigger ? (
+            <TriggerEditor
+              type={state.trigger_type}
+              config={state.trigger_config}
+              onTypeChange={onTriggerTypeChange}
+              onConfigChange={onTriggerConfigChange}
+              t={t}
+            />
+          ) : info && step ? (
+            <StepEditor step={step} onChange={(next) => updateStep(info.path, () => next)} />
+          ) : null}
+        </div>
+
+        {info && (
+          <div className="border-border flex items-center justify-between gap-2 border-t px-5 py-3">
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={info.index === 0}
+                aria-label="Mover para cima"
+                onClick={() => moveStepAt(info.path, -1)}
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={info.index >= siblings - 1}
+                aria-label="Mover para baixo"
+                onClick={() => moveStepAt(info.path, 1)}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button variant="destructive" size="sm" onClick={() => deleteStepAt(info.path)}>
+              <Trash2 className="h-3.5 w-3.5" />
+              {t("delete")}
+            </Button>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -1739,6 +1932,8 @@ function moveInBranches(
 interface ApiStep {
   step_type: string
   step_config: Record<string, unknown>
+  position_x?: number | null
+  position_y?: number | null
   branches?: { yes?: ApiStep[]; no?: ApiStep[] }
 }
 
@@ -1746,6 +1941,8 @@ export function toApiSteps(steps: BuilderStep[]): ApiStep[] {
   return steps.map((s) => ({
     step_type: s.step_type,
     step_config: s.step_config,
+    position_x: s.pos ? Math.round(s.pos.x) : null,
+    position_y: s.pos ? Math.round(s.pos.y) : null,
     branches: s.branches
       ? { yes: toApiSteps(s.branches.yes), no: toApiSteps(s.branches.no) }
       : undefined,
@@ -1760,6 +1957,8 @@ export interface ServerStepNode {
   id: string
   step_type: string
   step_config: Record<string, unknown>
+  position_x?: number | null
+  position_y?: number | null
   branches: { yes: ServerStepNode[]; no: ServerStepNode[] }
 }
 
@@ -1768,6 +1967,10 @@ export function fromServerSteps(nodes: ServerStepNode[]): BuilderStep[] {
     cid: cid(),
     step_type: n.step_type as AutomationStepType,
     step_config: n.step_config ?? {},
+    pos:
+      n.position_x != null && n.position_y != null
+        ? { x: n.position_x, y: n.position_y }
+        : null,
     branches:
       n.step_type === "condition"
         ? {

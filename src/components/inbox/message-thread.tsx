@@ -52,6 +52,7 @@ import {
 import { deleteAccountMedia } from '@/lib/storage/upload-media';
 import { TemplatePicker } from './template-picker';
 import { AiThreadBanner } from './ai-thread-banner';
+import { ContactAvatar } from './contact-avatar';
 import {
   ScheduleMessageDialog,
   useScheduledMessages,
@@ -924,18 +925,12 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          {contact?.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={contact.avatar_url}
-              alt=""
-              className="h-9 w-9 flex-shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div className="bg-muted text-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-medium">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <ContactAvatar
+            contactId={contact.id}
+            url={contact.avatar_url}
+            name={displayName}
+            className="h-9 w-9 text-sm"
+          />
           <div className="min-w-0">
             <h2 className="text-foreground truncate text-sm font-semibold">
               {displayName}

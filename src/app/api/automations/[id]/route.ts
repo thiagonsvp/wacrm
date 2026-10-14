@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/automations/admin-client'
 import {
   loadStepsTree,
   replaceSteps,
+  saveTriggerPosition,
   type BuilderStepInput,
 } from '@/lib/automations/steps-tree'
 import {
@@ -126,6 +127,10 @@ export async function PATCH(
   if (Array.isArray(body.steps)) {
     const err = await replaceSteps(id, body.steps as BuilderStepInput[])
     if (err) return NextResponse.json({ error: err }, { status: 500 })
+  }
+
+  if ('canvas_trigger_position' in body) {
+    await saveTriggerPosition(admin, id, body.canvas_trigger_position)
   }
 
   return NextResponse.json({ ok: true })

@@ -362,7 +362,7 @@ export function DealForm({
             <div className="grid gap-2">
               <Label className="text-muted-foreground">
                 {t('expectedCloseDate')}
-                {deal?.status === 'won' ? ' *' : ''}
+                {deal && deal.status !== 'won' ? ' *' : ''}
               </Label>
               <Input
                 type="date"
@@ -455,6 +455,11 @@ export function DealForm({
                     )}
                   </Button>
                 </div>
+                {deal.status !== 'won' && !expectedCloseDate && (
+                  <p className="text-muted-foreground text-xs">
+                    {t('wonNeedsCloseDate')}
+                  </p>
+                )}
                 {deal.status && deal.status !== 'open' && (
                   <Button
                     type="button"

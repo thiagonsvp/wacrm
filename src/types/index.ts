@@ -108,6 +108,9 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
+  /** Set when an agent renamed the contact in the inbox; inbound WhatsApp
+   *  messages then leave `name` alone (migration 085). */
+  name_locked_at?: string | null;
   /** Platform that originated the lead: a Meta click-to-WhatsApp ad
    *  (Facebook / Instagram) or a Google Ads click. Null = organic. */
   acquisition_source?: 'Facebook' | 'Instagram' | 'Google' | null;
