@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
 import {
   AlertCircle,
   CalendarDays,
+  Download,
   Eye,
   Handshake,
   MousePointerClick,
@@ -21,33 +23,20 @@ import { KpiTile } from '@/components/performance/kpi-tile'
 import { FunnelBars } from '@/components/performance/funnel-bars'
 import { OriginSplit } from '@/components/performance/origin-split'
 import { BreakdownTable } from '@/components/performance/breakdown-table'
-import { buildTrend, FunnelTrend, SpendTrend } from '@/components/performance/trend-charts'
+import { FunnelTrend, SpendTrend } from '@/components/performance/trend-charts'
 import {
   cac,
   cpc,
   cpl,
   cpm,
   ctr,
-  groupByCampaign,
-  groupByCreative,
-  indexByAd,
-  indexIdentity,
-  mediaTotals,
   reachedNegotiating,
   reachedQualified,
   roas,
-  spendByDay,
   ticket,
-  toAdIdentity,
-  toAdMedia,
 } from '@/lib/performance/merge'
 import { decimal, money, moneyOrDash, percent, quantity } from '@/lib/performance/format'
-import {
-  emptyCounts,
-  type AdIdentity,
-  type AdMedia,
-  type FunnelPayload,
-} from '@/lib/performance/types'
+import { usePerformanceReport, type AdSource } from '@/hooks/use-performance-report'
 import { cn } from '@/lib/utils'
 
 // ============================================================
@@ -83,168 +72,43 @@ function daysAgo(days: number): { from: string; to: string } {
   return { from: iso(start), to: iso(today) }
 }
 
-const emptyFunnel = (): FunnelPayload => ({
-  currency: 'BRL',
-  stageNames: null,
-  ads: [],
-  organic: emptyCounts(),
-  totals: emptyCounts(),
-  daily: [],
-  origins: [],
-  excludedContacts: 0,
-})
-
 export default function PerformancePage() {
   const initial = daysAgo(30)
-  const [source, setSource] = useState<'meta' | 'google'>('meta')
-  const [availableSources, setAvailableSources] = useState<Array<'meta' | 'google'> | null>(null)
+  const [source, setSource] = useState<AdSource>('meta')
   const [from, setFrom] = useState(initial.from)
   const [to, setTo] = useState(initial.to)
-  const [media, setMedia] = useState<AdMedia[]>([])
-  const [funnel, setFunnel] = useState<FunnelPayload>(emptyFunnel)
-  const [identity, setIdentity] = useState<AdIdentity[]>([])
-  const [mediaError, setMediaError] = useState('')
-  const [crmError, setCrmError] = useState('')
-  // "Atualizar" re-runs the same query, so it needs something to change.
+  // "Atualizar" re-runs the same query, so it needs something to change;
+  // that one run also bypasses the server's Windsor cache.
   const [nonce, setNonce] = useState(0)
-  const [settled, setSettled] = useState<string | null>(null)
+  const [freshNonce, setFreshNonce] = useState(-1)
 
-  useEffect(() => {
-    let current = true
-    void fetch('/api/windsor/config', { cache: 'no-store' })
-      .then((response) => response.json())
-      .then((data) => {
-        if (!current) return
-        const sources = (Array.isArray(data.configured_sources)
-          ? data.configured_sources
-          : []) as Array<'meta' | 'google'>
-        setAvailableSources(sources)
-        if (sources.length) {
-          setSource((currentSource) =>
-            sources.includes(currentSource) ? currentSource : sources[0],
-          )
-        }
-      })
-      .catch(() => {
-        if (current) setAvailableSources([])
-      })
-    return () => {
-      current = false
-    }
-  }, [])
-
-  // `loading` is DERIVED, not stored. Storing it would mean flipping it
-  // on inside the effect body, which cascades an extra render before a
-  // single byte has been fetched; comparing "what we asked for" against
-  // "what came back" says the same thing with no state to keep in sync,
-  // and it can never get stuck on after an early return.
-  const request = `${availableSources?.join(',') ?? 'loading'}|${source}|${from}|${to}|${nonce}`
-  const loading = availableSources === null || settled !== request
-
-  useEffect(() => {
-    if (availableSources === null) return
-    // Guards an out-of-order response: switch Meta → Google quickly and
-    // the slower first reply would otherwise land last and win.
-    let current = true
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-
-    const run = async () => {
-      // Independent requests, settled independently: an unconfigured
-      // Windsor connection must not blank out the CRM funnel, and a CRM
-      // hiccup must not hide the media spend. Each side reports its own
-      // failure and the page renders whatever did arrive.
-      const sourceConfigured = availableSources.includes(source)
-      const [ads, crm] = await Promise.allSettled([
-        sourceConfigured
-          ? fetch(`/api/windsor/performance?source=${source}&from=${from}&to=${to}`, { cache: 'no-store' })
-          : Promise.resolve(null),
-        fetch(`/api/performance/funnel?from=${from}&to=${to}&tz=${encodeURIComponent(tz)}`, { cache: 'no-store' }),
-      ])
-
-      const adsPayload =
-        ads.status === 'fulfilled' && ads.value ? await ads.value.json().catch(() => null) : null
-      const crmPayload =
-        crm.status === 'fulfilled' ? await crm.value.json().catch(() => null) : null
-
-      const adsOk = ads.status === 'fulfilled' && !!ads.value?.ok
-      const crmOk = crm.status === 'fulfilled' && crm.value.ok
-      const mediaRows: AdMedia[] =
-        adsOk && Array.isArray(adsPayload) ? adsPayload.map(toAdMedia) : []
-      const funnelPayload: FunnelPayload = crmOk ? (crmPayload as FunnelPayload) : emptyFunnel()
-
-      // Second pass: leads whose ad id got no media row in the window.
-      // A wide, id-filtered Windsor lookup recovers those ads' campaign
-      // and creative names (paused ads, ads in a sibling ad account), so
-      // they group under their real campaign instead of a "no match"
-      // bucket. Identity only — its spend never enters the totals. Best
-      // effort: if it fails, the report still renders, just less named.
-      let identityRows: AdIdentity[] = []
-      const known = indexByAd(mediaRows)
-      const orphanIds = funnelPayload.ads
-        .map((ad) => ad.adId)
-        .filter((id) => !known.has(id))
-      if (adsOk && orphanIds.length) {
-        try {
-          const res = await fetch(
-            `/api/windsor/ad-identity?source=${source}&ids=${orphanIds.join(',')}`,
-            { cache: 'no-store' },
-          )
-          const payload = await res.json().catch(() => null)
-          if (res.ok && Array.isArray(payload)) identityRows = payload.map(toAdIdentity)
-        } catch {
-          // Leads keep their WhatsApp-headline fallback names.
-        }
-      }
-      if (!current) return
-
-      if (adsOk) {
-        setMedia(mediaRows)
-        setMediaError('')
-      } else {
-        setMedia([])
-        setMediaError(
-          sourceConfigured
-            ? adsPayload?.error || 'Não foi possível consultar o Windsor.ai.'
-            : 'Nenhuma conta de anúncios foi selecionada para esta empresa.',
-        )
-      }
-
-      if (crmOk) {
-        setFunnel(funnelPayload)
-        setCrmError('')
-      } else {
-        setFunnel(emptyFunnel())
-        setCrmError(crmPayload?.error || 'Não foi possível carregar os leads do CRM.')
-      }
-
-      setIdentity(identityRows)
-      setSettled(request)
-    }
-
-    void run()
-    return () => {
-      current = false
-    }
-  }, [source, from, to, request, availableSources])
-
-  const currency = funnel.currency
-  const totals = useMemo(() => mediaTotals(media), [media])
-  const counts = funnel.totals
-  const identityByAd = useMemo(() => indexIdentity(identity), [identity])
-  const campaigns = useMemo(
-    () => groupByCampaign(media, funnel.ads, identityByAd),
-    [media, funnel.ads, identityByAd],
-  )
-  const creatives = useMemo(
-    () => groupByCreative(media, funnel.ads, identityByAd),
-    [media, funnel.ads, identityByAd],
-  )
-
-  const dailySpend = useMemo(() => spendByDay(media), [media])
-  const trend = useMemo(() => buildTrend(funnel.daily, dailySpend), [funnel.daily, dailySpend])
+  const {
+    availableSources,
+    funnel,
+    mediaError,
+    crmError,
+    crmLoading,
+    mediaLoading,
+    loading,
+    totals,
+    counts,
+    currency,
+    stageNames,
+    campaigns,
+    creatives,
+    trend,
+  } = usePerformanceReport({
+    source,
+    from,
+    to,
+    nonce,
+    fresh: freshNonce === nonce,
+    onSources: (sources) => {
+      if (sources.length) setSource((cur) => (sources.includes(cur) ? cur : sources[0]))
+    },
+  })
 
   const combined = { ...counts, spend: totals.spend }
-  const stageNames = funnel.stageNames
 
   const applyPreset = (days: number) => {
     const range = daysAgo(days)
@@ -325,12 +189,24 @@ export default function PerformancePage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setNonce((n) => n + 1)}
+            onClick={() => {
+              setFreshNonce(nonce + 1)
+              setNonce(nonce + 1)
+            }}
             disabled={loading}
           >
             <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', loading && 'animate-spin')} />
             Atualizar
           </Button>
+          <Link
+            href={`/report/performance?source=${source}&from=${from}&to=${to}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar
+          </Link>
         </div>
       </header>
 
@@ -340,7 +216,7 @@ export default function PerformancePage() {
           {crmError && <Notice text={crmError} />}
         </div>
       )}
-      {!crmError && !loading && !stageNames && (
+      {!crmError && !crmLoading && !stageNames && (
         <Notice text="Nenhum funil reconhecido no quadro de negócios: as colunas de qualificação, negociação e finalização não foram encontradas. Defina-as em Configurações › IA para ver as etapas por campanha." />
       )}
 
@@ -352,7 +228,7 @@ export default function PerformancePage() {
           hint={`${quantity(totals.impressions)} impressões · ${quantity(totals.clicks)} cliques`}
           icon={Wallet}
           accent="var(--viz-cat-2)"
-          loading={loading}
+          loading={mediaLoading}
         />
         <KpiTile
           label="Leads"
@@ -360,7 +236,7 @@ export default function PerformancePage() {
           hint={`Custo por lead ${moneyOrDash(cpl(combined), currency)}`}
           icon={Users}
           accent="var(--viz-funnel-1)"
-          loading={loading}
+          loading={crmLoading}
         />
         <KpiTile
           label={stageNames?.negotiating ?? 'Em negociação'}
@@ -368,7 +244,7 @@ export default function PerformancePage() {
           hint={`${quantity(reachedQualified(counts))} qualificados antes disso`}
           icon={Handshake}
           accent="var(--viz-funnel-3)"
-          loading={loading}
+          loading={crmLoading}
         />
         <KpiTile
           label="Vendas"
@@ -376,7 +252,7 @@ export default function PerformancePage() {
           hint={`CAC ${moneyOrDash(cac(combined), currency)} · ticket ${moneyOrDash(ticket(counts), currency)}`}
           icon={Trophy}
           accent="var(--viz-funnel-4)"
-          loading={loading}
+          loading={crmLoading}
         />
         <KpiTile
           label="Receita e ROAS"
@@ -388,34 +264,34 @@ export default function PerformancePage() {
           }
           icon={TrendingUp}
           accent="var(--viz-good)"
-          loading={loading}
+          loading={crmLoading}
         />
       </div>
 
       {/* Secondary strip — the media mechanics behind the numbers above. */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
-        <KpiTile compact label="Impressões" value={quantity(totals.impressions)} icon={Eye} accent="var(--viz-cat-2)" loading={loading} />
-        <KpiTile compact label="Alcance" value={quantity(totals.reach)} icon={Eye} accent="var(--viz-cat-2)" loading={loading} />
-        <KpiTile compact label="Cliques" value={quantity(totals.clicks)} icon={MousePointerClick} accent="var(--viz-cat-2)" loading={loading} />
-        <KpiTile compact label="CTR" value={percent(ctr(totals), 2)} icon={Target} accent="var(--viz-cat-2)" loading={loading} />
-        <KpiTile compact label="CPC" value={moneyOrDash(cpc(totals), currency)} icon={MousePointerClick} accent="var(--viz-cat-2)" loading={loading} />
-        <KpiTile compact label="CPM" value={moneyOrDash(cpm(totals), currency)} icon={Eye} accent="var(--viz-cat-2)" loading={loading} />
+        <KpiTile compact label="Impressões" value={quantity(totals.impressions)} icon={Eye} accent="var(--viz-cat-2)" loading={mediaLoading} />
+        <KpiTile compact label="Alcance" value={quantity(totals.reach)} icon={Eye} accent="var(--viz-cat-2)" loading={mediaLoading} />
+        <KpiTile compact label="Cliques" value={quantity(totals.clicks)} icon={MousePointerClick} accent="var(--viz-cat-2)" loading={mediaLoading} />
+        <KpiTile compact label="CTR" value={percent(ctr(totals), 2)} icon={Target} accent="var(--viz-cat-2)" loading={mediaLoading} />
+        <KpiTile compact label="CPC" value={moneyOrDash(cpc(totals), currency)} icon={MousePointerClick} accent="var(--viz-cat-2)" loading={mediaLoading} />
+        <KpiTile compact label="CPM" value={moneyOrDash(cpm(totals), currency)} icon={Eye} accent="var(--viz-cat-2)" loading={mediaLoading} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <FunnelBars counts={counts} currency={currency} stageNames={stageNames} loading={loading} />
+        <FunnelBars counts={counts} currency={currency} stageNames={stageNames} loading={crmLoading} />
         <div className="xl:col-span-2">
-          <SpendTrend data={trend} currency={currency} loading={loading} />
+          <SpendTrend data={trend} currency={currency} loading={mediaLoading} />
         </div>
         <OriginSplit
           origins={funnel.origins}
           totals={counts}
           organic={funnel.organic}
           excludedContacts={funnel.excludedContacts}
-          loading={loading}
+          loading={crmLoading}
         />
         <div className="xl:col-span-2">
-          <FunnelTrend data={trend} loading={loading} />
+          <FunnelTrend data={trend} loading={crmLoading} />
         </div>
       </div>
 

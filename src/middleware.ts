@@ -97,6 +97,7 @@ export async function middleware(request: NextRequest) {
     '/automations',
     '/settings',
     '/help',
+    '/report',
   ];
   if (
     !user &&

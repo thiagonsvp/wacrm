@@ -23,7 +23,9 @@
 import { NextResponse } from 'next/server'
 import { requireModule, toErrorResponse } from '@/lib/auth/account'
 import { loadGlobalWindsorToken } from '@/lib/windsor/global-config'
-import { windsorMcpCall } from '@/lib/windsor/mcp'
+import { windsorMcpCallCached } from '@/lib/windsor/mcp'
+
+export const maxDuration = 60
 
 const META_FIELDS = ['ad_id', 'ad_name', 'campaign', 'campaign_id', 'adset_name', 'account_name', 'image_url']
 // google_ads exposes no adset_name/account_name (see get_fields).
@@ -73,12 +75,13 @@ export async function GET(request: Request) {
     // and keeps other tenants' data out of it even on a multi-client
     // Windsor key: only ads the CRM already attributed leads to can
     // come back.
-    const rows = await windsorMcpCall<Record<string, unknown>[]>(token, 'get_data', {
+    // Ad identity (names, creative) barely changes — cache it longer.
+    const rows = await windsorMcpCallCached<Record<string, unknown>[]>(token, 'get_data', {
       connector,
       fields: isGoogle ? GOOGLE_FIELDS : META_FIELDS,
       date_preset: 'last_yearT',
-      filters: [['ad_id', 'in', JSON.stringify(ids)]],
-    })
+      filters: [['ad_id', 'in', JSON.stringify([...ids].sort())]],
+    }, { ttlSeconds: 6 * 3600 })
     return NextResponse.json(Array.isArray(rows) ? rows : [])
   } catch (err) {
     console.error('[windsor/ad-identity]', err)

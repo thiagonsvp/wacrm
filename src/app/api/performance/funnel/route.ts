@@ -196,6 +196,29 @@ function applyBucket(
   }
 }
 
+const PAGE = 1000;
+
+/**
+ * Read every row of a query. PostgREST caps a response at 1000 rows and
+ * says nothing about it, so an unpaged select on a busy account silently
+ * reported about half its leads and sales. `page` must apply a stable
+ * order so pages don't overlap or skip rows.
+ */
+async function selectAll<T>(
+  page: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE) return rows;
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { supabase, accountId } = await requireModule('performance');
@@ -222,20 +245,25 @@ export async function GET(request: Request) {
     const upperBound = new Date(`${to}T23:59:59.999Z`);
     upperBound.setUTCDate(upperBound.getUTCDate() + 1);
 
-    const [account, contactsRes, pipelinesRes] = await Promise.all([
+    const [account, contactRows, pipelinesRes] = await Promise.all([
       supabase
         .from('accounts')
         .select('default_currency')
         .eq('id', accountId)
         .maybeSingle(),
-      supabase
-        .from('contacts')
-        .select(
-          'id, created_at, acquisition_source, acquisition_source_id, acquisition_campaign, acquisition_ad_image_url, contact_tags(tags(name))'
-        )
-        .eq('account_id', accountId)
-        .gte('created_at', lowerBound.toISOString())
-        .lte('created_at', upperBound.toISOString()),
+      selectAll<ContactRow>((from, to) =>
+        supabase
+          .from('contacts')
+          .select(
+            'id, created_at, acquisition_source, acquisition_source_id, acquisition_campaign, acquisition_ad_image_url, contact_tags(tags(name))'
+          )
+          .eq('account_id', accountId)
+          .gte('created_at', lowerBound.toISOString())
+          .lte('created_at', upperBound.toISOString())
+          .order('id', { ascending: true })
+          .range(from, to)
+          .returns<ContactRow[]>()
+      ),
       // Two plain queries instead of `pipeline_stages(pipelines!inner(...))`.
       // An embed makes PostgREST resolve the FK from its schema cache, and
       // a stale cache turns that into a hard PGRST200 — the failure mode
@@ -243,7 +271,6 @@ export async function GET(request: Request) {
       supabase.from('pipelines').select('id').eq('account_id', accountId),
     ]);
 
-    if (contactsRes.error) throw contactsRes.error;
     if (pipelinesRes.error) throw pipelinesRes.error;
 
     const pipelineIds = (pipelinesRes.data ?? []).map((p) => p.id as string);
@@ -256,7 +283,7 @@ export async function GET(request: Request) {
       : null;
     if (stagesRes?.error) throw stagesRes.error;
 
-    const contacts = (contactsRes.data ?? []) as unknown as ContactRow[];
+    const contacts = contactRows;
     const allStages = (stagesRes?.data ?? []) as unknown as StageRow[];
 
     // Resolve the three board columns exactly the way the AI classifier
@@ -336,17 +363,21 @@ export async function GET(request: Request) {
     // A deal for one of these leads cannot predate the lead, so the
     // earliest lead in the window bounds the deal query too. Without
     // that bound this pulls the account's entire deal history.
-    const dealsRes = leads.length
-      ? await supabase
-          .from('deals')
-          .select('contact_id, stage_id, status, value, updated_at, created_at')
-          .eq('account_id', accountId)
-          .gte('created_at', lowerBound.toISOString())
-      : null;
-    if (dealsRes?.error) throw dealsRes.error;
+    const dealRows = leads.length
+      ? await selectAll<DealRow>((from, to) =>
+          supabase
+            .from('deals')
+            .select('id, contact_id, stage_id, status, value, updated_at, created_at')
+            .eq('account_id', accountId)
+            .gte('created_at', lowerBound.toISOString())
+            .order('id', { ascending: true })
+            .range(from, to)
+            .returns<DealRow[]>()
+        )
+      : [];
 
     const dealsByContact = new Map<string, DealRow[]>();
-    for (const deal of (dealsRes?.data ?? []) as unknown as DealRow[]) {
+    for (const deal of dealRows) {
       if (!deal.contact_id) continue;
       const list = dealsByContact.get(deal.contact_id);
       if (list) list.push(deal);

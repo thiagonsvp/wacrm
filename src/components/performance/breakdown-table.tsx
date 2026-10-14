@@ -195,6 +195,7 @@ export function BreakdownTable({
   loading,
   withThumbnails = false,
   emptyHint,
+  printAll = false,
 }: {
   title: string
   description: string
@@ -203,9 +204,12 @@ export function BreakdownTable({
   loading: boolean
   withThumbnails?: boolean
   emptyHint: string
+  /** Export/print view: every row, no "show more" toggle. */
+  printAll?: boolean
 }) {
   const [sort, setSort] = useState<{ key: ColumnKey; desc: boolean }>({ key: 'spend', desc: true })
-  const [showAll, setShowAll] = useState(false)
+  const [showAllState, setShowAll] = useState(false)
+  const showAll = printAll || showAllState
 
   const sorted = useMemo(() => {
     if (sort.key === 'name') {
@@ -311,7 +315,7 @@ export function BreakdownTable({
               </tbody>
             </table>
           </div>
-          {sorted.length > 10 && (
+          {sorted.length > 10 && !printAll && (
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}

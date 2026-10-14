@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account'
 import { loadGlobalWindsorToken } from '@/lib/windsor/global-config'
-import { windsorMcpCall } from '@/lib/windsor/mcp'
+import { windsorMcpCallCached } from '@/lib/windsor/mcp'
+
+// Windsor alone can take ~26s; leave room above the client timeout.
+export const maxDuration = 60
 
 // `ad_id` is the load-bearing field: it is the ONLY one both systems
 // agree on. Meta hands the same value to WhatsApp as
@@ -29,7 +32,12 @@ export async function GET(request: Request) {
     if (!token) return NextResponse.json({ error: 'A chave global do Windsor.ai não está configurada.' }, { status: 400 })
     const selected = data?.[accountColumn]
     if (!selected) return NextResponse.json({ error: `Nenhuma conta ${isGoogle ? 'Google Ads' : 'Meta Ads'} selecionada para esta empresa.` }, { status: 404 })
-    const rows = await windsorMcpCall<Record<string, unknown>[]>(token, 'get_data', { connector, accounts: [selected], fields: isGoogle ? GOOGLE_FIELDS : META_FIELDS, date_from: params.get('from') || undefined, date_to: params.get('to') || undefined })
+    const rows = await windsorMcpCallCached<Record<string, unknown>[]>(
+      token,
+      'get_data',
+      { connector, accounts: [selected], fields: isGoogle ? GOOGLE_FIELDS : META_FIELDS, date_from: params.get('from') || undefined, date_to: params.get('to') || undefined },
+      { fresh: params.get('fresh') === '1' },
+    )
     return NextResponse.json(rows)
   } catch (err) { console.error('[windsor/performance]', err); return toErrorResponse(err) }
 }
