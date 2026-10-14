@@ -59,6 +59,26 @@ export async function fetchUazapiProfileImage(
   }
 }
 
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+
+/**
+ * The URL comes from UAZAPI's response, so it is only fetched when it
+ * points at WhatsApp's photo CDN over https — never at an arbitrary or
+ * internal address the server could be steered to.
+ */
+export function isWhatsAppPhotoUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw)
+    const host = url.hostname.toLowerCase()
+    return (
+      url.protocol === 'https:' &&
+      (host === 'pps.whatsapp.net' || host.endsWith('.whatsapp.net'))
+    )
+  } catch {
+    return false
+  }
+}
+
 /** Download `sourceUrl` into Storage; returns the public URL (cache-busted). */
 export async function storeContactAvatar(
   db: SupabaseClient,
@@ -66,11 +86,16 @@ export async function storeContactAvatar(
   contactId: string,
   sourceUrl: string
 ): Promise<string | null> {
+  if (!isWhatsAppPhotoUrl(sourceUrl)) return null
   try {
-    const res = await fetch(sourceUrl, { signal: AbortSignal.timeout(10_000) })
+    // No redirects: a hop could lead off the allowed host.
+    const res = await fetch(sourceUrl, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
+    })
     if (!res.ok) return null
-    const type = res.headers.get('content-type') || 'image/jpeg'
-    if (!type.startsWith('image/')) return null
+    const type = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim().toLowerCase()
+    if (!IMAGE_TYPES.has(type)) return null
     const bytes = new Uint8Array(await res.arrayBuffer())
     if (bytes.byteLength === 0 || bytes.byteLength > MAX_AVATAR_BYTES) return null
     const path = `avatars/${accountId}/${contactId}.jpg`

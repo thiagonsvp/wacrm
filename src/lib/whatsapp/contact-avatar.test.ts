@@ -7,7 +7,26 @@ vi.mock('@/lib/contacts/dedupe', () => ({
   isUniqueViolation: () => false,
 }))
 
-import { isFreshStoredAvatar } from './contact-avatar'
+import { isFreshStoredAvatar, isWhatsAppPhotoUrl } from './contact-avatar'
+
+describe('isWhatsAppPhotoUrl', () => {
+  it('accepts the WhatsApp photo CDN over https', () => {
+    expect(isWhatsAppPhotoUrl('https://pps.whatsapp.net/v/t61/x.jpg?oe=1')).toBe(true)
+  })
+  it('refuses anything the server could be steered to', () => {
+    for (const url of [
+      'http://pps.whatsapp.net/x.jpg',
+      'https://169.254.169.254/latest/meta-data',
+      'https://localhost/x',
+      'https://evilwhatsapp.net/x',
+      'https://pps.whatsapp.net.evil.com/x',
+      'file:///etc/passwd',
+      'not a url',
+    ]) {
+      expect(isWhatsAppPhotoUrl(url)).toBe(false)
+    }
+  })
+})
 import { findOrCreateContact } from './inbound'
 import { findExistingContact } from '@/lib/contacts/dedupe'
 
