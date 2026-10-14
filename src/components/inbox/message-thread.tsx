@@ -7,7 +7,6 @@ import { usePresence } from '@/hooks/use-presence';
 import { PresenceDot } from '@/components/presence/presence-dot';
 import { presenceLabel } from '@/lib/presence';
 import { cn } from '@/lib/utils';
-import { DEFAULT_CURRENCY } from '@/lib/currency';
 import type {
   Conversation,
   Message,
@@ -17,8 +16,6 @@ import type {
   MessageTemplate,
   Profile,
   InteractiveMessagePayload,
-  PipelineStage,
-  Deal,
 } from '@/types';
 import {
   MessageSquare,
@@ -30,9 +27,8 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
-  Target,
-  Banknote,
   Info,
+  CalendarClock,
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useTranslations } from 'next-intl';
@@ -46,21 +42,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './message-bubble';
 import { MessageActions } from './message-actions';
 import {
@@ -71,6 +52,10 @@ import {
 import { deleteAccountMedia } from '@/lib/storage/upload-media';
 import { TemplatePicker } from './template-picker';
 import { AiThreadBanner } from './ai-thread-banner';
+import {
+  ScheduleMessageDialog,
+  useScheduledMessages,
+} from './schedule-message-dialog';
 import { buildReplyPreview } from './reply-quote';
 import { toast } from 'sonner';
 
@@ -163,13 +148,6 @@ function groupMessagesByDate(messages: Message[]) {
   return groups;
 }
 
-// Must match the seed names in `src/app/(dashboard)/pipelines/page.tsx`
-// (SPEC_DEFAULT_STAGES). Kept as separate constants here (not imported)
-// because that file isn't a shared module — duplicating two string
-// literals is simpler than carving out a shared constants file for it.
-const QUALIFIED_STAGE_NAME = 'Lead Qualificado';
-const WON_STAGE_NAME = 'Finalizado';
-
 const STATUS_OPTIONS: {
   label: string;
   value: ConversationStatus;
@@ -211,7 +189,7 @@ export function MessageThread({
   const t = useTranslations('Inbox.messageThread');
   const tQuote = useTranslations('Inbox.replyQuote');
 
-  const { user, profile, isAdmin, isOwner, accountId } = useAuth();
+  const { user, profile, isAdmin, isOwner } = useAuth();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -223,6 +201,8 @@ export function MessageThread({
   // parent's resyncToken); the 700ms spin is just feedback so the click
   // doesn't feel like a no-op. Cleared via the timer ref on unmount.
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const scheduled = useScheduledMessages(conversation?.id ?? null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
@@ -873,185 +853,6 @@ export function MessageThread({
     [conversation, onAssignChange, onStatusChange]
   );
 
-  const [qualifying, setQualifying] = useState(false);
-  const [saleOpen, setSaleOpen] = useState(false);
-  const [saleSaving, setSaleSaving] = useState(false);
-  const [saleProduct, setSaleProduct] = useState('');
-  const [saleValue, setSaleValue] = useState('');
-
-  // Shared by both quick actions: resolves the account's default pipeline
-  // (oldest by created_at, matching `loadPipelines` in pipelines/page.tsx)
-  // and the deal already linked to this contact within it, if any.
-  const resolvePipelineAndDeal = useCallback(
-    async (contactId: string) => {
-      const supabase = createClient();
-      const { data: pipeline, error: pipelineError } = await supabase
-        .from('pipelines')
-        .select('*')
-        .eq('account_id', accountId)
-        .order('created_at')
-        .limit(1)
-        .maybeSingle();
-
-      if (pipelineError || !pipeline) {
-        return { error: 'no-pipeline' as const };
-      }
-
-      const { data: stages, error: stagesError } = await supabase
-        .from('pipeline_stages')
-        .select('*')
-        .eq('pipeline_id', pipeline.id)
-        .order('position');
-
-      if (stagesError || !stages || stages.length === 0) {
-        return { error: 'no-stages' as const };
-      }
-
-      const { data: existingDeal } = await supabase
-        .from('deals')
-        .select('*')
-        .eq('pipeline_id', pipeline.id)
-        .eq('contact_id', contactId)
-        .maybeSingle();
-
-      return {
-        supabase,
-        pipeline,
-        stages: stages as PipelineStage[],
-        existingDeal: (existingDeal as Deal | null) ?? null,
-      };
-    },
-    [accountId]
-  );
-
-  const handleQualifyLead = useCallback(async () => {
-    if (!conversation || !contact?.id || !user?.id || !accountId) return;
-    setQualifying(true);
-    try {
-      const resolved = await resolvePipelineAndDeal(contact.id);
-      if ('error' in resolved) {
-        toast.error(t('noPipelineError'));
-        return;
-      }
-      const { supabase, pipeline, stages, existingDeal } = resolved;
-
-      const exactStage = stages.find((s) => s.name === QUALIFIED_STAGE_NAME);
-      // Name may have been renamed/deleted by the user — fall back to the
-      // second stage by position ("New Lead" is conventionally first).
-      const fallbackStage = stages.find((s) => s.position === 1) ?? stages[1];
-      const stage = exactStage ?? fallbackStage;
-      if (!stage) {
-        toast.error(t('noPipelineError'));
-        return;
-      }
-
-      if (existingDeal) {
-        const { error } = await supabase
-          .from('deals')
-          .update({ stage_id: stage.id })
-          .eq('id', existingDeal.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('deals').insert({
-          title: contact.name || contact.phone,
-          pipeline_id: pipeline.id,
-          stage_id: stage.id,
-          contact_id: contact.id,
-          conversation_id: conversation.id,
-          account_id: accountId,
-          user_id: user.id,
-          value: 0,
-          currency: DEFAULT_CURRENCY,
-        });
-        if (error) throw error;
-      }
-
-      toast.success(
-        exactStage ? t('qualifySuccess') : t('qualifySuccessFallback')
-      );
-    } catch (err) {
-      console.error('Failed to qualify lead:', err);
-      toast.error(t('qualifyError'));
-    } finally {
-      setQualifying(false);
-    }
-  }, [conversation, contact, user?.id, accountId, resolvePipelineAndDeal, t]);
-
-  const handleRegisterSale = useCallback(async () => {
-    if (!conversation || !contact?.id || !user?.id || !accountId) return;
-    const parsedValue = parseFloat(saleValue.replace(',', '.'));
-    if (!saleProduct.trim() || !parsedValue) {
-      toast.error(t('saleValidationError'));
-      return;
-    }
-
-    setSaleSaving(true);
-    try {
-      const resolved = await resolvePipelineAndDeal(contact.id);
-      if ('error' in resolved) {
-        toast.error(t('noPipelineError'));
-        return;
-      }
-      const { supabase, pipeline, stages, existingDeal } = resolved;
-
-      const exactStage = stages.find((s) => s.name === WON_STAGE_NAME);
-      // Fall back to the last stage by position — the pipeline's terminal
-      // column is the closest analog to "Won" if it was renamed/removed.
-      const fallbackStage = stages[stages.length - 1];
-      const stage = exactStage ?? fallbackStage;
-      if (!stage) {
-        toast.error(t('noPipelineError'));
-        return;
-      }
-
-      const payload = {
-        title: saleProduct.trim(),
-        value: parsedValue,
-        stage_id: stage.id,
-        status: 'won' as const,
-        expected_close_date: new Date().toISOString().slice(0, 10),
-      };
-
-      if (existingDeal) {
-        const { error } = await supabase
-          .from('deals')
-          .update(payload)
-          .eq('id', existingDeal.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('deals').insert({
-          ...payload,
-          pipeline_id: pipeline.id,
-          contact_id: contact.id,
-          conversation_id: conversation.id,
-          account_id: accountId,
-          user_id: user.id,
-          currency: DEFAULT_CURRENCY,
-        });
-        if (error) throw error;
-      }
-
-      toast.success(t('saleSuccess'));
-      setSaleOpen(false);
-      setSaleProduct('');
-      setSaleValue('');
-    } catch (err) {
-      console.error('Failed to register sale:', err);
-      toast.error(t('saleError'));
-    } finally {
-      setSaleSaving(false);
-    }
-  }, [
-    conversation,
-    contact,
-    user?.id,
-    accountId,
-    saleProduct,
-    saleValue,
-    resolvePipelineAndDeal,
-    t,
-  ]);
-
   // Empty state — same WhatsApp-style doodle background as the active
   // thread below, so swapping between empty/selected doesn't change the
   // pattern under the user's eye.
@@ -1211,20 +1012,17 @@ export function MessageThread({
                 {t('refresh')}
               </DropdownMenuItem>
             )}
-            <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => void handleQualifyLead()}
-              disabled={!contact?.id || qualifying}
+              onClick={() => setScheduleOpen(true)}
+              disabled={assignmentLocked}
             >
-              <Target className="mr-2 h-4 w-4" />
-              {t('qualifyLead')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setSaleOpen(true)}
-              disabled={!contact?.id}
-            >
-              <Banknote className="mr-2 h-4 w-4" />
-              {t('registerSale')}
+              <CalendarClock className="mr-2 h-4 w-4" />
+              Agendar mensagem
+              {scheduled.pendingCount > 0 && (
+                <span className="bg-primary text-primary-foreground ml-auto rounded-full px-1.5 text-[10px] font-bold">
+                  {scheduled.pendingCount}
+                </span>
+              )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
@@ -1348,32 +1146,22 @@ export function MessageThread({
             </button>
           )}
 
-          {/* Quick pipeline actions — mirror the Assign dropdown's visual
-              treatment (h-7 pill button). Disabled without a contact_id
-              since deals require one. */}
+          {/* Schedule a message for later — text, voice note or files.
+              The badge counts schedules still to go out on this thread. */}
           <button
             type="button"
-            onClick={() => void handleQualifyLead()}
-            disabled={!contact?.id || qualifying}
-            title={t('qualifyLead')}
+            onClick={() => setScheduleOpen(true)}
+            disabled={assignmentLocked}
+            title="Agendar mensagem"
             className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Target className="h-3 w-3" />
-            <span className="hidden sm:inline">{t('qualifyLead')}</span>
-          </button>
-
-          {/* A dialog rather than a popover: the mobile overflow menu opens
-              the same form, and a popover cannot anchor to a trigger that
-              is display:none on that breakpoint. */}
-          <button
-            type="button"
-            onClick={() => setSaleOpen(true)}
-            disabled={!contact?.id}
-            title={t('registerSale')}
-            className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-xs disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Banknote className="h-3 w-3" />
-            <span className="hidden sm:inline">{t('registerSale')}</span>
+            <CalendarClock className="h-3 w-3" />
+            <span>Agendar mensagem</span>
+            {scheduled.pendingCount > 0 && (
+              <span className="bg-primary text-primary-foreground flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold">
+                {scheduled.pendingCount}
+              </span>
+            )}
           </button>
 
           {/* Status dropdown */}
@@ -1472,49 +1260,6 @@ export function MessageThread({
           </DropdownMenu>
         </div>
       </div>
-
-      {/* Register-sale form. Lives outside the header so it is reachable
-          from both the desktop strip and the mobile overflow menu. */}
-      <Dialog open={saleOpen} onOpenChange={setSaleOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('registerSale')}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <div className="grid gap-1.5">
-              <Label className="text-muted-foreground text-xs">
-                {t('saleProduct')}
-              </Label>
-              <Input
-                value={saleProduct}
-                onChange={(e) => setSaleProduct(e.target.value)}
-                placeholder={t('saleProductPlaceholder')}
-                className="border-border bg-muted text-foreground text-sm"
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label className="text-muted-foreground text-xs">
-                {t('saleValue')}
-              </Label>
-              <Input
-                value={saleValue}
-                onChange={(e) => setSaleValue(e.target.value)}
-                placeholder="0.00"
-                inputMode="decimal"
-                className="border-border bg-muted text-foreground text-sm"
-              />
-            </div>
-            <Button
-              type="button"
-              onClick={() => void handleRegisterSale()}
-              disabled={saleSaving}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {saleSaving ? t('saving') : t('saleConfirm')}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
@@ -1618,6 +1363,38 @@ export function MessageThread({
           })}
         </div>
       )}
+      {scheduled.pendingCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setScheduleOpen(true)}
+          className="bg-primary/10 text-primary hover:bg-primary/15 mx-3 mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors"
+        >
+          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            {scheduled.pendingCount === 1
+              ? '1 mensagem agendada'
+              : `${scheduled.pendingCount} mensagens agendadas`}
+            {' · próxima '}
+            {new Date(
+              scheduled.items.find((i) => i.status === 'pending')?.send_at ?? Date.now()
+            ).toLocaleString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+          <span className="shrink-0 font-medium">Ver</span>
+        </button>
+      )}
+      <ScheduleMessageDialog
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        conversationId={conversation.id}
+        contactName={displayName}
+        items={scheduled.items}
+        onChanged={scheduled.reload}
+      />
       <MessageComposer
         conversationId={conversation.id}
         sessionExpired={false}

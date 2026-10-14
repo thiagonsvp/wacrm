@@ -62,6 +62,21 @@ export default function InboxPage() {
   // conversation, so it must start closed on every visit rather than
   // inheriting the desktop panel's remembered "open".
   const [mobileContactOpen, setMobileContactOpen] = useState(false);
+
+  // Scheduled messages: the database ticks every minute (pg_cron,
+  // migration 084), and an open inbox ticks too, so messages still go out
+  // on time if that job is not configured. The server claims each item
+  // atomically, so both ticking at once never sends anything twice.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      void fetch('/api/scheduled-messages/dispatch', { method: 'POST' }).catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(CONTACT_PANEL_STORAGE_KEY);
@@ -574,10 +589,15 @@ export default function InboxPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel: Conversation list.
             Hidden on mobile when a conversation is selected so the
-            thread can occupy the full width. Always visible on lg+. */}
+            thread can occupy the full width. Always visible on lg+.
+
+            `min-w-0` is load-bearing on mobile: the list is `w-full` there
+            (no fixed width), so without it the panel grows to the longest
+            last-message preview and pushes the unread badge, time and
+            lead-source icon off the right edge of the screen. */}
         <div
           className={cn(
-            "flex h-full flex-1 lg:flex-none",
+            "flex h-full min-w-0 flex-1 lg:flex-none",
             hasActiveConv ? "hidden lg:flex" : "flex",
           )}
         >

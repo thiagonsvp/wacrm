@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { sweepUnreadConversations } from '@/lib/ai/deal-pipeline'
+import { dispatchDueScheduledMessages } from '@/lib/scheduled-messages/dispatch'
 import {
   INBOUND_MEDIA_RETENTION_DAYS,
   purgeExpiredInboundMedia,
@@ -40,6 +41,15 @@ export async function GET(request: Request) {
   } catch (err) {
     console.error('[cron/daily] deal sweep failed:', err)
     out.dealSweep = { error: err instanceof Error ? err.message : String(err) }
+  }
+
+  // Safety net for scheduled messages if the per-minute database tick
+  // is not set up (migration 084).
+  try {
+    out.scheduledMessages = await dispatchDueScheduledMessages(db)
+  } catch (err) {
+    console.error('[cron/daily] scheduled messages failed:', err)
+    out.scheduledMessages = { error: err instanceof Error ? err.message : String(err) }
   }
 
   try {
