@@ -68,19 +68,28 @@ export interface ExpireResult {
  */
 export async function expireStaleDeals(
   db: SupabaseClient,
-  opts: { days?: number; apply?: boolean } = {},
+  opts: { days?: number; apply?: boolean; accountId?: string } = {},
 ): Promise<ExpireResult> {
   const days = opts.days ?? staleDealDays()
   const apply = opts.apply !== false
   const cutoffIso = new Date(Date.now() - days * 86_400_000).toISOString()
 
-  const { data: openDeals, error } = await db
-    .from('deals')
-    .select('id, account_id, contact_id, title, updated_at')
-    .eq('status', 'open')
-  if (error) throw error
-
-  const deals = (openDeals ?? []) as StaleCandidate[]
+  // Paged: PostgREST caps a response at 1000 rows without saying so, and
+  // a single account already has ~1800 open deals.
+  const deals: StaleCandidate[] = []
+  for (let from = 0; ; from += 1000) {
+    let query = db
+      .from('deals')
+      .select('id, account_id, contact_id, title, updated_at')
+      .eq('status', 'open')
+      .order('id', { ascending: true })
+      .range(from, from + 999)
+    if (opts.accountId) query = query.eq('account_id', opts.accountId)
+    const { data, error } = await query
+    if (error) throw error
+    deals.push(...((data ?? []) as StaleCandidate[]))
+    if (!data || data.length < 1000) break
+  }
   if (deals.length === 0) return { expired: [], examined: 0, days }
 
   const contactIds = [...new Set(deals.map((d) => d.contact_id).filter(Boolean))] as string[]

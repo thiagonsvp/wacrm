@@ -60,6 +60,8 @@ export type AiCredentials = Pick<AiConfig, 'provider' | 'model' | 'apiKey'>
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  /** ISO timestamp, when the caller asked for it (deal classifier). */
+  at?: string
 }
 
 /**

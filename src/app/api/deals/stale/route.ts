@@ -14,11 +14,15 @@ import { expireStaleDeals, staleDealDays } from '@/lib/deals/stale'
  * check the threshold before letting it run for real.
  */
 export async function GET(request: Request) {
-  const expected = process.env.AUTOMATION_CRON_SECRET
-  if (!expected) {
+  const pingerSecret = process.env.AUTOMATION_CRON_SECRET
+  const vercelSecret = process.env.CRON_SECRET
+  if (!pingerSecret && !vercelSecret) {
     return NextResponse.json({ error: 'cron not configured' }, { status: 503 })
   }
-  if (request.headers.get('x-cron-secret') !== expected) {
+  const authorized =
+    (!!pingerSecret && request.headers.get('x-cron-secret') === pingerSecret) ||
+    (!!vercelSecret && request.headers.get('authorization') === `Bearer ${vercelSecret}`)
+  if (!authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -26,9 +30,10 @@ export async function GET(request: Request) {
   const dry = url.searchParams.get('dry') === '1'
   const daysParam = Number(url.searchParams.get('days'))
   const days = Number.isFinite(daysParam) && daysParam > 0 ? daysParam : staleDealDays()
+  const accountId = url.searchParams.get('account') || undefined
 
   try {
-    const result = await expireStaleDeals(supabaseAdmin(), { days, apply: !dry })
+    const result = await expireStaleDeals(supabaseAdmin(), { days, apply: !dry, accountId })
     return NextResponse.json({
       dry_run: dry,
       days: result.days,

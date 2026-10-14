@@ -14,7 +14,10 @@ import {
 } from '@/lib/google-ads/protocol';
 import { transcribeInboundAudio } from '@/lib/ai/transcription';
 import { extractInboundPdfText } from '@/lib/ai/pdf';
-import { dispatchInboundToDealPipeline } from '@/lib/ai/deal-pipeline';
+import {
+  dispatchInboundToDealPipeline,
+  storeMessageSignal,
+} from '@/lib/ai/deal-pipeline';
 import {
   persistInboundMedia,
   swapToPersistedMedia,
@@ -508,7 +511,13 @@ async function processUazapiWebhook(
       externalMessageId,
       persistedMedia
     );
-    if (contentType === 'document' && contentText?.trim()) {
+    // Store messages that move a sale — a quote, the invoice form, a
+    // payment link, the courier — used to leave the card untouched until
+    // the customer next wrote (hundreds of cards sat at R$0 after a quote).
+    // A proposal document or the invoice form forces a re-read; the rest
+    // go through the normal cooldown.
+    const storeSignal = storeMessageSignal(contentType, contentText);
+    if (storeSignal) {
       await dispatchInboundToDealPipeline({
         accountId: config.account_id,
         conversationId: convResult.conversation.id,
@@ -516,7 +525,7 @@ async function processUazapiWebhook(
         configOwnerUserId: config.user_id,
         contactName: contactOutcome.contact.name,
         inboundText: contentText,
-        forceAnalysis: true,
+        forceAnalysis: storeSignal === 'force',
       });
     }
     return;

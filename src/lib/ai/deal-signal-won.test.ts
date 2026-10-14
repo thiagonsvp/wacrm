@@ -30,7 +30,7 @@ describe('the "won" rule demands a concrete act', () => {
   })
 
   it('names the concrete acts that do count', () => {
-    for (const signal of [/payment link/i, /PIX/i, /already paid/i, /delivery address/i]) {
+    for (const signal of [/payment link/i, /PIX/i, /they paid/i, /invoice form/i]) {
       expect(prompt).toMatch(signal)
     }
   })
@@ -43,11 +43,28 @@ describe('the "won" rule demands a concrete act', () => {
 
   it('warns that closing pitches are the seller talking, not the customer buying', () => {
     expect(prompt).toMatch(/closing (offer|pitch)/i)
-    expect(prompt).toMatch(/has not bought anything/i)
+    expect(prompt).toMatch(/does not mean the customer has bought anything/i)
   })
 
   it('requires the confirmation to come from the customer', () => {
-    expect(prompt).toMatch(/from the CUSTOMER/i)
+    expect(prompt).toMatch(/by the CUSTOMER/i)
+  })
+
+  it('treats a scheduled delivery as negotiating, not won', () => {
+    // Customers backed out after agreeing a delivery time, and won is
+    // terminal, so those cards could never be corrected.
+    expect(prompt).toMatch(/Agreeing on a delivery time[^.]*is "negotiating", not "won"/i)
+    expect(prompt).not.toMatch(/accepting a specific delivery\/pickup time/i)
+  })
+})
+
+describe('ad templates and non-customers', () => {
+  it('says pre-filled ad messages carry no intent', () => {
+    expect(prompt).toMatch(/Pre-filled first messages from ads/i)
+  })
+
+  it('asks for the counterparty so suppliers never get a card', () => {
+    expect(prompt).toContain('"counterparty": "customer" | "not_customer"')
   })
 })
 
@@ -66,15 +83,15 @@ describe('model and price must come from the same quoted line', () => {
 
 describe('the rules that were already right are still there', () => {
   it('keeps refusing the trade-in valuation as the price', () => {
-    expect(prompt).toMatch(/NEVER the trade-in valuation/i)
+    expect(prompt).toMatch(/trade-in valuation/i)
   })
 
   it('keeps refusing the upgrade top-up as the price', () => {
-    expect(prompt).toMatch(/NEVER the top-up amount/i)
+    expect(prompt).toMatch(/is the top-up, NOT the price/i)
   })
 
   it('keeps the lost signals intact', () => {
     expect(prompt).toMatch(/price is too high/i)
-    expect(prompt).toMatch(/chose another seller/i)
+    expect(prompt).toMatch(/bought elsewhere/i)
   })
 })

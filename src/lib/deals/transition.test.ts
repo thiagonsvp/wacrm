@@ -283,6 +283,7 @@ describe('matchStageSlots', () => {
       qualified: { id: 'b', position: 1 },
       negotiating: { id: 'c', position: 2 },
       closed: { id: 'd', position: 3 },
+      newLead: { id: 'a', position: 0 },
     });
   });
 

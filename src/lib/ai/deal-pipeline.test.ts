@@ -228,3 +228,56 @@ describe('runDealPipelineForConversation — won is terminal', () => {
     )
   })
 })
+
+describe('runDealPipelineForConversation — no customer message yet', () => {
+  const STAGES_WITH_NEW_LEAD = {
+    ...STAGES,
+    newLead: { id: 's0', position: -1 },
+  } as unknown as PipelineStageMap
+
+  it('skips the provider call entirely', async () => {
+    h.buildConversationContext.mockResolvedValue([
+      { role: 'assistant', content: 'Oi! Em que posso ajudar?' },
+    ])
+    const db = fakeDb({ contact_tags: [], deals: [] })
+    const res = await runDealPipelineForConversation(db, {
+      ...RUN_ARGS,
+      stages: STAGES_WITH_NEW_LEAD,
+    })
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(res.signal).toBeNull()
+    expect(res.plan).toMatchObject({ action: 'create', stageId: 's0' })
+  })
+
+  it('does nothing on a board with no Novo Lead column', async () => {
+    h.buildConversationContext.mockResolvedValue([])
+    const db = fakeDb({ contact_tags: [], deals: [] })
+    const res = await runDealPipelineForConversation(db, RUN_ARGS)
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(res.plan).toMatchObject({ action: 'none' })
+  })
+
+  it('leaves an existing card alone rather than re-filing it', async () => {
+    h.buildConversationContext.mockResolvedValue([])
+    const db = fakeDb({
+      contact_tags: [],
+      deals: [
+        {
+          id: 'd1',
+          title: 'iPhone 15',
+          value: 0,
+          status: 'open',
+          stage_id: 's1',
+          conversation_id: 'conv-1',
+          pipeline_stages: { position: 0 },
+        },
+      ],
+    })
+    const res = await runDealPipelineForConversation(db, {
+      ...RUN_ARGS,
+      stages: STAGES_WITH_NEW_LEAD,
+    })
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(res.plan).toMatchObject({ action: 'none' })
+  })
+})

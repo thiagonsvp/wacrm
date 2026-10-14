@@ -5,7 +5,8 @@ import { buildConversationContext } from './context';
 import { aiContextMessageLimit } from './defaults';
 import { generateReply } from './generate';
 import { logAiUsage } from './usage';
-import { isAcknowledgement } from './deal-ack';
+import { isAdTemplate, isNoise } from './deal-ack';
+import { validateQuotedPrice } from './deal-price';
 import {
   buildDealSignalPrompt,
   dealProductScope,
@@ -41,6 +42,17 @@ import type { AiConfig } from './types';
 // ------------------------------------------------------------
 
 const DEFAULT_COOLDOWN_MS = 10 * 60_000;
+
+/**
+ * Messages the classifier reads. Larger than the auto-reply window (20):
+ * sales threads run 77–270 messages and the payment, the invoice form or
+ * the quote fell out of a 20-line window. Override with
+ * `AI_DEAL_CONTEXT_MESSAGE_LIMIT`.
+ */
+export function dealContextMessageLimit(): number {
+  const raw = Number(process.env.AI_DEAL_CONTEXT_MESSAGE_LIMIT);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 40;
+}
 
 /**
  * Minimum gap between two classifications of the same conversation.
@@ -131,6 +143,30 @@ export async function excludedTagFor(
   return null;
 }
 
+/**
+ * Whether a message the STORE sent should re-read the thread.
+ * 'force' bypasses the cooldown (a proposal document, the invoice form —
+ * events that close or advance a sale); 'normal' respects it (a quote, a
+ * payment link, the courier); null ignores the message.
+ */
+export function storeMessageSignal(
+  contentType: string,
+  text: string | null | undefined
+): 'force' | 'normal' | null {
+  const t = text?.trim() ?? '';
+  if (!t) return null;
+  if (contentType === 'document') return 'force';
+  if (/novo formul[áa]rio|nota fiscal/i.test(t)) return 'force';
+  if (
+    /r\$\s*\d|\d[\d.]*,\d{2}\b|diferen[çc]a|link de pagamento|mpago\.|motoboy|chave pix|parcel/i.test(
+      t
+    )
+  ) {
+    return 'normal';
+  }
+  return null;
+}
+
 interface DispatchArgs {
   accountId: string;
   conversationId: string;
@@ -188,7 +224,7 @@ export async function hasUnreadSignal(
   if (error) return true;
 
   return ((data ?? []) as { content_text: string | null }[]).some(
-    (m) => !!m.content_text?.trim() && !isAcknowledgement(m.content_text)
+    (m) => !!m.content_text?.trim() && !isNoise(m.content_text)
   );
 }
 
@@ -411,6 +447,9 @@ export async function runDealPipelineForConversation(
     configOwnerUserId: string;
     contactName?: string | null;
     apply?: boolean;
+    /** Only do what needs no provider call (file a Novo Lead card); if
+     *  the thread has real customer text, stop instead of classifying. */
+    skipModel?: boolean;
   }
 ): Promise<PipelineRunResult> {
   const { config, stages, accountId, conversationId, contactId } = args;
@@ -467,8 +506,40 @@ export async function runDealPipelineForConversation(
     };
   }
 
-  const messages = await buildConversationContext(db, conversationId);
-  if (!messages.some((m) => m.role === 'user')) {
+  const messages = await buildConversationContext(
+    db,
+    conversationId,
+    dealContextMessageLimit()
+  );
+  // Nothing of the customer's own to read yet — no reply, or only the
+  // pre-filled ad/site message and greetings. Answer "none" without a
+  // provider call (on two accounts these were ~230 and ~111 cards wrongly
+  // filed as "qualified").
+  if (!messages.some((m) => m.role === 'user' && !isNoise(m.content))) {
+    // No customer message to read yet — nothing to classify. Still file a
+    // Novo Lead card when the board has that column and none exists, so a
+    // contact who hasn't replied isn't invisible; skip the provider call
+    // entirely since there is nothing for it to read.
+    const plan = planTransition({
+      signal: { outcome: 'none', model: null, price: null },
+      current,
+      stages,
+      fallbackTitle: args.contactName?.trim() || 'Lead sem nome',
+    });
+    if (!apply || plan.action === 'none') {
+      return { signal: null, plan, applied: null };
+    }
+    const written = await applyPlan(db, plan, {
+      accountId,
+      conversationId,
+      contactId,
+      configOwnerUserId: args.configOwnerUserId,
+      stages,
+    });
+    return { signal: null, plan, applied: written?.description ?? null };
+  }
+
+  if (args.skipModel) {
     return { signal: null, plan: null, applied: null };
   }
 
@@ -502,14 +573,22 @@ export async function runDealPipelineForConversation(
   });
 
   const parsed: DealSignal | null = parseDealSignal(text);
-  const signal = parsed;
-  if (!signal) {
+  if (!parsed) {
     console.warn(
       `[ai deal pipeline] unusable model output for conversation ${conversationId}:`,
       text.slice(0, 200)
     );
     return { signal: null, plan: null, applied: null };
   }
+  // The model is told what a valid price is; this enforces it against the
+  // transcript (deal-price.ts).
+  const checked = validateQuotedPrice(parsed.price, messages);
+  if (parsed.price != null && checked.price == null) {
+    console.log(
+      `[ai deal pipeline] conversation ${conversationId}: dropped price ${parsed.price} (${checked.reason})`
+    );
+  }
+  const signal: DealSignal = { ...parsed, price: checked.price };
 
   const plan = planTransition({
     signal,
@@ -531,8 +610,10 @@ export async function runDealPipelineForConversation(
   // A disqualified lead is the opposite of a conversion. Reporting one as
   // QualifiedLead would teach Meta to spend the budget finding more
   // people who want to pay by carne — the exact customer this business
-  // cannot serve. Nothing about it goes to the ad platform.
-  if (written && signal.outcome !== 'disqualified') {
+  // cannot serve. A "none" outcome that only opened a placeholder Novo
+  // Lead card is not a real signal either — nothing about either goes to
+  // the ad platform.
+  if (written && signal.outcome !== 'disqualified' && signal.outcome !== 'none') {
     // Report the outcome to Meta so ads that click to WhatsApp can
     // optimise for real sales. Owns its errors — a failing ad-platform
     // call must never undo a deal write that already succeeded.
@@ -559,6 +640,118 @@ export async function runDealPipelineForConversation(
   }
 
   return { signal, plan, applied: written?.description ?? null };
+}
+
+export interface SweepResult {
+  candidates: number;
+  analyzed: number;
+  skippedNoSignal: number;
+  stoppedEarly: boolean;
+}
+
+/**
+ * Catch-up for messages the cooldown skipped.
+ *
+ * A message landing within the cooldown of the previous classification
+ * is dropped, and if nothing else arrives the thread is never re-read —
+ * that left hundreds of real conversations unread on one account. Vercel
+ * Hobby only allows a daily schedule, so this runs once a day: every
+ * conversation of a pipeline-enabled account with a message newer than
+ * its last classification (within `sinceHours`) is re-read, but only when
+ * that new material could move the deal — customer text that isn't noise,
+ * or a store message carrying a quote/invoice/payment signal.
+ */
+export async function sweepUnreadConversations(
+  db: SupabaseClient,
+  opts: { sinceHours?: number; maxConversations?: number; budgetMs?: number } = {}
+): Promise<SweepResult> {
+  const sinceHours = opts.sinceHours ?? 48;
+  const maxConversations = opts.maxConversations ?? 150;
+  const deadline = Date.now() + (opts.budgetMs ?? 240_000);
+  const result: SweepResult = {
+    candidates: 0,
+    analyzed: 0,
+    skippedNoSignal: 0,
+    stoppedEarly: false,
+  };
+
+  const { data: configs, error: cfgErr } = await db
+    .from('ai_configs')
+    .select('account_id')
+    .eq('deal_pipeline_enabled', true);
+  if (cfgErr) throw cfgErr;
+  const accountIds = (configs ?? []).map((c) => c.account_id as string);
+  if (!accountIds.length) return result;
+
+  const since = new Date(Date.now() - sinceHours * 3_600_000).toISOString();
+  const settled = new Date(Date.now() - dealPipelineCooldownMs()).toISOString();
+  const { data: convs, error: convErr } = await db
+    .from('conversations')
+    .select(
+      'id, account_id, contact_id, user_id, last_message_at, ai_deal_analyzed_at, contacts(name)'
+    )
+    .in('account_id', accountIds)
+    .gte('last_message_at', since)
+    .lt('last_message_at', settled)
+    .order('last_message_at', { ascending: false })
+    .limit(1000);
+  if (convErr) throw convErr;
+
+  type ConvRow = {
+    id: string;
+    account_id: string;
+    contact_id: string;
+    user_id: string;
+    last_message_at: string;
+    ai_deal_analyzed_at: string | null;
+    contacts: { name: string | null } | { name: string | null }[] | null;
+  };
+  const pending = ((convs ?? []) as unknown as ConvRow[]).filter(
+    (c) => !c.ai_deal_analyzed_at || c.last_message_at > c.ai_deal_analyzed_at
+  );
+  result.candidates = pending.length;
+
+  for (const conv of pending) {
+    if (result.analyzed >= maxConversations || Date.now() > deadline) {
+      result.stoppedEarly = true;
+      break;
+    }
+    let query = db
+      .from('messages')
+      .select('sender_type, content_type, content_text')
+      .eq('conversation_id', conv.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (conv.ai_deal_analyzed_at) query = query.gt('created_at', conv.ai_deal_analyzed_at);
+    const { data: fresh, error: msgErr } = await query;
+    if (msgErr) continue;
+    const meaningful = (
+      (fresh ?? []) as {
+        sender_type: string;
+        content_type: string;
+        content_text: string | null;
+      }[]
+    ).some((m) =>
+      m.sender_type === 'customer'
+        ? !!m.content_text?.trim() && !isNoise(m.content_text)
+        : storeMessageSignal(m.content_type, m.content_text) !== null
+    );
+    if (!meaningful) {
+      result.skippedNoSignal += 1;
+      continue;
+    }
+    const contact = Array.isArray(conv.contacts) ? conv.contacts[0] : conv.contacts;
+    await dispatchInboundToDealPipeline({
+      accountId: conv.account_id,
+      conversationId: conv.id,
+      contactId: conv.contact_id,
+      configOwnerUserId: conv.user_id,
+      contactName: contact?.name ?? null,
+      inboundText: null,
+    });
+    result.analyzed += 1;
+  }
+  return result;
 }
 
 /**
@@ -589,11 +782,36 @@ export async function dispatchInboundToDealPipeline(
     // call when an earlier, substantive message is still waiting to be
     // read — e.g. one the cooldown skipped. Checked before the claim so
     // an ack never consumes the slot either.
+    // Ad/site templates are noise too, and — crucially — must not consume
+    // the slot: claiming it on the template meant the real conversation
+    // that followed within the cooldown was never read (~480 leads on one
+    // account had no card for that reason).
     if (
       !args.forceAnalysis &&
-      isAcknowledgement(args.inboundText) &&
+      isNoise(args.inboundText) &&
       !(await hasUnreadSignal(db, conversationId))
     ) {
+      // A fresh ad click still deserves a Novo Lead card when the board
+      // has that column — filed with no provider call and no slot claim.
+      if (isAdTemplate(args.inboundText)) {
+        const stages = await resolvePipelineStages(db, accountId, {
+          qualified: config.dealStageQualifiedId,
+          negotiating: config.dealStageNegotiatingId,
+          closed: config.dealStageClosedId,
+        });
+        if (stages?.newLead) {
+          await runDealPipelineForConversation(db, {
+            config,
+            stages,
+            accountId,
+            conversationId,
+            contactId,
+            configOwnerUserId,
+            contactName: args.contactName,
+            skipModel: true,
+          });
+        }
+      }
       return;
     }
 

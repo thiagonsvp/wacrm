@@ -41,6 +41,8 @@ export interface DealSignal {
   model: string | null
   /** Price quoted BY THE BUSINESS for that product, in the account's currency. */
   price: number | null
+  /** The other party is a supplier, partner, courier or staff — not a lead. */
+  notCustomer?: boolean
 }
 
 /** The existing card for this conversation, if any. */
@@ -79,6 +81,10 @@ export type TransitionPlan =
  * becomes known, so a title a human edited by hand is left alone.
  */
 export function titleNamesProduct(title: string): boolean {
+  // A contact whose WhatsApp name is their own number gets titled with it
+  // ("5521981705087"); that is a placeholder, not a product, and must be
+  // replaceable — ~50 cards on one account were stuck with one.
+  if (/^\+?[\d\s()-]{8,}$/.test(title.trim())) return false
   return /iphone/i.test(title) || /\d/.test(title)
 }
 
@@ -97,7 +103,25 @@ export function planTransition(args: {
 }): TransitionPlan {
   const { signal, current, stages, fallbackTitle } = args
 
+  // Suppliers, repair partners, couriers and staff message the same
+  // number. They never get a card — not even a Novo Lead placeholder.
+  if (signal.notCustomer) {
+    return { action: 'none', reason: 'counterparty is not a customer' }
+  }
+
   if (signal.outcome === 'none') {
+    // A contact with no real signal yet still deserves a place on the
+    // board, as long as it doesn't already have one — never re-file an
+    // existing card here just because a later message read as thin.
+    if (!current && stages.newLead) {
+      return {
+        action: 'create',
+        stageId: stages.newLead.id,
+        title: fallbackTitle,
+        value: 0,
+        status: 'open',
+      }
+    }
     return { action: 'none', reason: 'no actionable signal in the conversation' }
   }
 

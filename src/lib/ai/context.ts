@@ -5,6 +5,7 @@ import { aiContextMessageLimit } from './defaults'
 interface DbMessage {
   sender_type: 'customer' | 'agent' | 'bot'
   content_text: string | null
+  created_at: string
 }
 
 /**
@@ -12,6 +13,10 @@ interface DbMessage {
  * provider-neutral chat shape. Customer messages become `user`; agent
  * and bot messages become `assistant`. Media messages are included when
  * they carry a caption or transcription in `content_text`.
+ *
+ * Empty messages (untranscribed audio, bare media) are dropped IN THE
+ * QUERY, before the limit — otherwise they ate part of the window and a
+ * 20-message context held as few as ~17 readable lines.
  *
  * Ordered oldest-first (chronological) so the transcript reads
  * naturally and the most recent customer message lands last.
@@ -23,8 +28,10 @@ export async function buildConversationContext(
 ): Promise<ChatMessage[]> {
   const { data, error } = await db
     .from('messages')
-    .select('sender_type, content_text')
+    .select('sender_type, content_text, created_at')
     .eq('conversation_id', conversationId)
+    .not('content_text', 'is', null)
+    .neq('content_text', '')
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -36,5 +43,6 @@ export async function buildConversationContext(
     .map((m) => ({
       role: m.sender_type === 'customer' ? 'user' : 'assistant',
       content: m.content_text!.trim(),
+      at: m.created_at,
     }))
 }

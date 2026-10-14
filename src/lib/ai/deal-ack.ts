@@ -66,3 +66,37 @@ export function isAcknowledgement(text: string | null | undefined): boolean {
   const words = norm.split(' ')
   return words.every((w) => ACK_WORDS.has(w))
 }
+
+/**
+ * Pre-filled first messages from ad / website click-to-WhatsApp buttons,
+ * plus provider placeholders. They arrive as if the customer typed them
+ * but carry no intent of their own — measured on two accounts, they were
+ * the ONLY customer text on ~230 and ~111 cards filed as "qualified".
+ * Matched on the normalized text (see `normalizeForAck`).
+ */
+const AD_TEMPLATES: RegExp[] = [
+  /\bvim pelo anuncio\b/,
+  /\bvi o anuncio\b/,
+  /\bvim pelo site\b/,
+  /\btenho interesse em fazer (o )?upgrade\b/,
+  /\btenho interesse e (queria|gostaria de) mais informacoes\b/,
+  /\btenho interesse em um aparelho novo\b/,
+  /\bposso ter mais informacoes sobre isso\b/,
+  /^ola quero saber sobre o\b/,
+  /\bnao foi possivel descriptografar\b/,
+]
+
+/** True for a pre-filled ad/site message (see AD_TEMPLATES). */
+export function isAdTemplate(text: string | null | undefined): boolean {
+  if (!text) return false
+  const norm = normalizeForAck(text)
+  return AD_TEMPLATES.some((re) => re.test(norm))
+}
+
+/**
+ * True when a message carries no sales signal of the customer's own:
+ * an acknowledgement/greeting or a pre-filled ad/site template.
+ */
+export function isNoise(text: string | null | undefined): boolean {
+  return isAcknowledgement(text) || isAdTemplate(text)
+}

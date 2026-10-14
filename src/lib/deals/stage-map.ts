@@ -34,6 +34,13 @@ export interface PipelineStageMap {
    * outcome as "none" rather than inventing a home for the card.
    */
   disqualified?: StageRef;
+  /**
+   * Catch-all for a contact with no real signal yet — no reply, or a
+   * message too thin to read ("oi"). OPTIONAL: a board without a "Novo
+   * Lead" column is perfectly valid, and the classifier then leaves such
+   * a contact off the board entirely, as it always has.
+   */
+  newLead?: StageRef;
 }
 
 export interface StageRow {
@@ -78,6 +85,7 @@ const SLOT_NAMES = {
     'won',
   ],
   disqualified: ['desqualificado', 'descartado', 'disqualified', 'unqualified'],
+  newLead: ['novo lead', 'novo', 'new lead', 'new'],
 } as const;
 
 /**
@@ -107,11 +115,37 @@ export function matchStageSlots(
   const closed = pick('closed');
   if (!qualified || !negotiating || !closed) return null;
 
-  // Optional on purpose — its absence must not fail the whole match and
+  // Optional on purpose — their absence must not fail the whole match and
   // switch the account's classification off.
   const disqualified = pick('disqualified') ?? undefined;
+  const newLead = pick('newLead') ?? undefined;
 
-  return { qualified, negotiating, closed, disqualified };
+  return { qualified, negotiating, closed, disqualified, newLead };
+}
+
+/**
+ * Find an optional slot (disqualified, newLead) by name among a single
+ * board's stages. Shared by `mapConfiguredStages` for the slots that have
+ * no id field in Settings — silent no-op is the failure mode this
+ * codebase keeps paying for, so both fall back to name matching rather
+ * than never firing.
+ */
+function matchOptionalSlotByName(
+  stages: StageRow[],
+  pipelineId: string,
+  slot: 'disqualified' | 'newLead'
+): StageRow | undefined {
+  const onBoard = stages.filter((st) => st.pipeline_id === pipelineId);
+  const byName = new Map<string, StageRow>();
+  for (const st of onBoard) {
+    const key = normalize(st.name);
+    if (!byName.has(key)) byName.set(key, st);
+  }
+  for (const candidate of SLOT_NAMES[slot]) {
+    const hit = byName.get(candidate);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 /** Stage ids chosen explicitly in Settings, when the operator set them. */
@@ -149,34 +183,23 @@ export function mapConfiguredStages(
   if (q.pipeline_id !== n.pipeline_id || q.pipeline_id !== c.pipeline_id)
     return null;
 
-  // The disqualified column has no field in Settings yet, so an account
-  // that pinned the other three by id would otherwise get `undefined`
-  // here and the rule would quietly never fire. Fall back to matching it
-  // by name on the SAME board — silent no-op is the failure mode this
-  // codebase keeps paying for.
-  let d = disqualified ? byId.get(disqualified) : undefined;
-  if (!d) {
-    const onBoard = stages.filter((st) => st.pipeline_id === q.pipeline_id);
-    const byName = new Map<string, StageRow>();
-    for (const st of onBoard) {
-      const key = normalize(st.name);
-      if (!byName.has(key)) byName.set(key, st);
-    }
-    for (const candidate of SLOT_NAMES.disqualified) {
-      const hit = byName.get(candidate);
-      if (hit) {
-        d = hit;
-        break;
-      }
-    }
-  }
+  // The disqualified and newLead columns have no field in Settings yet, so
+  // an account that pinned the other three by id would otherwise get
+  // `undefined` here and the rule would quietly never fire. Fall back to
+  // matching them by name on the SAME board.
+  const d =
+    (disqualified ? byId.get(disqualified) : undefined) ??
+    matchOptionalSlotByName(stages, q.pipeline_id, 'disqualified');
   const sameBoard = d && d.pipeline_id === q.pipeline_id;
+
+  const newLead = matchOptionalSlotByName(stages, q.pipeline_id, 'newLead');
 
   return {
     pipelineId: q.pipeline_id,
     qualified: { id: q.id, position: q.position },
     negotiating: { id: n.id, position: n.position },
     closed: { id: c.id, position: c.position },
+    newLead: newLead ? { id: newLead.id, position: newLead.position } : undefined,
     disqualified:
       sameBoard && d ? { id: d.id, position: d.position } : undefined,
   };

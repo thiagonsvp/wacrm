@@ -4,6 +4,6 @@
     "NEXT_PUBLIC_SITE_URL": "https://crm.natividadedigital.com.br"
   },
   "crons": [
-    { "path": "/api/media/retention", "schedule": "0 6 * * *" }
+    { "path": "/api/cron/daily", "schedule": "0 6 * * *" }
   ]
 }
