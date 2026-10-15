@@ -131,3 +131,20 @@ describe("capability predicates", () => {
     expect(canTransferOwnership("viewer")).toBe(false);
   });
 });
+
+describe("canOverrideAssignment", () => {
+  it("lets whoever supervises sellers write on any lead", async () => {
+    const { canOverrideAssignment } = await import("./roles");
+    expect(canOverrideAssignment("owner")).toBe(true);
+    expect(canOverrideAssignment("admin")).toBe(true);
+    expect(canOverrideAssignment("manager")).toBe(true);
+  });
+
+  it("keeps sellers and viewers to their own leads", async () => {
+    const { canOverrideAssignment } = await import("./roles");
+    expect(canOverrideAssignment("agent")).toBe(false);
+    expect(canOverrideAssignment("viewer")).toBe(false);
+    expect(canOverrideAssignment(null)).toBe(false);
+    expect(canOverrideAssignment("gerente")).toBe(false);
+  });
+});

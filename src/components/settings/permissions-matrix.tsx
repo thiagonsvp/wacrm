@@ -97,13 +97,15 @@ export function PermissionsMatrix() {
       <div className="text-muted-foreground space-y-3 text-sm">
         <p>
           <strong className="text-foreground">Vendedor</strong> atende:
-          conversas, contatos, pipeline e painel.
+          conversas, contatos, pipeline e painel. Só envia mensagem nos próprios
+          leads e nos da fila.
         </p>
         <p>
           <strong className="text-foreground">Gerente</strong> acrescenta o que
           é irreversível — transmissões, que não podem ser canceladas depois de
           enviadas, e a aprovação de conversões, que libera investimento em
-          anúncio.
+          anúncio. Também pode enviar mensagem em qualquer conversa, mesmo
+          atribuída a outro vendedor, sem mudar o responsável.
         </p>
         <p>
           <strong className="text-foreground">Administrador</strong> acrescenta

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { canOverrideAssignment } from '@/lib/auth/roles'
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -59,10 +60,9 @@ export async function POST(request: Request) {
         { status: 403 },
       )
     }
-    // Admin/owner override the assignment lock below; only a plain
-    // 'agent' can be blocked from a teammate's thread.
-    const isAdminOrOwner =
-      profile?.account_role === 'admin' || profile?.account_role === 'owner'
+    // Owner/admin/manager override the assignment lock below; only a
+    // plain 'agent' can be blocked from a teammate's thread.
+    const isAdminOrOwner = canOverrideAssignment(profile?.account_role)
 
     const body = await request.json()
     const {

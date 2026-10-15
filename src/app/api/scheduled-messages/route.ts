@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { canOverrideAssignment } from '@/lib/auth/roles'
 
 /** Meta's caption cap — same limit the composer and send route enforce. */
 const MEDIA_CAPTION_MAX = 1024
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
 
   // Same rule as /api/whatsapp/send: a plain agent cannot write on a
   // teammate's lead; admin/owner can.
-  const isAdminOrOwner = profile.account_role === 'admin' || profile.account_role === 'owner'
+  const isAdminOrOwner = canOverrideAssignment(profile.account_role)
   if (conv.assigned_agent_id && conv.assigned_agent_id !== user.id && !isAdminOrOwner) {
     return NextResponse.json(
       { error: 'Esta conversa está atribuída a outro atendente.' },

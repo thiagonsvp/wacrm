@@ -95,6 +95,17 @@ export function canSendMessages(role: AccountRole): boolean {
 }
 
 /**
+ * Owner / admin / manager: write on a conversation assigned to someone
+ * else. A seller (agent) can only reply to their own leads and the
+ * shared queue; whoever supervises them must be able to step into any
+ * conversation. Shared by the inbox UI and every send route, so the
+ * button and the server never disagree.
+ */
+export function canOverrideAssignment(role: string | null | undefined): boolean {
+  return isAccountRole(role) && hasMinRole(role, "manager");
+}
+
+/**
  * Viewer: read-only across everything. Provided as a positive
  * predicate so UI gates read naturally (`if (canViewOnly(role))`
  * shows the "Read-only" tooltip without inverting `canSendMessages`).

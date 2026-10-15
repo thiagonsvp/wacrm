@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { canOverrideAssignment } from '@/lib/auth/roles'
 
 /**
  * Cancel a schedule (every item of it still pending). Items already sent
@@ -44,7 +45,7 @@ export async function DELETE(
   }
 
   const conv = items[0].conversations as unknown as { assigned_agent_id: string | null } | null
-  const isAdminOrOwner = profile.account_role === 'admin' || profile.account_role === 'owner'
+  const isAdminOrOwner = canOverrideAssignment(profile.account_role)
   const allowed =
     isAdminOrOwner ||
     items[0].created_by === user.id ||

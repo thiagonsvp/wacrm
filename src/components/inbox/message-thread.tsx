@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { canOverrideAssignment } from '@/lib/auth/roles';
 import { usePresence } from '@/hooks/use-presence';
 import { PresenceDot } from '@/components/presence/presence-dot';
 import { presenceLabel } from '@/lib/presence';
@@ -190,7 +191,7 @@ export function MessageThread({
   const t = useTranslations('Inbox.messageThread');
   const tQuote = useTranslations('Inbox.replyQuote');
 
-  const { user, profile, isAdmin, isOwner } = useAuth();
+  const { user, profile, accountRole } = useAuth();
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -893,10 +894,12 @@ export function MessageThread({
   const assignLabel = assignedAgentId
     ? (currentAssignee?.full_name ?? t('assigned'))
     : t('assign');
-  // Admin/owner keep an override — consistent with the same rule enforced
-  // server-side in /api/whatsapp/send.
+  // Owner/admin/manager keep an override — the same rule the server
+  // enforces in /api/whatsapp/send (canOverrideAssignment).
   const assignmentLocked = Boolean(
-    assignedAgentId && assignedAgentId !== user?.id && !isAdmin && !isOwner
+    assignedAgentId &&
+      assignedAgentId !== user?.id &&
+      !canOverrideAssignment(accountRole)
   );
 
   return (
