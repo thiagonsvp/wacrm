@@ -274,7 +274,9 @@ export function InviteMemberDialog({
                   onValueChange={(v) => v && setRole(v as InviteRole)}
                 >
                   <SelectTrigger className="w-full bg-muted border-border text-foreground">
-                    <SelectValue />
+                    <SelectValue>
+                      {(value: InviteRole) => tRoles(value)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">{tRoles('admin')}</SelectItem>

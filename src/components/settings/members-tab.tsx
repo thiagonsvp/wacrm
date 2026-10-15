@@ -94,8 +94,11 @@ interface Invitation {
 }
 
 // These roles are translated via `useTranslations("Settings.roles")` where they are used.
+// Same set (and order) as the invite dialog — 'manager' was missing here,
+// so a member could be invited as Gerente but never promoted to it.
 const EDITABLE_ROLES: { value: AccountRole }[] = [
   { value: 'admin' },
+  { value: 'manager' },
   { value: 'agent' },
   { value: 'viewer' },
 ];
@@ -428,7 +431,11 @@ export function MembersTab() {
                           className="w-32 bg-muted border-border text-foreground"
                           disabled={isBusy}
                         >
-                          <SelectValue />
+                          {/* Without a formatter Base UI prints the raw
+                              value ("agent") instead of "Vendedor". */}
+                          <SelectValue>
+                            {(value: AccountRole) => tRoles(value)}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {EDITABLE_ROLES.map((r) => (
