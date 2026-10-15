@@ -412,6 +412,10 @@ export interface Deal {
   contact?: Contact;
   stage?: PipelineStage;
   assignee?: Profile;
+  /** Seller who holds the lead: the deal's own assignee, else whoever the
+   *  conversation is assigned to (AI-created cards leave assigned_to
+   *  empty). Derived on load for the pipeline's seller filter. */
+  seller_id?: string | null;
 }
 
 export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed';

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Pipeline, PipelineStage, Deal, Contact, Tag } from "@/types";
 import { PipelineBoard } from "@/components/pipelines/pipeline-board";
@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, UserRound, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -57,6 +58,45 @@ export default function PipelinesPage() {
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Seller filter: "all", "none" (no seller yet) or a member's user_id.
+  // Members come from the Members API so sellers who currently have
+  // another company open are listed too.
+  const [sellerFilter, setSellerFilter] = useState<string>("all");
+  const [sellers, setSellers] = useState<{ user_id: string; full_name: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/account/members", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (alive && data?.members) setSellers(data.members);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [accountId]);
+  const sellerCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const d of deals) {
+      const key = d.seller_id ?? "none";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [deals]);
+  const visibleDeals = useMemo(
+    () =>
+      sellerFilter === "all"
+        ? deals
+        : deals.filter((d) => (d.seller_id ?? "none") === sellerFilter),
+    [deals, sellerFilter],
+  );
+  const sellerLabel =
+    sellerFilter === "all"
+      ? "Todos os vendedores"
+      : sellerFilter === "none"
+        ? "Sem vendedor"
+        : sellers.find((s) => s.user_id === sellerFilter)?.full_name || "Vendedor";
 
   // Dialog / sheet state
   const [newPipelineOpen, setNewPipelineOpen] = useState(false);
@@ -102,31 +142,59 @@ export default function PipelinesPage() {
   const loadDeals = useCallback(
     async (pipelineId: string) => {
       if (!accountId) return [] as Deal[];
-      const { data } = await supabase
-        .from("deals")
-        .select("*, contact:contacts(*, contact_tags(tags(*))), assignee:profiles!deals_assigned_to_fkey(*)")
-        .eq("pipeline_id", pipelineId)
-        .eq("account_id", accountId)
-        .order("created_at", { ascending: false });
+      // Paged: PostgREST silently caps a response at 1000 rows, and a
+      // busy board passes that — the rest of the cards simply vanished.
+      const data: Record<string, unknown>[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: page, error } = await supabase
+          .from("deals")
+          .select(
+            "*, contact:contacts(*, contact_tags(tags(*)), conversations(id, assigned_agent_id)), assignee:profiles!deals_assigned_to_fkey(*)"
+          )
+          .eq("pipeline_id", pipelineId)
+          .eq("account_id", accountId)
+          .order("created_at", { ascending: false })
+          .order("id")
+          .range(from, from + 999);
+        if (error) {
+          console.error("Failed to load deals:", error.message);
+          break;
+        }
+        data.push(...(page ?? []));
+        if (!page || page.length < 1000) break;
+      }
     // Flatten the embedded join so pipeline cards can use the same Contact
     // shape as the inbox and contacts views.
-    return (data ?? []).map((deal) => {
+    return data.map((deal) => {
       const contact = deal.contact as (Contact & {
         contact_tags?: { tags?: Tag | null }[];
+        conversations?: { id: string; assigned_agent_id: string | null }[];
       }) | null;
-      if (!contact) return deal;
+      // Seller: the card's own assignee, else the seller the conversation
+      // is assigned to — the AI creates cards without an assignee.
+      const conversations = contact?.conversations ?? [];
+      const conversation =
+        conversations.find((c) => c.id === deal.conversation_id) ??
+        conversations.find((c) => c.assigned_agent_id) ??
+        null;
+      const seller_id =
+        (deal.assigned_to as string | null) ?? conversation?.assigned_agent_id ?? null;
+      if (!contact) return { ...deal, seller_id };
       const rawTags = contact.contact_tags ?? [];
       const contactFields = Object.fromEntries(
-        Object.entries(contact).filter(([key]) => key !== "contact_tags"),
+        Object.entries(contact).filter(
+          ([key]) => key !== "contact_tags" && key !== "conversations",
+        ),
       ) as Contact;
       return {
         ...deal,
+        seller_id,
         contact: {
           ...contactFields,
           tags: rawTags.map((join) => join.tags).filter(Boolean),
         },
       };
-    }) as Deal[];
+    }) as unknown as Deal[];
     },
     [supabase, accountId],
   );
@@ -386,6 +454,60 @@ export default function PipelinesPage() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Seller filter — narrows the board and its totals to one
+              seller's cards. Counts are for the whole pipeline. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm hover:bg-muted transition-colors data-[popup-open]:bg-muted",
+                sellerFilter === "all"
+                  ? "border-border text-foreground"
+                  : "border-primary/50 text-primary"
+              )}
+            >
+              <UserRound className="h-4 w-4" />
+              <span className="max-w-40 truncate">{sellerLabel}</span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-64 border-border bg-popover text-popover-foreground"
+            >
+              {[
+                { id: "all", name: "Todos os vendedores", count: deals.length },
+                ...sellers
+                  .map((s) => ({
+                    id: s.user_id,
+                    name: s.full_name || "Sem nome",
+                    count: sellerCounts.get(s.user_id) ?? 0,
+                  }))
+                  .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+                { id: "none", name: "Sem vendedor", count: sellerCounts.get("none") ?? 0 },
+              ].map((opt) => (
+                <DropdownMenuItem
+                  key={opt.id}
+                  onClick={() => setSellerFilter(opt.id)}
+                  className={cn(
+                    "flex items-center justify-between gap-2",
+                    opt.id === sellerFilter ? "text-primary" : "text-popover-foreground"
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    {opt.id === sellerFilter ? (
+                      <Check className="h-3.5 w-3.5 shrink-0" />
+                    ) : (
+                      <span className="w-3.5 shrink-0" />
+                    )}
+                    <span className="truncate">{opt.name}</span>
+                  </span>
+                  <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                    {opt.count}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="flex items-center gap-2">
@@ -434,10 +556,10 @@ export default function PipelinesPage() {
         </div>
       ) : (
         <>
-          <PipelineAnalytics stages={stages} deals={deals} />
+          <PipelineAnalytics stages={stages} deals={visibleDeals} />
           <PipelineBoard
             stages={stages}
-            deals={deals}
+            deals={visibleDeals}
             onDealMoved={handleDealMoved}
             onAddDeal={handleAddDeal}
             onEditDeal={handleEditDeal}
