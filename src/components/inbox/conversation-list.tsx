@@ -10,7 +10,7 @@ import {
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, Tag as TagIcon, X, GitBranch } from "lucide-react";
+import { Search, ChevronDown, Tag as TagIcon, X, GitBranch, UserRound } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -67,7 +67,7 @@ export function ConversationList({
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
-  const { user } = useAuth();
+  const { user, accountId } = useAuth();
 
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
@@ -94,6 +94,31 @@ export function ConversationList({
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [stages, setStages] = useState<PipelineStageFilter[]>([]);
+  // Seller names for the "who owns this lead" chip. From the Members API,
+  // not a direct profiles query: that one only sees teammates who have
+  // this company open right now, and would miss a manager working in
+  // another store.
+  const [sellerNames, setSellerNames] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/account/members", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!alive || !data?.members) return;
+        setSellerNames(
+          new Map(
+            (data.members as { user_id: string; full_name: string }[]).map((m) => [
+              m.user_id,
+              m.full_name?.trim().split(/s+/)[0] || "Sem nome",
+            ]),
+          ),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [accountId]);
   const [contactStageIds, setContactStageIds] = useState<Map<string, string[]>>(
     () => new Map(),
   );
@@ -549,6 +574,14 @@ export function ConversationList({
                 conversation={conv}
                 isActive={conv.id === activeConversationId}
                 onSelect={handleSelect}
+                sellerName={
+                  conv.assigned_agent_id
+                    ? conv.assigned_agent_id === user?.id
+                      ? "Você"
+                      : sellerNames.get(conv.assigned_agent_id) ?? null
+                    : null
+                }
+                sellerId={conv.assigned_agent_id ?? null}
                 t={t}
               />
             ))}
@@ -563,6 +596,9 @@ interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
   onSelect: (conversation: Conversation) => void;
+  /** First name of the seller who owns the lead; null when unassigned. */
+  sellerName: string | null;
+  sellerId: string | null;
   t: ReturnType<typeof useTranslations>;
 }
 
@@ -570,6 +606,8 @@ function ConversationItem({
   conversation,
   isActive,
   onSelect,
+  sellerName,
+  sellerId,
   t,
 }: ConversationItemProps) {
   const contact = conversation.contact;
@@ -587,7 +625,8 @@ function ConversationItem({
     : "";
 
   const allTags = contact?.tags ?? [];
-  const rowTags = allTags.slice(0, 2);
+  // The seller chip takes one of the two slots so the row stays one line.
+  const rowTags = allTags.slice(0, sellerName ? 1 : 2);
   const extraTagCount = allTags.length - rowTags.length;
 
   return (
@@ -615,13 +654,22 @@ function ConversationItem({
           {source && <LeadSourceIcon source={source} />}
           <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
         </div>
-        {/* Tags. An agent scanning the list wants to know where the lead
-            came from and what kind of contact it is before opening the
-            conversation — that is the whole reason to look at the list
-            rather than the thread. Capped at two so a heavily tagged
-            contact cannot push the row to a third line. */}
-        {rowTags.length > 0 && (
+        {/* Seller + tags. Who owns the lead comes first — it is what a
+            manager scans the list for — then where the lead came from and
+            what kind of contact it is. Capped so a heavily tagged contact
+            cannot push the row to a third line. */}
+        {(sellerName || rowTags.length > 0) && (
           <div className="mt-1 flex items-center gap-1 overflow-hidden">
+            {sellerName && sellerId && (
+              <span
+                title={`Responsável: ${sellerName}`}
+                className="inline-flex max-w-28 shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                style={{ backgroundColor: sellerColor(sellerId) }}
+              >
+                <UserRound className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{sellerName}</span>
+              </span>
+            )}
             {rowTags.map((tag) => (
               <span
                 key={tag.id}
@@ -666,6 +714,14 @@ function ConversationItem({
       </div>
     </button>
   );
+}
+
+/** Stable, readable colour per seller (white text on every swatch). */
+const SELLER_COLORS = ["#2563eb", "#9333ea", "#db2777", "#0d9488", "#ea580c", "#4f46e5", "#16a34a", "#b45309"];
+function sellerColor(userId: string): string {
+  let h = 0;
+  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) >>> 0;
+  return SELLER_COLORS[h % SELLER_COLORS.length];
 }
 
 type LeadSource = "facebook" | "instagram" | "google";
