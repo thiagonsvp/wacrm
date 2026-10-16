@@ -632,11 +632,15 @@ async function resolveConversationId(args: ExecuteArgs): Promise<string> {
   if (fromCtx) return fromCtx;
   if (!args.contactId)
     throw new Error('cannot resolve conversation: no contact');
+  // A contact can have one conversation per WhatsApp number (migration
+  // 087): take the most recently active one, the one they're talking on.
   const { data, error } = await supabaseAdmin()
     .from('conversations')
     .select('id')
     .eq('account_id', args.automation.account_id)
     .eq('contact_id', args.contactId)
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .limit(1)
     .maybeSingle();
   if (error) throw new Error(`conversation lookup failed: ${error.message}`);
   if (!data?.id) throw new Error('no conversation for contact');

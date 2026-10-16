@@ -124,6 +124,10 @@ export function SettingsOverview({
           .from('whatsapp_config')
           .select('provider, phone_number_id, uazapi_instance_name')
           .eq('account_id', acctId)
+          // Several numbers per account (087): show the primary one.
+          .order('is_primary', { ascending: false })
+          .order('created_at', { ascending: true })
+          .limit(1)
           .maybeSingle(),
         fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) => r.json()),
       ]);

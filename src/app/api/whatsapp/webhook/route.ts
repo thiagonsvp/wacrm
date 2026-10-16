@@ -335,7 +335,9 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           // inserts that need it for NOT NULL FK compliance. Always
           // the admin who saved the WhatsApp config.
           config.user_id,
-          decryptedAccessToken
+          decryptedAccessToken,
+          // The number the message arrived on (migration 087).
+          config.id
         );
       }
     }
@@ -544,7 +546,8 @@ async function processMessage(
   // (contacts, conversations). Always the admin who saved the
   // WhatsApp config; the choice is arbitrary post-017 but stable.
   configOwnerUserId: string,
-  accessToken: string
+  accessToken: string,
+  whatsappConfigId: string
 ) {
   const senderPhone = normalizePhone(message.from);
   const contactName = contact.profile.name;
@@ -643,7 +646,8 @@ async function processMessage(
     supabaseAdmin(),
     accountId,
     configOwnerUserId,
-    contactRecord.id
+    contactRecord.id,
+    whatsappConfigId
   );
   if (!convResult) return;
   const conversation = convResult.conversation;

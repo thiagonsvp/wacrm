@@ -28,9 +28,10 @@ export async function GET(
     const server = getUazapiServer()
     if (!server) return NextResponse.json({ connected: false, reason: 'uazapi_not_configured' })
 
+    // This instance's own row — an account can have several (087).
     const { data: config } = await supabase.from('whatsapp_config')
       .select('id, status, uazapi_instance_id, uazapi_token')
-      .eq('account_id', accountId).maybeSingle()
+      .eq('account_id', accountId).eq('uazapi_instance_id', id).maybeSingle()
     const isBound = config?.uazapi_instance_id === id && !!config?.uazapi_token
 
     let token: string

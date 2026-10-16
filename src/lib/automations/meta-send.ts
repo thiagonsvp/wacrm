@@ -3,7 +3,9 @@ import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import {
   engineSendInteractiveButtons,
   engineSendInteractiveList,
+  engineSendText as flowSendText,
 } from '@/lib/flows/meta-send'
+import { resolveWhatsAppConfig } from '@/lib/whatsapp/account-config'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   sanitizePhoneForMeta,
@@ -48,8 +50,14 @@ interface SendTemplateArgs {
   params?: string[]
 }
 
+/**
+ * Plain text from an automation. Delegates to the Flows sender, which
+ * speaks both providers (UAZAPI and Meta) and replies on the number the
+ * conversation lives on — this path used to be Meta-only, so every
+ * "send message" step failed on UAZAPI accounts.
+ */
 export async function engineSendText(args: SendTextArgs): Promise<{ whatsapp_message_id: string }> {
-  return sendViaMeta({ ...args, kind: 'text' })
+  return flowSendText(args)
 }
 
 export async function engineSendTemplate(
@@ -131,12 +139,11 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', input.accountId)
-    .single()
-  if (configErr || !config) {
+  // The number this conversation lives on (an account can have several).
+  const config = await resolveWhatsAppConfig(db, input.accountId, {
+    conversationId: input.conversationId,
+  }).catch(() => null)
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
   if (config.provider !== 'meta') {

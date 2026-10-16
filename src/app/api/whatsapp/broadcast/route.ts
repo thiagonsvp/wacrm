@@ -15,6 +15,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import { resolveWhatsAppConfig } from '@/lib/whatsapp/account-config'
 
 interface BroadcastResult {
   phone: string
@@ -134,11 +135,10 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .single()
+    // Several numbers per account (migration 087): broadcasts are Meta
+    // templates, so use the account's Meta number.
+    const config = await resolveWhatsAppConfig(supabase, accountId, { provider: 'meta' }).catch(() => null)
+    const configError = config ? null : true
 
     if (configError || !config) {
       return NextResponse.json(

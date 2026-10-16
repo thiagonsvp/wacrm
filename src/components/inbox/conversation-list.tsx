@@ -10,7 +10,8 @@ import {
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, Tag as TagIcon, X, GitBranch, UserRound } from "lucide-react";
+import { Search, ChevronDown, Tag as TagIcon, X, GitBranch, UserRound, Smartphone } from "lucide-react";
+import { useWhatsAppNumbers } from "@/hooks/use-whatsapp-numbers";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,9 @@ export function ConversationList({
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  // Which WhatsApp number (several per company since migration 087).
+  const whatsappNumbers = useWhatsAppNumbers();
+  const [selectedNumberId, setSelectedNumberId] = useState<string | null>(null);
   const [stages, setStages] = useState<PipelineStageFilter[]>([]);
   // Seller names for the "who owns this lead" chip. From the Members API,
   // not a direct profiles query: that one only sees teammates who have
@@ -272,6 +276,10 @@ export function ConversationList({
       );
     }
 
+    if (selectedNumberId !== null) {
+      result = result.filter((c) => c.whatsapp_config_id === selectedNumberId);
+    }
+
     if (selectedStageId !== null) {
       result = result.filter((c) =>
         contactStageIds.get(c.contact_id ?? "")?.includes(selectedStageId),
@@ -289,7 +297,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, assignmentFilter, filter, search, selectedTagIds, selectedCompany, selectedStageId, contactStageIds, user?.id]);
+  }, [conversations, assignmentFilter, filter, search, selectedTagIds, selectedCompany, selectedNumberId, selectedStageId, contactStageIds, user?.id]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -301,9 +309,11 @@ export function ConversationList({
     setSelectedTagIds([]);
     setSelectedCompany(null);
     setSelectedStageId(null);
+    setSelectedNumberId(null);
   }, []);
 
-  const hasContactFilters = selectedTagIds.length > 0 || selectedCompany !== null || selectedStageId !== null;
+  const hasContactFilters = selectedTagIds.length > 0 || selectedCompany !== null || selectedStageId !== null || selectedNumberId !== null;
+  const selectedNumber = selectedNumberId ? whatsappNumbers.byId.get(selectedNumberId) : null;
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -477,6 +487,31 @@ export function ConversationList({
             </DropdownMenu>
           )}
 
+          {whatsappNumbers.multiple && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  "inline-flex max-w-40 items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                  selectedNumberId ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Smartphone className="h-3 w-3 shrink-0" />
+                <span className="truncate">{selectedNumber?.label ?? "Número"}</span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-64 w-56 border-border bg-popover">
+                <DropdownMenuItem onClick={() => setSelectedNumberId(null)} className={cn("text-sm", selectedNumberId === null ? "text-primary" : "text-popover-foreground")}>
+                  Todos os números
+                </DropdownMenuItem>
+                {whatsappNumbers.numbers.map((n) => (
+                  <DropdownMenuItem key={n.id} onClick={() => setSelectedNumberId(n.id)} className={cn("text-sm", selectedNumberId === n.id ? "text-primary" : "text-popover-foreground")}>
+                    <span className="truncate">{n.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           {stages.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -534,6 +569,13 @@ export function ConversationList({
                 <X className="h-3 w-3" />
               </button>
             )}
+            {selectedNumber && (
+              <button onClick={() => setSelectedNumberId(null)} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70">
+                <Smartphone className="h-3 w-3 shrink-0" />
+                <span className="max-w-24 truncate">{selectedNumber.label}</span>
+                <X className="h-3 w-3" />
+              </button>
+            )}
             {selectedStage && (
               <button onClick={() => setSelectedStageId(null)} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: selectedStage.color ?? "var(--muted-foreground)" }} />
@@ -582,6 +624,11 @@ export function ConversationList({
                     : null
                 }
                 sellerId={conv.assigned_agent_id ?? null}
+                numberLabel={
+                  whatsappNumbers.multiple && conv.whatsapp_config_id
+                    ? whatsappNumbers.byId.get(conv.whatsapp_config_id)?.label ?? null
+                    : null
+                }
                 t={t}
               />
             ))}
@@ -599,6 +646,9 @@ interface ConversationItemProps {
   /** First name of the seller who owns the lead; null when unassigned. */
   sellerName: string | null;
   sellerId: string | null;
+  /** Which of the company's numbers this lead wrote to; null when the
+   *  company has only one number (nothing to tell apart). */
+  numberLabel: string | null;
   t: ReturnType<typeof useTranslations>;
 }
 
@@ -608,6 +658,7 @@ function ConversationItem({
   onSelect,
   sellerName,
   sellerId,
+  numberLabel,
   t,
 }: ConversationItemProps) {
   const contact = conversation.contact;
@@ -652,6 +703,15 @@ function ConversationItem({
             {displayName}
           </span>
           {source && <LeadSourceIcon source={source} />}
+          {numberLabel && (
+            <span
+              title={`Número: ${numberLabel}`}
+              className="inline-flex max-w-20 shrink-0 items-center gap-0.5 rounded border border-border px-1 text-[10px] text-muted-foreground"
+            >
+              <Smartphone className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{numberLabel}</span>
+            </span>
+          )}
           <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
         </div>
         {/* Seller + tags. Who owns the lead comes first — it is what a

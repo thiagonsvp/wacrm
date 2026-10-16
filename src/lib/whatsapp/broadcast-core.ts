@@ -29,6 +29,7 @@ import {
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
 import type { MessageTemplate } from '@/types';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
+import { resolveWhatsAppConfig } from '@/lib/whatsapp/account-config';
 
 /** Thrown by createBroadcast on a caller-visible failure; route maps it. */
 export class BroadcastError extends Error {
@@ -111,11 +112,9 @@ export async function createBroadcast(
 
   // Config (fail fast + provides the audit trail owner already resolved
   // by the caller). Meta send needs phone_number_id + decrypted token.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
+  // Several numbers per account (migration 087): use the Meta one.
+  const config = await resolveWhatsAppConfig(db, accountId, { provider: 'meta' }).catch(() => null);
+  const configError = config ? null : true;
   if (configError || !config) {
     throw new BroadcastError(
       'whatsapp_not_configured',

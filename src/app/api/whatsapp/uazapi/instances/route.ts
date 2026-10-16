@@ -26,11 +26,21 @@ export async function GET() {
       return NextResponse.json({ configured: false, instances: [], boundInstanceId: null })
     }
 
-    const { data: config } = await supabase
+    // Several numbers per account (migration 087). Adoption and the
+    // other-server notice look at the primary number, as before.
+    const { data: configRows } = await supabase
       .from('whatsapp_config')
-      .select('provider, uazapi_base_url, uazapi_instance_id, uazapi_instance_name')
+      .select('provider, uazapi_base_url, uazapi_instance_id, uazapi_instance_name, is_primary, created_at')
       .eq('account_id', accountId)
-      .maybeSingle()
+      .order('created_at', { ascending: true })
+    const configs = (configRows ?? []) as {
+      provider: string
+      uazapi_base_url: string | null
+      uazapi_instance_id: string | null
+      uazapi_instance_name: string | null
+      is_primary?: boolean
+    }[]
+    const config = configs.find((c) => c.is_primary) ?? configs[0] ?? null
 
     const all = await loadInstances(server)
     const owned = await adoptForAccount(server, all, accountId, {
@@ -48,7 +58,12 @@ export async function GET() {
     const body: Record<string, unknown> = {
       configured: true,
       instances: owned.map(toPublicInstance),
+      // Kept for older clients: the primary number.
       boundInstanceId: config?.uazapi_instance_id ?? null,
+      boundInstanceIds: configs
+        .map((c) => c.uazapi_instance_id)
+        .filter((v): v is string => !!v),
+      primaryInstanceId: config?.uazapi_instance_id ?? null,
       otherServer,
     }
 

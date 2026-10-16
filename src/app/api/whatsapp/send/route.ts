@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { canOverrideAssignment } from '@/lib/auth/roles'
+import { primaryWhatsAppConfigId } from '@/lib/whatsapp/account-config'
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -308,11 +309,15 @@ async function findOrCreateConversation(
   userId: string,
   contactId: string,
 ): Promise<{ id: string; isNew: boolean; assignedAgentId: string | null } | null> {
+  // A contact can have one conversation per WhatsApp number (migration
+  // 087): reuse the one they talked on most recently.
   const { data: existing } = await supabase
     .from('conversations')
     .select('id, assigned_agent_id')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .limit(1)
     .maybeSingle()
 
   if (existing) {
@@ -326,6 +331,9 @@ async function findOrCreateConversation(
       user_id: userId,
       contact_id: contactId,
       assigned_agent_id: userId,
+      // None yet: the CRM opens it on the primary number.
+      whatsapp_config_id: await primaryWhatsAppConfigId(supabase, accountId).catch(() => null),
+      channel: 'whatsapp',
     })
     .select('id')
     .single()

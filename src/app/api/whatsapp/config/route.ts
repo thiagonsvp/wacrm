@@ -92,6 +92,10 @@ export async function GET() {
         'id, phone_number_id, access_token, status, provider, uazapi_base_url, uazapi_instance_name, uazapi_token',
       )
       .eq('account_id', accountId)
+      // Several numbers per account (087): this form manages the primary.
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle()
 
     if (configError) {
@@ -337,6 +341,10 @@ export async function POST(request: Request) {
       .from('whatsapp_config')
       .select('id, registered_at, phone_number_id')
       .eq('account_id', accountId)
+      // Several numbers per account (087): this form manages the primary.
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle()
 
     const sameNumber =
@@ -432,6 +440,7 @@ export async function POST(request: Request) {
         .from('whatsapp_config')
         .update(baseRow)
         .eq('account_id', accountId)
+        .eq('id', existing.id)
 
       if (updateError) {
         console.error('Error updating whatsapp_config:', updateError)
@@ -451,6 +460,8 @@ export async function POST(request: Request) {
           account_id: accountId,
           user_id: user.id,
           ...baseRow,
+          // Only reached when the account has no number yet (087).
+          is_primary: true,
         })
 
       if (insertError) {
@@ -591,6 +602,10 @@ async function saveUazapiConfig(
       .from('whatsapp_config')
       .select('uazapi_instance_name, status')
       .eq('account_id', accountId)
+      // Several numbers per account (087): this form manages the primary.
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle()
 
     if (currentError) {
@@ -645,6 +660,10 @@ async function saveUazapiConfig(
     .from('whatsapp_config')
     .select('id')
     .eq('account_id', accountId)
+    // Several numbers per account (087): this form manages the primary.
+    .order('is_primary', { ascending: false })
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle()
 
   const baseRow = {
@@ -666,6 +685,7 @@ async function saveUazapiConfig(
       .from('whatsapp_config')
       .update(baseRow)
       .eq('account_id', accountId)
+      .eq('id', existing.id)
     if (updateError) {
       console.error('Error updating whatsapp_config (uazapi):', updateError)
       return NextResponse.json(
@@ -678,6 +698,7 @@ async function saveUazapiConfig(
       account_id: accountId,
       user_id: userId,
       ...baseRow,
+      is_primary: true,
     })
     if (insertError) {
       console.error('Error inserting whatsapp_config (uazapi):', insertError)
@@ -720,10 +741,26 @@ export async function DELETE() {
       )
     }
 
-    const { error: deleteError } = await supabase
+    // Several numbers per account (087): this form removes the primary
+    // number only, and the next oldest takes over as primary.
+    const { data: rows } = await supabase
       .from('whatsapp_config')
-      .delete()
+      .select('id, is_primary')
       .eq('account_id', accountId)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true })
+    const [primary, ...others] = rows ?? []
+
+    const { error: deleteError } = primary
+      ? await supabase
+          .from('whatsapp_config')
+          .delete()
+          .eq('account_id', accountId)
+          .eq('id', primary.id)
+      : { error: null }
+    if (!deleteError && primary?.is_primary && others[0]) {
+      await supabase.from('whatsapp_config').update({ is_primary: true }).eq('id', others[0].id)
+    }
 
     if (deleteError) {
       console.error('Error deleting whatsapp_config:', deleteError)

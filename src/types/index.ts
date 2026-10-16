@@ -198,6 +198,9 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   contact?: Contact;
+  /** The WhatsApp number this conversation lives on (migration 087).
+   *  Replies go out through it; null for Instagram / Messenger. */
+  whatsapp_config_id?: string | null;
   /**
    * AI auto-reply state for this thread (migration 029 + 033):
    *  - `ai_autoreply_disabled` — the bot is paused here (a human took

@@ -45,6 +45,9 @@ interface ListResponse {
   configured: boolean;
   instances: PublicInstance[];
   boundInstanceId: string | null;
+  /** Every number bound to this company (several since migration 087). */
+  boundInstanceIds?: string[];
+  primaryInstanceId?: string | null;
   otherServer?: boolean;
   unowned?: PublicInstance[];
   accounts?: { id: string; name: string }[];
@@ -144,6 +147,23 @@ export function UazapiInstances() {
           void load();
         }
       }, 3000);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Several numbers can be bound to one company (migration 087).
+  function isBound(id: string): boolean {
+    return (data?.boundInstanceIds ?? (data?.boundInstanceId ? [data.boundInstanceId] : [])).includes(id);
+  }
+
+  async function makePrimary(id: string) {
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/whatsapp/uazapi/instances/${id}/primary`, { method: 'POST' });
+      if (!response.ok) return toast.error(t('genericError'));
+      toast.success('Número principal atualizado.');
+      await load();
     } finally {
       setBusyId(null);
     }
@@ -361,9 +381,12 @@ export function UazapiInstances() {
                     {instance.owner ? ` · ${instance.owner}` : ''}
                     {instance.profileName ? ` · ${instance.profileName}` : ''}
                   </span>
-                  {data.boundInstanceId === instance.id && (
-                    <Badge>{t('bound')}</Badge>
-                  )}
+                  {isBound(instance.id) && <Badge>{t('bound')}</Badge>}
+                  {isBound(instance.id) &&
+                    (data.boundInstanceIds?.length ?? 0) > 1 &&
+                    data.primaryInstanceId === instance.id && (
+                      <Badge variant="outline">Principal</Badge>
+                    )}
                   <span className="ml-auto flex flex-wrap gap-2">
                     <Button
                       size="sm"
@@ -391,7 +414,7 @@ export function UazapiInstances() {
                         {t('generateLink')}
                       </Button>
                     )}
-                    {data.boundInstanceId !== instance.id && (
+                    {!isBound(instance.id) && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -401,6 +424,19 @@ export function UazapiInstances() {
                         {t('bind')}
                       </Button>
                     )}
+                    {isBound(instance.id) &&
+                      (data.boundInstanceIds?.length ?? 0) > 1 &&
+                      data.primaryInstanceId !== instance.id && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busyId === instance.id}
+                          onClick={() => makePrimary(instance.id)}
+                          title="Número usado quando o CRM inicia uma conversa"
+                        >
+                          Tornar principal
+                        </Button>
+                      )}
                     <Button
                       size="sm"
                       variant="outline"

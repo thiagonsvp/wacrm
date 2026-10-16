@@ -460,7 +460,8 @@ async function processUazapiWebhook(
       db,
       config.account_id,
       config.user_id,
-      contactOutcome.contact.id
+      contactOutcome.contact.id,
+      config.id
     );
     if (!convResult) return;
     await persistAgentDeviceMessage({
@@ -560,7 +561,9 @@ async function processUazapiWebhook(
     db,
     config.account_id,
     config.user_id,
-    contactOutcome.contact.id
+    contactOutcome.contact.id,
+    // The number this message arrived on: one conversation per number.
+    config.id
   );
   if (!convResult) {
     await avatarTask;

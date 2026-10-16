@@ -30,6 +30,7 @@ import {
   PanelRightClose,
   Info,
   CalendarClock,
+  Smartphone,
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useTranslations } from 'next-intl';
@@ -54,6 +55,7 @@ import { deleteAccountMedia } from '@/lib/storage/upload-media';
 import { TemplatePicker } from './template-picker';
 import { AiThreadBanner } from './ai-thread-banner';
 import { ContactAvatar } from './contact-avatar';
+import { useWhatsAppNumbers } from '@/hooks/use-whatsapp-numbers';
 import {
   ScheduleMessageDialog,
   useScheduledMessages,
@@ -205,6 +207,9 @@ export function MessageThread({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const scheduled = useScheduledMessages(conversation?.id ?? null);
+  // Several WhatsApp numbers per company (migration 087): say which one
+  // this customer wrote to — replies go out through it.
+  const whatsappNumbers = useWhatsAppNumbers();
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
@@ -935,8 +940,19 @@ export function MessageThread({
             className="h-9 w-9 text-sm"
           />
           <div className="min-w-0">
-            <h2 className="text-foreground truncate text-sm font-semibold">
-              {displayName}
+            <h2 className="text-foreground flex min-w-0 items-center gap-1.5 text-sm font-semibold">
+              <span className="truncate">{displayName}</span>
+              {whatsappNumbers.multiple && conversation.whatsapp_config_id && (
+                <span
+                  title="Número em que o cliente está falando (as respostas saem por ele)"
+                  className="border-border text-muted-foreground inline-flex max-w-32 shrink-0 items-center gap-0.5 rounded border px-1 text-[10px] font-normal"
+                >
+                  <Smartphone className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">
+                    {whatsappNumbers.byId.get(conversation.whatsapp_config_id)?.label ?? 'Outro número'}
+                  </span>
+                </span>
+              )}
             </h2>
             {/* Second line: the tags are what an agent needs at a glance
                 on a phone — where the lead came from, whether they are a

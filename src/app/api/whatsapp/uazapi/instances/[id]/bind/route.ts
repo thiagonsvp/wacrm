@@ -2,10 +2,10 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
-import { decrypt, encrypt } from '@/lib/whatsapp/encryption'
+import { encrypt } from '@/lib/whatsapp/encryption'
 import { setWebhook } from '@/lib/whatsapp/providers/uazapi'
 import { getUazapiServer, requireOwnedInstance } from '@/lib/whatsapp/uazapi-admin'
-import { buildBindInsert, buildBindRow, decideBindConflict } from '@/lib/whatsapp/uazapi-bind'
+import { buildBindInsert, buildBindRow } from '@/lib/whatsapp/uazapi-bind'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _adminClient: any = null
@@ -32,7 +32,6 @@ export async function POST(
     }
 
     const instance = await requireOwnedInstance(server, accountId, id)
-    const payload = (await request.json().catch(() => ({}))) as { replace_existing?: boolean }
 
     const { data: claimed, error: claimedError } = await supabaseAdmin()
       .from('whatsapp_config')
@@ -49,55 +48,42 @@ export async function POST(
       return NextResponse.json({ error: 'instance_claimed', owner: owner ?? null }, { status: 409 })
     }
 
-    const { data: current, error: currentError } = await supabase
+    // An account can have several numbers (migration 087). Binding adds
+    // this instance next to the others; it never replaces another number.
+    //   * already bound here  -> refresh that row (new token / webhook);
+    //   * an emptied row left by a deleted instance -> reuse it;
+    //   * otherwise -> a new row; the account's first number is primary.
+    const { data: rows, error: rowsError } = await supabase
       .from('whatsapp_config')
-      .select('id, provider, status, uazapi_instance_id, uazapi_instance_name, uazapi_token, phone_number_id')
+      .select('id, provider, uazapi_instance_id, uazapi_token, is_primary')
       .eq('account_id', accountId)
-      .maybeSingle()
-    if (currentError) {
-      console.error('[uazapi/bind] current config check failed:', currentError)
+    if (rowsError) {
+      console.error('[uazapi/bind] current config check failed:', rowsError)
       return NextResponse.json({ error: 'current_check_failed' }, { status: 503 })
     }
-
-    const conflict = decideBindConflict({
-      current: current ? {
-        provider: current.provider,
-        status: current.status,
-        uazapi_instance_id: current.uazapi_instance_id,
-        uazapi_instance_name: current.uazapi_instance_name,
-        phone_number_id: current.phone_number_id,
-      } : null,
-      newInstanceId: instance.id,
-      newInstanceName: instance.name,
-      replaceExisting: payload.replace_existing === true,
-    })
-    if (conflict) {
-      return NextResponse.json({
-        error: conflict.reason,
-        requires_confirmation: true,
-        current_instance: conflict.currentInstanceName ?? null,
-        new_instance: instance.name,
-      }, { status: 409 })
-    }
-
-    let previousToken: string | null = null
-    if (current?.uazapi_token && current.uazapi_instance_id && current.uazapi_instance_id !== instance.id) {
-      try { previousToken = decrypt(current.uazapi_token) } catch { previousToken = null }
-    }
+    const existing =
+      (rows ?? []).find((r: { uazapi_instance_id: string | null }) => r.uazapi_instance_id === instance.id) ??
+      (rows ?? []).find(
+        (r: { provider: string; uazapi_instance_id: string | null; uazapi_token: string | null }) =>
+          r.provider === 'uazapi' && !r.uazapi_instance_id && !r.uazapi_token,
+      ) ??
+      null
 
     const row = buildBindRow({ baseUrl: server.baseUrl, instance, encryptToken: encrypt })
     let configId: string
-    if (current) {
+    if (existing) {
       const { data, error } = await supabase.from('whatsapp_config')
-        .update(row).eq('account_id', accountId).select('id').single()
+        .update(row).eq('id', existing.id).eq('account_id', accountId).select('id').single()
       if (error || !data) {
         console.error('[uazapi/bind] update failed:', error)
         return NextResponse.json({ error: 'save_failed' }, { status: 500 })
       }
       configId = data.id
     } else {
+      const hasPrimary = (rows ?? []).some((r: { is_primary?: boolean }) => r.is_primary)
       const { data, error } = await supabase.from('whatsapp_config')
-        .insert(buildBindInsert(row, accountId, userId)).select('id').single()
+        .insert({ ...buildBindInsert(row, accountId, userId), is_primary: !hasPrimary })
+        .select('id').single()
       if (error || !data) {
         console.error('[uazapi/bind] insert failed:', error)
         return NextResponse.json({ error: 'save_failed' }, { status: 500 })
@@ -111,14 +97,6 @@ export async function POST(
     } catch (err) {
       console.error('[uazapi/bind] setWebhook failed:', err)
       return NextResponse.json({ error: 'webhook_failed' }, { status: 502 })
-    }
-
-    if (previousToken) {
-      try {
-        await setWebhook({ baseUrl: server.baseUrl, token: previousToken, webhookUrl, enabled: false })
-      } catch (err) {
-        console.error('[uazapi/bind] disabling previous webhook failed:', err)
-      }
     }
 
     return NextResponse.json({ success: true })

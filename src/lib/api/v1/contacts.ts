@@ -73,10 +73,13 @@ export async function resolveAuditUserId(
   db: SupabaseClient,
   accountId: string
 ): Promise<string> {
+  // Several numbers per account (migration 087): the oldest one's owner.
   const { data: config } = await db
     .from('whatsapp_config')
     .select('user_id')
     .eq('account_id', accountId)
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle();
   const configOwner = config?.user_id as string | undefined;
   if (configOwner) return configOwner;

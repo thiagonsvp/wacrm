@@ -17,6 +17,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { supabaseAdmin } from './admin-client'
+import { resolveWhatsAppConfig } from '@/lib/whatsapp/account-config'
 
 // ------------------------------------------------------------
 // Flows-side Meta sender (interactive variants).
@@ -83,12 +84,11 @@ export async function engineSendText(
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', args.accountId)
-    .single()
-  if (configErr || !config) {
+  // The number this conversation lives on (an account can have several).
+  const config = await resolveWhatsAppConfig(db, args.accountId, {
+    conversationId: args.conversationId,
+  }).catch(() => null)
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
   const isUazapi = config.provider === 'uazapi'
@@ -213,12 +213,11 @@ export async function engineSendMedia(
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', args.accountId)
-    .single()
-  if (configErr || !config) {
+  // The number this conversation lives on (an account can have several).
+  const config = await resolveWhatsAppConfig(db, args.accountId, {
+    conversationId: args.conversationId,
+  }).catch(() => null)
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
   if (config.provider !== 'meta') {
@@ -370,12 +369,11 @@ async function sendInteractiveViaMeta(
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', input.accountId)
-    .single()
-  if (configErr || !config) {
+  // The number this conversation lives on (an account can have several).
+  const config = await resolveWhatsAppConfig(db, input.accountId, {
+    conversationId: input.conversationId,
+  }).catch(() => null)
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
   if (config.provider !== 'meta') {

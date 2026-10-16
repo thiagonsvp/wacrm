@@ -166,21 +166,29 @@ export async function findOrCreateConversation(
   accountId: string,
   configOwnerUserId: string,
   contactId: string,
+  /** The WhatsApp number this message came in on (migration 087). One
+   *  conversation per contact PER NUMBER, so replies go out on the number
+   *  the customer wrote to. Omitted only by callers with no number. */
+  whatsappConfigId?: string | null,
 ): Promise<ConversationOutcome | null> {
-  // Do not use `.single()` here: historical duplicate rows (created by
-  // older inbound versions) make it return an error, which previously
-  // caused every new message to create yet another conversation.
-  const { data: existingRows, error: findError } = await db
-    .from('conversations')
-    .select('*')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-
-  if (!findError && existingRows?.[0]) {
-    return { conversation: existingRows[0], created: false }
+  const find = async () => {
+    // Do not use `.single()` here: historical duplicate rows (created by
+    // older inbound versions) make it return an error, which previously
+    // caused every new message to create yet another conversation.
+    let query = db
+      .from('conversations')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId)
+    if (whatsappConfigId) query = query.eq('whatsapp_config_id', whatsappConfigId)
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(1)
+    return error ? null : (data?.[0] ?? null)
   }
+
+  const existing = await find()
+  if (existing) return { conversation: existing, created: false }
 
   const { data: newConv, error: createError } = await db
     .from('conversations')
@@ -189,11 +197,16 @@ export async function findOrCreateConversation(
       user_id: configOwnerUserId,
       contact_id: contactId,
       status: 'pending',
+      ...(whatsappConfigId ? { whatsapp_config_id: whatsappConfigId, channel: 'whatsapp' } : {}),
     })
     .select()
     .single()
 
   if (createError) {
+    // Two messages from a new lead arriving together both miss the lookup;
+    // the unique index lets one insert win — use that row.
+    const raced = await find()
+    if (raced) return { conversation: raced, created: false }
     console.error('[inbound] Error creating conversation:', createError)
     return null
   }

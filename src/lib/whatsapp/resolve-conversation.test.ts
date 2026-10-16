@@ -39,6 +39,8 @@ function makeDb(script: Script): SupabaseClient {
       return builder;
     },
     eq: () => builder,
+    order: () => builder,
+    limit: () => builder,
     like: () => {
       const data = script.contactCandidatesByCall
         ? (script.contactCandidatesByCall[likeCalls] ?? [])
@@ -75,9 +77,18 @@ function makeDb(script: Script): SupabaseClient {
         });
       return Promise.resolve({ data: null, error: null });
     },
-    // Thenable: `await db.from().update().eq()` lands here.
-    then: (resolve: (v: { data: null; error: null }) => void) =>
-      resolve({ data: null, error: null }),
+    // Thenable: `await db.from().update().eq()` lands here, and so does
+    // the list of the account's numbers (several since migration 087).
+    then: (resolve: (v: { data: unknown; error: null }) => void) =>
+      resolve({
+        data:
+          table === 'whatsapp_config'
+            ? script.config
+              ? [{ id: 'cfg-1', account_id: 'acc', is_primary: true, ...script.config }]
+              : []
+            : null,
+        error: null,
+      }),
   };
 
   return {

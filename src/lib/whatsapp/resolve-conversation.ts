@@ -23,6 +23,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
 import { SendMessageError } from '@/lib/whatsapp/send-message';
+import { primaryWhatsAppConfigId } from '@/lib/whatsapp/account-config';
 import { resolveAuditUserId, ContactError } from '@/lib/api/v1/contacts';
 
 export interface ResolvedConversation {
@@ -55,12 +56,10 @@ export async function resolveConversationByPhone(
 
   // Fail fast (and create nothing) when the account has no WhatsApp
   // connected — the same error the send would raise anyway.
-  const { data: config } = await db
-    .from('whatsapp_config')
-    .select('id')
-    .eq('account_id', accountId)
-    .maybeSingle();
-  if (!config) {
+  // A conversation the CRM opens itself goes out on the primary number
+  // (an account can have several, migration 087).
+  const configId = await primaryWhatsAppConfigId(db, accountId).catch(() => null);
+  if (!configId) {
     throw new SendMessageError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -137,13 +136,15 @@ export async function resolveConversationByPhone(
   }
 
   // ---- conversation -------------------------------------------
-  // One conversation per (account, contact) — same convention as the
-  // webhook.
+  // One conversation per (account, contact, number) — same convention as
+  // the webhook; the CRM-initiated one lives on the primary number.
   const { data: conv } = await db
     .from('conversations')
     .select('id')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
+    .eq('whatsapp_config_id', configId)
+    .limit(1)
     .maybeSingle();
 
   if (conv?.id) {
@@ -156,6 +157,8 @@ export async function resolveConversationByPhone(
       account_id: accountId,
       user_id: ownerUserId,
       contact_id: contactId,
+      whatsapp_config_id: configId,
+      channel: 'whatsapp',
     })
     .select('id')
     .single();

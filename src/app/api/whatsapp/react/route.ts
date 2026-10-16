@@ -8,6 +8,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit';
+import { resolveWhatsAppConfig } from '@/lib/whatsapp/account-config';
 
 /**
  * POST /api/whatsapp/react
@@ -109,11 +110,11 @@ export async function POST(request: Request) {
     }
 
     // WhatsApp config + access token. Account-scoped post-multi-user.
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('provider, phone_number_id, access_token')
-      .eq('account_id', accountId)
-      .single();
+    // The number this conversation lives on (migration 087).
+    const config = await resolveWhatsAppConfig(supabase, accountId, {
+      conversationId: conversation.id,
+    }).catch(() => null);
+    const configError = config ? null : true;
 
     if (configError || !config) {
       return NextResponse.json(

@@ -5,6 +5,7 @@ import {
   getSubscribedApps,
   verifyPhoneNumber,
 } from '@/lib/whatsapp/meta-api'
+import { resolveWhatsAppConfig } from '@/lib/whatsapp/account-config'
 
 /**
  * GET /api/whatsapp/config/verify-registration
@@ -55,11 +56,8 @@ export async function GET() {
     })
   }
 
-  const { data: config } = await supabase
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .maybeSingle()
+  // Registration is a Meta concept; use the Meta number (migration 087).
+  const config = await resolveWhatsAppConfig(supabase, accountId, { provider: 'meta' }).catch(() => null)
 
   if (!config) {
     return NextResponse.json({

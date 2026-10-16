@@ -51,15 +51,21 @@ describe('engineSendText with UAZAPI', () => {
 
       if (table === 'whatsapp_config') {
         return {
+          // The account's numbers (several since migration 087).
           select: () => ({
             eq: () => ({
-              single: async () => ({
-                data: {
-                  provider: 'uazapi',
-                  uazapi_base_url: 'https://uazapi.example',
-                  uazapi_token: 'encrypted-token',
-                  access_token: null,
-                },
+              order: async () => ({
+                data: [
+                  {
+                    id: 'cfg-1',
+                    account_id: 'account-1',
+                    is_primary: true,
+                    provider: 'uazapi',
+                    uazapi_base_url: 'https://uazapi.example',
+                    uazapi_token: 'encrypted-token',
+                    access_token: null,
+                  },
+                ],
                 error: null,
               }),
             }),
@@ -73,6 +79,14 @@ describe('engineSendText with UAZAPI', () => {
 
       if (table === 'conversations') {
         return {
+          // Which number the conversation lives on.
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: { whatsapp_config_id: 'cfg-1' }, error: null }),
+              }),
+            }),
+          }),
           update: vi.fn(() => ({
             eq: vi.fn().mockResolvedValue({ error: null }),
           })),

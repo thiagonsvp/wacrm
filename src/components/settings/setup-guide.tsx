@@ -186,6 +186,10 @@ export function SetupGuide({
           .from('whatsapp_config')
           .select('provider, status')
           .eq('account_id', accountId)
+          // Several numbers per account (087): show the primary one.
+          .order('is_primary', { ascending: false })
+          .order('created_at', { ascending: true })
+          .limit(1)
           .maybeSingle(),
         supabase
           .from('pipeline_stages')
