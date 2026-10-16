@@ -942,17 +942,20 @@ export function MessageThread({
           <div className="min-w-0">
             <h2 className="text-foreground flex min-w-0 items-center gap-1.5 text-sm font-semibold">
               <span className="truncate">{displayName}</span>
-              {whatsappNumbers.multiple && conversation.whatsapp_config_id && (
-                <span
-                  title="Número em que o cliente está falando (as respostas saem por ele)"
-                  className="border-border text-muted-foreground inline-flex max-w-32 shrink-0 items-center gap-0.5 rounded border px-1 text-[10px] font-normal"
-                >
-                  <Smartphone className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate">
-                    {whatsappNumbers.byId.get(conversation.whatsapp_config_id)?.label ?? 'Outro número'}
+              {whatsappNumbers.multiple && conversation.whatsapp_config_id && (() => {
+                const number = whatsappNumbers.byId.get(conversation.whatsapp_config_id);
+                const color = number?.color ?? '#64748b';
+                return (
+                  <span
+                    title="Número em que o cliente está falando (as respostas saem por ele)"
+                    className="inline-flex max-w-36 shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold"
+                    style={{ backgroundColor: `${color}1f`, color, boxShadow: `inset 0 0 0 1px ${color}55` }}
+                  >
+                    <Smartphone className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{number?.label ?? 'Outro número'}</span>
                   </span>
-                </span>
-              )}
+                );
+              })()}
             </h2>
             {/* Second line: the tags are what an agent needs at a glance
                 on a phone — where the lead came from, whether they are a

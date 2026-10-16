@@ -624,9 +624,9 @@ export function ConversationList({
                     : null
                 }
                 sellerId={conv.assigned_agent_id ?? null}
-                numberLabel={
+                number={
                   whatsappNumbers.multiple && conv.whatsapp_config_id
-                    ? whatsappNumbers.byId.get(conv.whatsapp_config_id)?.label ?? null
+                    ? whatsappNumbers.byId.get(conv.whatsapp_config_id) ?? null
                     : null
                 }
                 t={t}
@@ -648,7 +648,7 @@ interface ConversationItemProps {
   sellerId: string | null;
   /** Which of the company's numbers this lead wrote to; null when the
    *  company has only one number (nothing to tell apart). */
-  numberLabel: string | null;
+  number: { label: string; color: string } | null;
   t: ReturnType<typeof useTranslations>;
 }
 
@@ -658,7 +658,7 @@ function ConversationItem({
   onSelect,
   sellerName,
   sellerId,
-  numberLabel,
+  number,
   t,
 }: ConversationItemProps) {
   const contact = conversation.contact;
@@ -703,23 +703,26 @@ function ConversationItem({
             {displayName}
           </span>
           {source && <LeadSourceIcon source={source} />}
-          {numberLabel && (
-            <span
-              title={`Número: ${numberLabel}`}
-              className="inline-flex max-w-20 shrink-0 items-center gap-0.5 rounded border border-border px-1 text-[10px] text-muted-foreground"
-            >
-              <Smartphone className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{numberLabel}</span>
-            </span>
-          )}
           <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
         </div>
         {/* Seller + tags. Who owns the lead comes first — it is what a
             manager scans the list for — then where the lead came from and
             what kind of contact it is. Capped so a heavily tagged contact
             cannot push the row to a third line. */}
-        {(sellerName || rowTags.length > 0) && (
+        {(number || sellerName || rowTags.length > 0) && (
           <div className="mt-1 flex items-center gap-1 overflow-hidden">
+            {/* Which of the company's numbers the lead wrote to — first,
+                because it decides which phone the reply leaves from. */}
+            {number && (
+              <span
+                title={`Número: ${number.label}`}
+                className="inline-flex max-w-24 shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{ backgroundColor: `${number.color}1f`, color: number.color, boxShadow: `inset 0 0 0 1px ${number.color}55` }}
+              >
+                <Smartphone className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{number.label}</span>
+              </span>
+            )}
             {sellerName && sellerId && (
               <span
                 title={`Responsável: ${sellerName}`}
