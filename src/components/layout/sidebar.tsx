@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { CompanySwitcher } from './company-switcher';
@@ -29,6 +29,8 @@ import {
   Workflow,
   X,
   Zap,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import Image from 'next/image';
 import type { AccountRole } from '@/lib/auth/roles';
@@ -182,7 +184,38 @@ interface SidebarProps {
 
 import { useTranslations } from 'next-intl';
 
+// Desktop "collapse to icons", remembered per browser. Read through
+// useSyncExternalStore so the server render (expanded) and the first client
+// render agree, then the stored choice applies without a hydration warning.
+const COLLAPSE_KEY = 'sidebar-collapsed';
+const COLLAPSE_EVENT = 'sidebar-collapsed-change';
+function subscribeCollapsed(cb: () => void) {
+  window.addEventListener('storage', cb);
+  window.addEventListener(COLLAPSE_EVENT, cb);
+  return () => {
+    window.removeEventListener('storage', cb);
+    window.removeEventListener(COLLAPSE_EVENT, cb);
+  };
+}
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function setCollapsed(next: boolean) {
+  try {
+    localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
+  } catch {
+    // Private mode: the toggle still works for this page view.
+  }
+  window.dispatchEvent(new Event(COLLAPSE_EVENT));
+}
+
 export function Sidebar({ open = false, onClose }: SidebarProps) {
+  // Desktop only: on a phone the sidebar is a drawer and never collapses.
+  const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
   const t = useTranslations('Sidebar');
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, isSuperAdmin, signOut } = useAuth();
@@ -260,14 +293,20 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           'transition-transform duration-200 ease-out will-change-transform',
           open ? 'translate-x-0' : '-translate-x-full',
           // Desktop: static, always visible — reset all the mobile framing.
-          'lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none'
+          'lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-[width] lg:duration-200',
+          collapsed && 'lg:w-16'
         )}
         aria-label="Primary"
       >
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
-        <div className="border-border flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
+        <div
+          className={cn(
+            'border-border flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4',
+            collapsed && 'lg:justify-center lg:px-2'
+          )}
+        >
+          <Link href="/dashboard" className={cn('flex items-center gap-2', collapsed && 'lg:hidden')}>
             <div className="relative h-8 w-8 overflow-hidden rounded-lg">
               <Image
                 src="/Natividade%202.png"
@@ -283,6 +322,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </Link>
           <button
             type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            aria-expanded={!collapsed}
+            className="text-muted-foreground hover:bg-muted hover:text-foreground hidden h-8 w-8 items-center justify-center rounded-md lg:flex"
+          >
+            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
             onClick={onClose}
             aria-label={t('closeMenu')}
             className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-9 w-9 items-center justify-center rounded-md lg:hidden"
@@ -292,7 +341,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         </div>
 
         {/* Main navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <nav className={cn('flex-1 overflow-y-auto px-3 py-4', collapsed && 'lg:px-2')}>
           <ul className="flex flex-col gap-1">
             {visibleNav.map((item) => {
               const isActive =
@@ -313,17 +362,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    title={collapsed ? t(item.labelKey as string) : undefined}
                     className={cn(
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
-                      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2',
+                      'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2',
+                      collapsed && 'lg:justify-center lg:px-0',
                       isActive
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{t(item.labelKey as string)}</span>
-                    {item.beta && (
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className={cn('flex-1', collapsed && 'lg:hidden')}>{t(item.labelKey as string)}</span>
+                    {/* Collapsed: unread counts shrink to a dot on the icon. */}
+                    {collapsed && (showUnreadDot || showNotificationBadge) && (
+                      <span className="bg-primary absolute top-1.5 right-1.5 hidden h-2 w-2 rounded-full lg:block" />
+                    )}
+                    {item.beta && !collapsed && (
                       <span
                         aria-label={t('beta')}
                         className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-300 uppercase"
@@ -331,7 +386,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                         {t('beta')}
                       </span>
                     )}
-                    {showUnreadDot && (
+                    {showUnreadDot && !collapsed && (
                       <span
                         aria-label={t('unreadConversations', {
                           count: totalUnread,
@@ -342,7 +397,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                         <span className="bg-primary relative inline-flex h-2 w-2 rounded-full" />
                       </span>
                     )}
-                    {showNotificationBadge && (
+                    {showNotificationBadge && !collapsed && (
                       <span
                         aria-label={t('unreadNotifications', {
                           count: unreadNotifications,
@@ -367,15 +422,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    title={collapsed ? t(item.labelKey as string) : undefined}
                     className={cn(
                       'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2',
+                      collapsed && 'lg:justify-center lg:px-0',
                       isActive
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
-                    {t(item.labelKey as string)}
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className={cn(collapsed && 'lg:hidden')}>{t(item.labelKey as string)}</span>
                   </Link>
                 </li>
               );
@@ -384,7 +441,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         </nav>
 
         {/* User section */}
-        <div className="border-border shrink-0 border-t p-3">
+        <div className={cn('border-border shrink-0 border-t p-3', collapsed && 'lg:px-2')}>
           {/* Account name display — surfaced only when the account
               name differs from the user's own name (see
               `showAccountStrip`). For a default solo account the two
@@ -394,6 +451,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           {/* Which company you are acting in. Becomes a picker for
               operators who belong to more than one; stays a plain strip
               for everyone else, so a single-company user sees no change. */}
+          <div className={cn(collapsed && 'lg:hidden')}>
           <CompanySwitcher
             fallbackName={account?.name}
             fallbackRole={accountRole}
@@ -411,8 +469,15 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               );
             }}
           />
+          </div>
           <DropdownMenu>
-            <DropdownMenuTrigger className="hover:bg-muted/60 focus:bg-muted/60 data-popup-open:bg-muted/60 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none">
+            <DropdownMenuTrigger
+              title={collapsed ? (profile?.full_name ?? undefined) : undefined}
+              className={cn(
+                'hover:bg-muted/60 focus:bg-muted/60 data-popup-open:bg-muted/60 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none',
+                collapsed && 'lg:justify-center lg:px-0'
+              )}
+            >
               <Avatar className="size-8 shrink-0">
                 {profile?.avatar_url ? (
                   <AvatarImage
@@ -426,7 +491,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="min-w-0 flex-1">
+              <div className={cn('min-w-0 flex-1', collapsed && 'lg:hidden')}>
                 <p className="text-foreground truncate text-sm font-medium">
                   {profile?.full_name ?? t('defaultUser')}
                 </p>
