@@ -423,6 +423,23 @@ export function MessageComposer({
     [stageUpload],
   );
 
+  // Ctrl+V of a screenshot or copied file stages it as an attachment, like
+  // WhatsApp Web. Plain-text pastes fall through to the textarea untouched.
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const file = Array.from(e.clipboardData.files)[0];
+      if (!file) return;
+      e.preventDefault();
+      const kind: "image" | "video" | "document" = file.type.startsWith("image/")
+        ? "image"
+        : file.type.startsWith("video/")
+          ? "video"
+          : "document";
+      void stageUpload(kind, file);
+    },
+    [stageUpload],
+  );
+
   // ---- Voice recording (client-side Ogg/Opus, no server transcode) ---
 
   // The encoded Ogg/Opus file from opus-recorder → upload as an audio
@@ -736,6 +753,7 @@ export function MessageComposer({
             value={text}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={
               assignmentLocked
                 ? t("assignmentLockedPlaceholder")

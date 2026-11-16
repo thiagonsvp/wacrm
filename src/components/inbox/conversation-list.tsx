@@ -296,7 +296,14 @@ export function ConversationList({
       });
     }
 
-    return result;
+    // Newest activity first, like WhatsApp. Realtime handlers patch
+    // last_message_at in place, so the order must be derived here rather
+    // than relying on the initial query's ORDER BY.
+    return [...result].sort((a, b) => {
+      const ta = a.last_message_at ? Date.parse(a.last_message_at) : 0;
+      const tb = b.last_message_at ? Date.parse(b.last_message_at) : 0;
+      return tb - ta;
+    });
   }, [conversations, assignmentFilter, filter, search, selectedTagIds, selectedCompany, selectedNumberId, selectedStageId, contactStageIds, user?.id]);
 
   const toggleTag = useCallback((id: string) => {

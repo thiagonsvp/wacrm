@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { CornerUpLeft, Copy, SmilePlus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -45,7 +45,11 @@ export function MessageActions({
   const isAgent =
     message.sender_type === "agent" || message.sender_type === "bot";
 
+  // Only a touch long-press opens the toolbar. A mouse right-click keeps
+  // the browser's native menu so agents can Copy/Paste selected text.
+  const lastPointerRef = useRef<string>("mouse");
   const handleContextMenu = (e: React.MouseEvent) => {
+    if (lastPointerRef.current !== "touch") return;
     e.preventDefault();
     setTouchOpen(true);
   };
@@ -85,6 +89,9 @@ export function MessageActions({
         "flex w-full",
         isAgent ? "justify-end" : "justify-start",
       )}
+      onPointerDown={(e) => {
+        lastPointerRef.current = e.pointerType;
+      }}
       onContextMenu={handleContextMenu}
       onBlur={() => setTouchOpen(false)}
     >

@@ -18,6 +18,7 @@ import {
   Plus,
   ExternalLink,
   Pencil,
+  Trash2,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -142,11 +143,46 @@ export function ContactSidebar({ contact, onContactUpdated }: ContactSidebarProp
         .insert({ contact_id: contact.id, tag_id: tag.id })
         .select('id')
         .single();
-      if (!error && data)
+      if (error || !data) {
+        toast.error(tSidebar('tagAddFailed'));
+      } else {
         setTags((prev) => [...prev, { ...tag, contact_tag_id: data.id }]);
+      }
       setTagPickerOpen(false);
     },
-    [contact]
+    [contact, tSidebar]
+  );
+
+  const handleRemoveTag = useCallback(
+    async (contactTagId: string) => {
+      const previous = tags;
+      setTags((prev) => prev.filter((t) => t.contact_tag_id !== contactTagId));
+      const { error } = await createClient()
+        .from('contact_tags')
+        .delete()
+        .eq('id', contactTagId);
+      if (error) {
+        setTags(previous);
+        toast.error(tSidebar('tagRemoveFailed'));
+      }
+    },
+    [tags, tSidebar]
+  );
+
+  const handleDeleteNote = useCallback(
+    async (noteId: string) => {
+      if (!window.confirm(tSidebar('deleteNoteConfirm'))) return;
+      const { error } = await createClient()
+        .from('contact_notes')
+        .delete()
+        .eq('id', noteId);
+      if (error) {
+        toast.error(tSidebar('noteDeleteFailed'));
+        return;
+      }
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    },
+    [tSidebar]
   );
 
   const handleAddDeal = useCallback(async () => {
@@ -249,9 +285,11 @@ export function ContactSidebar({ contact, onContactUpdated }: ContactSidebarProp
     if (!error && data) {
       setNotes((prev) => [data, ...prev]);
       setNewNote('');
+    } else {
+      toast.error(tSidebar('noteAddFailed'));
     }
     setAddingNote(false);
-  }, [contact, newNote, accountId]);
+  }, [contact, newNote, accountId, tSidebar]);
 
   if (!contact) {
     return (
@@ -559,13 +597,22 @@ export function ContactSidebar({ contact, onContactUpdated }: ContactSidebarProp
                 tags.map((tag) => (
                   <span
                     key={tag.contact_tag_id}
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    className="inline-flex items-center gap-0.5 rounded-full py-0.5 pr-1 pl-2 text-[10px] font-medium"
                     style={{
                       backgroundColor: `${tag.color}20`,
                       color: tag.color,
                     }}
                   >
                     {tag.name}
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveTag(tag.contact_tag_id)}
+                      className="rounded-full p-0.5 opacity-60 transition-opacity hover:bg-black/10 hover:opacity-100"
+                      aria-label={tSidebar('removeTag', { name: tag.name })}
+                      title={tSidebar('removeTag', { name: tag.name })}
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
                   </span>
                 ))
               )}
@@ -715,6 +762,12 @@ export function ContactSidebar({ contact, onContactUpdated }: ContactSidebarProp
                 <textarea
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      void handleAddNote();
+                    }
+                  }}
                   placeholder={tSidebar('addNotePlaceholder')}
                   rows={2}
                   className="border-border bg-muted text-foreground placeholder-muted-foreground focus:border-primary/50 flex-1 resize-none rounded-lg border px-3 py-2 text-xs outline-none"
@@ -724,6 +777,8 @@ export function ContactSidebar({ contact, onContactUpdated }: ContactSidebarProp
                   className="bg-primary hover:bg-primary/90 h-auto px-2"
                   onClick={handleAddNote}
                   disabled={!newNote.trim() || addingNote}
+                  aria-label={tSidebar('addNote')}
+                  title={tSidebar('addNote')}
                 >
                   <Plus className="h-3 w-3" />
                 </Button>
@@ -731,13 +786,22 @@ export function ContactSidebar({ contact, onContactUpdated }: ContactSidebarProp
 
               <div className="mt-2 space-y-2">
                 {notes.map((note) => (
-                  <div key={note.id} className="bg-muted rounded-lg px-3 py-2">
-                    <p className="text-muted-foreground text-xs whitespace-pre-wrap">
+                  <div key={note.id} className="group/note bg-muted relative rounded-lg px-3 py-2 pr-7">
+                    <p className="text-muted-foreground text-xs break-words whitespace-pre-wrap">
                       {note.note_text}
                     </p>
                     <p className="text-muted-foreground mt-1 text-[10px]">
-                      {format(new Date(note.created_at), 'MMM d, yyyy HH:mm')}
+                      {format(new Date(note.created_at), 'dd/MM/yyyy HH:mm')}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteNote(note.id)}
+                      className="text-muted-foreground hover:bg-background hover:text-destructive absolute top-1.5 right-1.5 rounded p-1 opacity-60 transition-opacity group-hover/note:opacity-100 focus-visible:opacity-100"
+                      aria-label={tSidebar('deleteNote')}
+                      title={tSidebar('deleteNote')}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
                   </div>
                 ))}
               </div>

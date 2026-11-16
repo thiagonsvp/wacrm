@@ -31,18 +31,22 @@ interface MessageBubbleProps {
   onToggleReaction?: (emoji: string) => void;
 }
 
-function StatusIcon({ status }: { status: Message["status"] }) {
+// WhatsApp-style receipts, drawn on the outbound (primary) fill:
+// ✓ sent, ✓✓ delivered, blue ✓✓ read. Grey ticks use the primary
+// foreground so they stay visible on the coloured bubble.
+function StatusIcon({ status, t }: { status: Message["status"]; t: ReturnType<typeof useTranslations> }) {
+  const base = "h-3.5 w-3.5 shrink-0";
   switch (status) {
     case "sending":
-      return <Clock className="h-3 w-3 text-muted-foreground" />;
+      return <Clock className={cn(base, "text-primary-foreground/60")} aria-label={t("statusSending")} />;
     case "sent":
-      return <Check className="h-3 w-3 text-muted-foreground" />;
+      return <Check className={cn(base, "text-primary-foreground/70")} aria-label={t("statusSent")} />;
     case "delivered":
-      return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
+      return <CheckCheck className={cn(base, "text-primary-foreground/70")} aria-label={t("statusDelivered")} />;
     case "read":
-      return <CheckCheck className="h-3 w-3 text-blue-400" />;
+      return <CheckCheck className={cn(base, "text-[#53bdeb]")} strokeWidth={2.5} aria-label={t("statusRead")} />;
     case "failed":
-      return <XCircle className="h-3 w-3 text-red-400" />;
+      return <XCircle className={cn(base, "text-red-400")} aria-label={t("statusFailed")} />;
     default:
       return null;
   }
@@ -367,7 +371,7 @@ export function MessageBubble({
           >
             {time}
           </span>
-          {isAgent && <StatusIcon status={message.status} />}
+          {isAgent && <StatusIcon status={message.status} t={t} />}
         </div>
       </div>
       {reactions && reactions.length > 0 && onToggleReaction && (

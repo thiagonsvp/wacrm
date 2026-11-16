@@ -257,7 +257,12 @@
       "interactiveReply": "[Resposta interativa]",
       "unsupported": "[Tipo de mensagem não suportado]",
       "aiBadge": "IA",
-      "aiBadgeTitle": "Enviado automaticamente pelo assistente de IA"
+      "aiBadgeTitle": "Enviado automaticamente pelo assistente de IA",
+      "statusSending": "Enviando",
+      "statusSent": "Enviada",
+      "statusDelivered": "Entregue",
+      "statusRead": "Lida",
+      "statusFailed": "Falhou"
     },
     "actions": {
       "reply": "Responder",
@@ -318,7 +323,15 @@
       "placement": "Posicionamento",
       "protocol": "Protocolo",
       "openAd": "Abrir anúncio/campanha",
-      "openLandingPage": "Abrir página de origem"
+      "openLandingPage": "Abrir página de origem",
+      "addNote": "Adicionar nota (Ctrl+Enter)",
+      "deleteNote": "Excluir nota",
+      "deleteNoteConfirm": "Excluir esta nota? Essa ação não pode ser desfeita.",
+      "noteAddFailed": "Não foi possível salvar a nota.",
+      "noteDeleteFailed": "Não foi possível excluir a nota.",
+      "removeTag": "Remover tag {name}",
+      "tagAddFailed": "Não foi possível adicionar a tag.",
+      "tagRemoveFailed": "Não foi possível remover a tag."
     },
     "aiBanner": {
       "pausedTitle": "O assistente de IA está pausado aqui",

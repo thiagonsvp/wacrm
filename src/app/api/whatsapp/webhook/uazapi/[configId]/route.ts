@@ -10,6 +10,11 @@ import {
 } from '@/lib/whatsapp/acquisition-text';
 import { parseUazapiChatIdentity } from '@/lib/whatsapp/uazapi-identity';
 import {
+  parseUazapiReceipt,
+  UPGRADABLE_FROM,
+  type UazapiReceiptPayload,
+} from '@/lib/whatsapp/uazapi-receipts';
+import {
   claimGoogleAdsProtocol,
   resolveGoogleAdsProtocol,
 } from '@/lib/google-ads/protocol';
@@ -354,10 +359,31 @@ async function resolveMediaUrl(
   }
 }
 
+/**
+ * Mirror a customer's delivery/read receipt onto our outbound messages so
+ * the inbox shows ✓ / ✓✓ / blue ✓✓. Forward-only: a late "delivered"
+ * never downgrades a message that is already "read". The realtime UPDATE
+ * on `messages` refreshes the open thread.
+ */
+async function applyUazapiReceipt(body: UazapiReceiptPayload): Promise<void> {
+  const receipt = parseUazapiReceipt(body);
+  if (!receipt) return;
+  const { error } = await supabaseAdmin()
+    .from('messages')
+    .update({ status: receipt.status })
+    .in('message_id', receipt.messageIds)
+    .in('status', UPGRADABLE_FROM[receipt.status]);
+  if (error) console.error('[uazapi-webhook] receipt update failed:', error);
+}
+
 async function processUazapiWebhook(
   body: UazapiWebhookPayload,
   config: UazapiStoredConfig
 ) {
+  if (body.EventType === 'messages_update') {
+    await applyUazapiReceipt(body as UazapiReceiptPayload);
+    return;
+  }
   if (body.EventType !== 'messages') return;
 
   const msg = body.message;

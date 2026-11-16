@@ -257,7 +257,12 @@
       "interactiveReply": "[Interactive reply]",
       "unsupported": "[Unsupported message type]",
       "aiBadge": "AI",
-      "aiBadgeTitle": "Sent automatically by the AI assistant"
+      "aiBadgeTitle": "Sent automatically by the AI assistant",
+      "statusSending": "Sending",
+      "statusSent": "Sent",
+      "statusDelivered": "Delivered",
+      "statusRead": "Read",
+      "statusFailed": "Failed"
     },
     "actions": {
       "reply": "Reply",
@@ -318,7 +323,15 @@
       "placement": "Placement",
       "protocol": "Protocol",
       "openAd": "Open ad/campaign",
-      "openLandingPage": "Open landing page"
+      "openLandingPage": "Open landing page",
+      "addNote": "Add note (Ctrl+Enter)",
+      "deleteNote": "Delete note",
+      "deleteNoteConfirm": "Delete this note? This cannot be undone.",
+      "noteAddFailed": "Could not save the note.",
+      "noteDeleteFailed": "Could not delete the note.",
+      "removeTag": "Remove tag {name}",
+      "tagAddFailed": "Could not add the tag.",
+      "tagRemoveFailed": "Could not remove the tag."
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",
