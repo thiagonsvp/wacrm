@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rejectUnauthorizedCron } from '@/lib/cron-auth'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { backfillConversions } from '@/lib/meta/backfill'
 
@@ -16,13 +17,8 @@ import { backfillConversions } from '@/lib/meta/backfill'
  * `?dry=1` lists what would be sent without sending it.
  */
 export async function GET(request: Request) {
-  const expected = process.env.AUTOMATION_CRON_SECRET
-  if (!expected) {
-    return NextResponse.json({ error: 'cron not configured' }, { status: 503 })
-  }
-  if (request.headers.get('x-cron-secret') !== expected) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = rejectUnauthorizedCron(request, { vercel: false })
+  if (denied) return denied
 
   const dry = new URL(request.url).searchParams.get('dry') === '1'
 

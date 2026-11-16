@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rejectUnauthorizedCron } from '@/lib/cron-auth'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { dispatchDueScheduledMessages } from '@/lib/scheduled-messages/dispatch'
 
@@ -14,15 +15,8 @@ export const maxDuration = 60
  * $CRON_SECRET` or `x-cron-secret: $AUTOMATION_CRON_SECRET`.
  */
 async function handle(request: Request) {
-  const pingerSecret = process.env.AUTOMATION_CRON_SECRET
-  const vercelSecret = process.env.CRON_SECRET
-  if (!pingerSecret && !vercelSecret) {
-    return NextResponse.json({ error: 'cron not configured' }, { status: 503 })
-  }
-  const authorized =
-    (!!pingerSecret && request.headers.get('x-cron-secret') === pingerSecret) ||
-    (!!vercelSecret && request.headers.get('authorization') === `Bearer ${vercelSecret}`)
-  if (!authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = rejectUnauthorizedCron(request)
+  if (denied) return denied
 
   try {
     return NextResponse.json(await dispatchDueScheduledMessages(supabaseAdmin()))

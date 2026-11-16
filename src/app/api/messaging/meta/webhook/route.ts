@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server'
-import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import {
   channelFromWebhookObject,
   findOrCreateChannelContact,
@@ -100,21 +100,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'ignored' }, { status: 200 })
   }
 
-  // Signature is verified against the app secret when one is configured.
+  // Signature is verified against META_APP_SECRET on every delivery.
   // Meta signs every delivery; skipping the check would let anyone who
   // learns the URL inject messages into a customer's inbox.
-  const appSecret = process.env.META_APP_SECRET
-  if (appSecret) {
-    const signature = request.headers.get('x-hub-signature-256') ?? ''
-    const expected =
-      'sha256=' + crypto.createHmac('sha256', appSecret).update(raw).digest('hex')
-    const ok =
-      signature.length === expected.length &&
-      crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
-    if (!ok) {
-      console.warn('[meta-messaging] rejected a delivery with a bad signature')
-      return NextResponse.json({ error: 'Bad signature' }, { status: 401 })
-    }
+  // Fails closed: without META_APP_SECRET every delivery is rejected.
+  if (!verifyMetaWebhookSignature(raw, request.headers.get('x-hub-signature-256'))) {
+    console.warn('[meta-messaging] rejected a delivery with a bad or unverifiable signature')
+    return NextResponse.json({ error: 'Bad signature' }, { status: 401 })
   }
 
   after(async () => {

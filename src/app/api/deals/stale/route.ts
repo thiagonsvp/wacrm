@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rejectUnauthorizedCron } from '@/lib/cron-auth'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { expireStaleDeals, staleDealDays } from '@/lib/deals/stale'
 
@@ -14,17 +15,8 @@ import { expireStaleDeals, staleDealDays } from '@/lib/deals/stale'
  * check the threshold before letting it run for real.
  */
 export async function GET(request: Request) {
-  const pingerSecret = process.env.AUTOMATION_CRON_SECRET
-  const vercelSecret = process.env.CRON_SECRET
-  if (!pingerSecret && !vercelSecret) {
-    return NextResponse.json({ error: 'cron not configured' }, { status: 503 })
-  }
-  const authorized =
-    (!!pingerSecret && request.headers.get('x-cron-secret') === pingerSecret) ||
-    (!!vercelSecret && request.headers.get('authorization') === `Bearer ${vercelSecret}`)
-  if (!authorized) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = rejectUnauthorizedCron(request)
+  if (denied) return denied
 
   const url = new URL(request.url)
   const dry = url.searchParams.get('dry') === '1'
