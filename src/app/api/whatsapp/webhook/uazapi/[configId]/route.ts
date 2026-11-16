@@ -365,13 +365,31 @@ async function resolveMediaUrl(
  * never downgrades a message that is already "read". The realtime UPDATE
  * on `messages` refreshes the open thread.
  */
-async function applyUazapiReceipt(body: UazapiReceiptPayload): Promise<void> {
+async function applyUazapiReceipt(
+  body: UazapiReceiptPayload,
+  config: UazapiStoredConfig
+): Promise<void> {
   const receipt = parseUazapiReceipt(body);
   if (!receipt) return;
-  const { error } = await supabaseAdmin()
+  const db = supabaseAdmin();
+  // Scope to this config's account: messages has no account_id, so resolve
+  // matching rows through their conversation first, then update by row id.
+  const { data: rows, error: findError } = await db
+    .from('messages')
+    .select('id, conversations!inner(account_id)')
+    .in('message_id', receipt.messageIds)
+    .in('status', UPGRADABLE_FROM[receipt.status])
+    .eq('conversations.account_id', config.account_id);
+  if (findError) {
+    console.error('[uazapi-webhook] receipt lookup failed:', findError);
+    return;
+  }
+  const ids = ((rows ?? []) as Array<{ id: string }>).map((r) => r.id);
+  if (ids.length === 0) return;
+  const { error } = await db
     .from('messages')
     .update({ status: receipt.status })
-    .in('message_id', receipt.messageIds)
+    .in('id', ids)
     .in('status', UPGRADABLE_FROM[receipt.status]);
   if (error) console.error('[uazapi-webhook] receipt update failed:', error);
 }
@@ -381,7 +399,7 @@ async function processUazapiWebhook(
   config: UazapiStoredConfig
 ) {
   if (body.EventType === 'messages_update') {
-    await applyUazapiReceipt(body as UazapiReceiptPayload);
+    await applyUazapiReceipt(body as UazapiReceiptPayload, config);
     return;
   }
   if (body.EventType !== 'messages') return;
